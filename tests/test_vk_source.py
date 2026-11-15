@@ -2681,3 +2681,93 @@ async def test_real_jpeg_fallback_keeps_resolution_after_empty_uploads(monkeypat
             assert last.size == (800, 533)
     for payload in sent:
         main.validate_jpeg_markers(payload)
+
+
+@pytest.fixture(scope="module")
+def large_consumer_webp_bytes():
+    import random
+
+    source = BytesIO()
+    with Image.frombytes("RGB", (1800, 1200), random.Random(0).randbytes(1800 * 1200 * 3)) as image:
+        image.save(source, "WEBP", lossless=True, method=0)
+    raw = source.getvalue()
+    assert len(raw) > 5 * 1024 * 1024
+    return raw
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", [
+    "managed", "unmanaged", "missing_length", "mismatch", "invalid_length",
+    "oversized_header", "oversized_stream", "oversized_output",
+])
+async def test_vk_managed_source_download_is_bounded_before_consumer_upload(monkeypatch, large_consumer_webp_bytes, case):
+    import media_dedup
+
+    raw = large_consumer_webp_bytes
+    ceiling = 36_700_160
+    sent, gets, chunks = [], [], []
+    monkeypatch.setenv("EVENT_MEDIA_CDN_BASE_URL", "https://static.kenigevents.ru")
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "fixture")
+    monkeypatch.setattr(main, "choose_vk_actor", lambda *_: [main.VkActor("user", "fixture", "user:test")])
+    if case == "oversized_output":
+        monkeypatch.setattr(media_dedup, "prepare_consumer_jpeg", lambda *_: b"x" * (main.MAX_DOWNLOAD_SIZE + 1))
+
+    class Download:
+        content_length = ceiling + 1 if case == "oversized_header" else (
+            None if case in {"missing_length", "invalid_length", "oversized_stream"} else len(raw))
+        headers = ({"Content-Length": "invalid"} if case == "invalid_length" else
+                   {"Content-Length": str(len(raw) + 1)} if case == "mismatch" else
+                   {"Content-Length": str(ceiling + 1)} if case == "oversized_header" else
+                   {} if case in {"missing_length", "oversized_stream"} else {"Content-Length": str(len(raw))})
+        @property
+        def content(self):
+            return self
+        async def iter_chunked(self, size):
+            for _ in range(6 if case == "oversized_stream" else 1):
+                for offset in range(0, len(raw), size):
+                    chunks.append(offset)
+                    yield raw[offset:offset + size]
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *_):
+            return False
+        def raise_for_status(self):
+            pass
+
+    class Upload:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *_):
+            return False
+        async def json(self):
+            return {"photo": "accepted", "server": 7, "hash": "receipt"}
+
+    class Session:
+        def get(self, url):
+            gets.append(url)
+            return Download()
+        def post(self, url, data):
+            assert url == "https://upload.invalid"
+            sent.append(data._fields[0][2])
+            return Upload()
+
+    async def vk(method, params=None, *args, **kwargs):
+        if method == "photos.getWallUploadServer":
+            return {"response": {"upload_url": "https://upload.invalid"}}
+        assert method == "photos.saveWallPhoto"
+        return {"response": [{"owner_id": -1, "id": 42}]}
+
+    monkeypatch.setattr(main, "get_http_session", lambda: Session())
+    monkeypatch.setattr(main, "_vk_api", vk)
+    host = "source.invalid" if case == "unmanaged" else "static.kenigevents.ru"
+    result = await main.upload_vk_photo("1", f"https://{host}/p/image/v2/ab/source.webp")
+    assert len(gets) == 1
+    if case in {"managed", "missing_length"}:
+        assert result == "photo-1_42" and len(sent) == 1
+        assert len(sent[0]) <= main.MAX_DOWNLOAD_SIZE
+        with Image.open(BytesIO(sent[0])) as image:
+            assert image.format == "JPEG" and max(image.size) <= 1600
+    else:
+        assert result is None and not sent
+    if case in {"unmanaged", "oversized_header"}:
+        assert not chunks

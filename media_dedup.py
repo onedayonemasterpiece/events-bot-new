@@ -53,8 +53,7 @@ def prepare_consumer_jpeg(data: bytes, *, max_side: int = 1600) -> bytes:
     with ExitStack() as images:
         source = images.enter_context(Image.open(BytesIO(data)))
         scale = max(1, max(source.size) / max_side)
-        if (source.format == "WEBP" and source.width * source.height > 40_000_000
-                and not source.is_animated):
+        if source.format == "WEBP" and scale > 1 and not source.is_animated:
             # Pillow decodes the full WebP raster; libwebp scales during decode.
             exif = source.info.get("exif")
             resized = subprocess.run(

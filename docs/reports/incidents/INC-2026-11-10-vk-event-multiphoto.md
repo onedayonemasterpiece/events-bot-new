@@ -135,6 +135,21 @@ portrait и square controls сохраняют прежние размеры/с�
 Старый пост не редактировали; доставку и обычный следующий результат проверяет
 координатор после review и governed release.
 
+## Входной лимит отсекает managed WebP до уменьшения, 16 ноября
+
+Обычное initial задание 158090/11051 отклоняло approved canonical WebP
+9,009,760 байт, 5865×3910: URL download сравнивал исходник с 5 MiB до вызова
+consumer resize. Related card bytes уже загружались; весь initial затем падал
+с partial-media. Для managed CDN URL существующий async fetch использует
+общий потолок event-media 36,700,160 байт, сохраняя 5 MiB для других URL и
+готовой upload-копии. Глобальные настройки и default 8 MB медиаревью не меняются.
+Статический WebP теперь использует уже установленный dwebp при любом уменьшении:
+на synthetic 22.9 MP Pillow потребовал 381 MiB, сумма отдельных Python/native
+пиков была 83 MiB. Это не измерение одновременно занятой памяти и не actual файл.
+Регрессия загружает >5 MiB managed WebP один раз и отправляет только <=1600 JPEG;
+negative controls сохраняют отказы unmanaged URL, oversized header/stream/output
+и malformed/mismatched lengths. Runtime и старые посты writer не менял.
+
 ## Treat as regression guard when
 
 При изменениях approved-галереи, полноты managed VK-поста, `vk_sync`, загрузки обложки и режима `wall.post` / `wall.edit`. Сохраняются контракты [дублей и частичной загрузки](INC-2026-06-09-event-media-duplicates.md), [разных визуально похожих снимков](INC-2026-05-11-poster-near-duplicate-and-tram-photo-dropped.md), [сбора изображений из нескольких источников](INC-2026-05-05-event-source-media-aggregation-gap.md) и [неопределённого исхода публикации](INC-2026-08-27-eventsbot-vk-image-publish-outcome-unknown.md).
