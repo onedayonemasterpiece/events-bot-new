@@ -618,3 +618,30 @@ for members sharing the same saved publication URL. Delayed user ICS remains
 independent of automatic post updates. No state, flag, queue, retry or repair
 mechanism was added. Production changes are net negative; deployment and actual
 ordinary publication verification remain the parent operator's responsibility.
+
+
+### 2026-11-15: mixed Telegram album loses no-OCR photographs before review
+
+Events11023/11024 entered SmartUpdate with zero posters. Current exact source
+album8747 contains two text posters and four no-text photos, including thematic
+pottery and library images visually identified by the operator. The historical
+raw import is absent: this is matching source evidence and a proven mechanism,
+not proof that the historical execution took this exact branch.11025 is a
+text-only source; the existing minimum-photo publication policy is unchanged.
+
+The multi-event OCR filter retained blank-OCR photos only if the entire album
+was text-free. In a mixed album those candidates scored zero and disappeared
+before the existing visual review could judge relevance. The filter now keeps
+blank-OCR candidates while preserving confident OCR filtering. Real monitor
+assignments are OCR-only; their assigned text poster is retained first and
+no-OCR carrier candidates are appended through existing deduplication (limit8).
+Photo-only explicit subsets and fully photographic positional mapping remain. Existing batch review rejects confirmed foreign-event conflicts;
+its approved unavailable/uncertain fail-open behavior is not changed. No new
+semantic policy, provider call path, queue, flag or historical replay.
+
+Initialized intake controls fail before for mixed candidates and candidate-to-
+SmartUpdate media persistence, while single-event, assigned, all-photo and
+wrong-text cases pass. After the fix the existing review keeps the appropriate
+photo and rejects the unrelated no-text candidate from canonical gallery.
+Source tests cover the local pipeline. I did not deploy this change or inspect
+a new ordinary production import; the parent operator performs those steps.

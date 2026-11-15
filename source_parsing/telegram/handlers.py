@@ -3833,6 +3833,10 @@ def _filter_posters_for_event(
     scored.sort(key=lambda x: (-x[0], x[1]))
     kept: list[PosterCandidate] = []
     for s, _i, p in scored:
+        if not (_norm_match(p.ocr_text) or _norm_match(p.ocr_title)):
+            # Photos without text need the existing visual relevance review.
+            kept.append(p)
+            continue
         if s < 6:
             continue
         if has_many and tokens:
@@ -5374,6 +5378,10 @@ def _build_candidate(
         # by OCR/title/date/time.
         if assigned_posters_payload:
             posters = _payload_to_posters(assigned_posters_payload)
+            if any(_norm_match(p.ocr_text) or _norm_match(p.ocr_title) for p in posters):
+                photos = [p for p in message_posters_payload
+                          if not (_norm_match(p.get("ocr_text")) or _norm_match(p.get("ocr_title")))]
+                posters = _dedupe_poster_candidates(posters + _payload_to_posters(photos), limit=8)
         else:
             posters = _filter_posters_for_event(
                 posters,

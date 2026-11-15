@@ -4,6 +4,8 @@
 
 ## Event Posts
 
+- Telegram mixed-album photos without OCR remain candidates for the existing visual relevance review, as in wholly photographic albums. Text posters still require their existing OCR match. OCR-only monitor assignments keep their assigned poster first and add no-OCR carrier candidates; photo-only assigned subsets and wholly photographic positional mapping stay unchanged. Confirmed semantic conflicts are rejected downstream; the existing owner-approved unavailable/uncertain visual-review policy is unchanged.
+
 - Automatic outbox publication creates initial announcements only. Existing managed receipts skip locally before API calls; canonical source changes do not rewrite those posts. A new event linked to an already managed peer publishes individually, while wholly unpublished groups retain their combined initial publication. Manual editing remains separate.
 
 - Initial announcements retain their existing scheduling priority. An initial already deferred with `vk_initial_waiting_related` returns to the existing related-only due-order lane, allowing older static/vector work to prepare its strict graph. Due calendar comments keep their existing higher priority; dependencies and publication guards are unchanged.
