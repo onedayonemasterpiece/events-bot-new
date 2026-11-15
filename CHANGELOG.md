@@ -1,6 +1,7 @@
 # Changelog
 
 - Guide visual digests choose the source-grounded canonical variant; card text fits before portraits, unknown location sentinels stay hidden, and four rows clear the footer.
+- Multi-event VK imports retain already-read attachment OCR for identity and child-scope review even when no image is assigned for publication; gallery assignment stays separate.
 
 - Explicit theatre event types survive mentions of cinema in actor credits; the film-keyword fallback applies only when no type was supplied.
 
