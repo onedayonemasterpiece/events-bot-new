@@ -2167,7 +2167,7 @@ async def test_sync_vk_source_post_does_not_preserve_old_hashtag_tail(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_job_sync_vk_source_post_resyncs_title_only_change(tmp_path, monkeypatch, calendar_comment_delivery):
+async def test_job_sync_vk_source_post_preserves_created_post_after_title_change(tmp_path, monkeypatch, calendar_comment_delivery):
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()
     monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "1")
@@ -2202,14 +2202,14 @@ async def test_job_sync_vk_source_post_resyncs_title_only_change(tmp_path, monke
     await main.job_sync_vk_source_post(event_id, db, None)
     calendar_comment_delivery.assert_not_awaited()
 
-    assert calls == [("New title", "Same body", False)]
+    assert calls == []
     async with db.get_session() as session:
         updated = await session.get(main.Event, event_id)
-    assert updated.vk_source_hash == _expected_vk_source_hash(updated, "Same body")
+    assert updated.vk_source_hash == main.content_hash("Same body")
 
 
 @pytest.mark.asyncio
-async def test_job_sync_vk_source_post_resyncs_when_calendar_projection_is_removed(
+async def test_job_sync_vk_source_post_preserves_created_post_after_calendar_change(
     tmp_path, monkeypatch, calendar_comment_delivery
 ):
     db = main.Database(str(tmp_path / "db.sqlite"))
@@ -2253,15 +2253,15 @@ async def test_job_sync_vk_source_post_resyncs_when_calendar_projection_is_remov
     await main.job_sync_vk_source_post(event_id, db, None)
     calendar_comment_delivery.assert_not_awaited()
 
-    assert calls == [(event_id, "Same body", None)]
+    assert calls == []
     async with db.get_session() as session:
         updated = await session.get(main.Event, event_id)
-    assert updated.vk_source_hash == _expected_vk_source_hash(updated, "Same body")
+    assert updated.vk_source_hash == event.vk_source_hash
     await db.close()
 
 
 @pytest.mark.asyncio
-async def test_job_sync_vk_source_post_republishes_missing_managed_post(tmp_path, monkeypatch, calendar_comment_delivery):
+async def test_job_sync_vk_source_post_does_not_automatically_republish_created_post(tmp_path, monkeypatch, calendar_comment_delivery):
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()
     monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
@@ -2314,10 +2314,10 @@ async def test_job_sync_vk_source_post_republishes_missing_managed_post(tmp_path
     await main.job_sync_vk_source_post(event_id, db, None)
     calendar_comment_delivery.assert_not_awaited()
 
-    assert calls == [(None, "Same body")]
+    assert calls == []
     async with db.get_session() as session:
         updated = await session.get(main.Event, event_id)
-    assert updated.source_vk_post_url == "https://vk.com/wall-231920894_2389"
+    assert updated.source_vk_post_url == "https://vk.com/wall-231920894_2375"
     assert updated.vk_source_hash == _expected_vk_source_hash(updated, "Same body")
 
 

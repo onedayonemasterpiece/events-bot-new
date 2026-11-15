@@ -365,7 +365,7 @@ async def test_related_peers_must_be_public_but_other_dates_need_no_post(tmp_pat
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('linked', [False, True])
+@pytest.mark.parametrize('linked', [False, True, 'individual'])
 async def test_related_comment_resolves_public_linked_header_once(tmp_path, monkeypatch, linked):
     """The delayed job uses the same real linked-time view as initial publication."""
     from unittest.mock import AsyncMock
@@ -388,15 +388,18 @@ async def test_related_comment_resolves_public_linked_header_once(tmp_path, monk
             for eid, time in [(1, '11:00'), (2, '12:30')]:
                 session.add(main.Event(id=eid, title='Матч за 5 место', description='', source_text='',
                     date='2099-11-14', time=time, location_name='Зал', linked_event_ids=[2] if linked and eid == 1 else [],
-                    source_vk_post_url='https://vk.com/wall-1_10'))
+                    source_vk_post_url=('https://vk.com/wall-1_99' if linked == 'individual' and eid == 2
+                                        else 'https://vk.com/wall-1_10')))
             session.add(main.JobOutbox(event_id=1, task=main.JobTask.vk_calendar_comment,
                 coalesce_key='vk_related_comment:-1:10', payload=payload,
                 next_run_at=datetime.now(timezone.utc) - timedelta(seconds=1)))
             await session.commit()
             event = await session.get(main.Event, 1)
         publish_event, _ = await main._prepare_same_day_linked_publish_event(db, event)
+        if linked == "individual":
+            publish_event = event
         header = next(line for line in main.build_vk_source_header(publish_event, None) if line.startswith('📅 '))
-        assert ('11:00 и 12:30' in header) == linked
+        assert ('11:00 и 12:30' in header) == (linked is True)
         public = {'id': 20, 'date': int(datetime.now(timezone.utc).timestamp()) - 1800,
                   'post_type': 'post', 'text': 'Матч за 5 место\n' + header + '\nПОХОЖИЕ СОБЫТИЯ\nСохранённый выбор'}
         async def api(method, params, *args, **kwargs):
