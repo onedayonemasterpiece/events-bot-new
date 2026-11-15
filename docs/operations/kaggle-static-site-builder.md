@@ -631,7 +631,11 @@ recomputes the whole active graph. Normal warm related-only publication retrieve
 pending own anchors and changed current anchors from the full candidate catalog;
 expired or changed peers do not expand this work to their old reverse neighbors.
 Existing per-anchor audit keys use current facts to invalidate stale verdicts
-without retrieving unrelated old anchors. Duplicate anchor ids fail before
+without retrieving unrelated old anchors. Saved chains keep only current anchors
+and peers; enabled-verifier runs retain only reachable current audit keys.
+Pruning does not turn missing raw retrieval into a verified empty recommendation:
+full consumers rebuild incomplete raw caches, while scoped publication still
+retrieves only its own requested or changed anchors. Duplicate anchor ids fail before
 the first request, preventing a second corpus fetch inside one export. Astro
 continues to perform the full build for now; it consumes the generated related
 manifest and never retrieves the corpus again.
