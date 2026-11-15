@@ -14343,7 +14343,7 @@ async def _llm_merge_identity_gate(
         "выполнит bounded durable retry; сомнение/unsafe/no_merge никогда не разрешает CREATE. Не придумывай "
         "фактов, опирайся только на данные.\n\n"
         "Для related_but_distinct/festival_context_sibling заполни source_grounded_evidence точными короткими "
-        "цитатами из source_text/raw_excerpt/poster_texts, которые доказывают именно отдельное событие или "
+        "цитатами из source_text/poster_texts, которые доказывают именно отдельное событие или "
         "occurrence. Извлечённые date/location сами по себе не source evidence: если их нет в исходном тексте, "
         "не используй их как доказательство distinct. У одинакового title и ticket reminder/repost считай "
         "source_update, если источник явно не называет отдельное событие/сеанс/площадку.\n\n"
@@ -14365,7 +14365,6 @@ async def _llm_merge_identity_gate(
     if isinstance(raw_evidence, list):
         grounding_corpus = [
             candidate.source_text,
-            candidate.raw_excerpt,
             *[
                 p.ocr_text
                 for p in candidate.posters
@@ -14392,6 +14391,11 @@ async def _llm_merge_identity_gate(
             and re.sub(r"\s+", " ", str(item)).strip().casefold()
             in normalized_corpus
         ][:4]
+        if any(str(item or "").strip()
+               and re.sub(r"\s+", " ", str(item)).strip().casefold() not in normalized_corpus
+               for item in raw_evidence):
+            logger.info("smart_update.merge_identity_evidence_rejected source_url=%s", candidate.source_url)
+            return None
     return data
 
 

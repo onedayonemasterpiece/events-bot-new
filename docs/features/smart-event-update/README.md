@@ -46,6 +46,13 @@ facts) and grounds them against the same candidate/existing-poster OCR supplied
 to the model. Explicit repeated days may be distinct occurrences; uncertainty
 still schedules a retry and does not authorize creation.
 
+The merge identity gate also requires every cited quote to appear in primary
+source text or OCR. A generated candidate summary (`raw_excerpt`) is context,
+not an eligible source for those quotes. An unsupported part of a compound proof
+invalidates the response through the existing unavailable-decision path; keeping
+one valid quote must not authorize an unsupported distinct-event claim. The
+existing four-quote output bound remains independent of this validation.
+
 После `INC-2026-08-10-smart-update-identity-terminal-loss` Smart Update —
 child-resolution boundary, а не второй eventness classifier. Для кандидата с
 `source_disposition=EVENTS_FOUND|MIXED` regex/date/title/venue/promo/recap
