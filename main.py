@@ -6671,7 +6671,7 @@ def normalize_event_type(
 ) -> str | None:
     """Return corrected event type, marking film screenings as ``кинопоказ``."""
     text = f"{title} {description}".lower()
-    if event_type in (None, "", "спектакль"):
+    if event_type in (None, ""):
         if any(word in text for word in ("кино", "фильм", "кинопоказ", "киносеанс")):
             return "кинопоказ"
     # Guardrail: upstream LLMs sometimes label board-game meetups as "мастер-класс"

@@ -1,5 +1,7 @@
 # Changelog
 
+- Explicit theatre event types survive mentions of cinema in actor credits; the film-keyword fallback applies only when no type was supplied.
+
 - Related audit keeps successful candidate batches in the existing cache when another batch fails, so normal retries continue missing work and retain full-anchor readiness semantics.
 
 - VK related cards use the ready search_digest in neutral secondary text; descriptions use the space below venue medallions and rows share the available card height.
