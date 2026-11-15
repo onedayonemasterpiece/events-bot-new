@@ -5773,11 +5773,20 @@ def startup(
             *,
             run_id: str | None = None,
         ) -> None:
-            await run_event_vector_sync(
-                db_obj,
-                trigger="scheduled",
-                scheduler_run_id=run_id,
-            )
+            if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only":
+                main_module = get_running_main()
+                await main_module.enqueue_job(
+                    db_obj, 0, main_module.JobTask.event_vector_sync,
+                    payload={"reason": "scheduled"},
+                    coalesce_key="event_vector_sync:prod",
+                    next_run_at=datetime.now(timezone.utc),
+                )
+            else:
+                await run_event_vector_sync(
+                    db_obj,
+                    trigger="scheduled",
+                    scheduler_run_id=run_id,
+                )
 
         vector_interval = max(
             15,
