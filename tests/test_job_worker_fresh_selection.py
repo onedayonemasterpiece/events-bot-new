@@ -397,3 +397,82 @@ async def test_due_calendar_precedes_older_missing_media_and_static_work(
                 assert (await session.get(main.JobOutbox, calendar_id)).status == main.JobStatus.pending
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ready_comment", [False, "known", "legacy"])
+@pytest.mark.parametrize("include_future", [False, True])
+async def test_captcha_future_comment_keeps_slot_for_initial_then_normal_worker_prioritizes_initial(
+    tmp_path, monkeypatch, ready_comment, include_future
+):
+    db = main.Database(str(tmp_path / "initial-before-edit.sqlite"))
+    await db.init()
+    monkeypatch.setenv("STATIC_SITE_BUILD_PROFILE", "related-only")
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_CAPTCHA_RESUME_SPACING_SEC", 30)
+    monkeypatch.setattr(main, "_vk_captcha_needed", False)
+    marker = "captcha_wait:fixture"
+    now = datetime.now(timezone.utc)
+    try:
+        async with db.get_session() as session:
+            events = [main.Event(title=title, description="d", source_text="s", date="2099-01-01",
+                                 time="12:00", location_name="Venue", source_vk_post_url=url,
+                                 vk_source_hash=source_hash)
+                      for title, url, source_hash in [
+                          ("Old edit", "https://vk.com/wall-231920894_13733", "applied"),
+                          ("Initial external source", "https://vk.com/wall-212760444_6413", None),
+                          ("Managed without hash", "https://vk.com/wall-231920894_14400", None),
+                          ("External with applied hash", "https://vk.com/wall-212760444_6414", "applied"),
+                      ]]
+            session.add_all(events)
+            await session.flush()
+            old, initial, managed, applied = events
+            jobs = [main.JobOutbox(event_id=ev.id, task=main.JobTask.vk_sync, status=main.JobStatus.paused,
+                                   last_error=marker, next_run_at=now + timedelta(days=3650)) for ev in events]
+            future = main.JobOutbox(event_id=old.id, task=main.JobTask.vk_calendar_comment,
+                                    payload={"post_url": old.source_vk_post_url,
+                                             "publish_date": int((now + timedelta(hours=3)).timestamp())},
+                                    status=main.JobStatus.paused, last_error=marker,
+                                    next_run_at=now + timedelta(days=3650))
+            session.add_all(jobs + ([future] if include_future else []))
+            if ready_comment:
+                ready_payload = {"post_url": managed.source_vk_post_url}
+                if ready_comment == "known":
+                    ready_payload["publish_date"] = int((now - timedelta(hours=1)).timestamp())
+                session.add(main.JobOutbox(event_id=managed.id, task=main.JobTask.vk_calendar_comment,
+                                           payload=ready_payload,
+                                           status=main.JobStatus.paused, last_error=marker,
+                                           next_run_at=now + timedelta(days=3650)))
+            await session.commit()
+            initial_id, future_id = jobs[1].id, future.id
+            old_id = old.id
+        await main._resume_vk_captcha_outbox(db, marker)
+        async with db.get_session() as session:
+            initial_job = await session.get(main.JobOutbox, initial_id)
+            if future_id is not None:
+                future_job = await session.get(main.JobOutbox, future_id)
+                assert main._ensure_utc(future_job.next_run_at) >= now + timedelta(hours=2)
+            assert (main._ensure_utc(initial_job.next_run_at) - now).total_seconds() < (31 if ready_comment else 1)
+            # A genuine newly imported fact rearms an old edit after recovery;
+            # ordinary worker priority must still favour the due initial.
+            for job in (await session.execute(main.select(main.JobOutbox))).scalars():
+                if job.id != future_id:
+                    job.next_run_at = now - timedelta(seconds=120 if job.event_id != initial.id and job.task == main.JobTask.vk_sync else 1)
+                    session.add(job)
+            await session.commit()
+        calls = []
+        async def publish(eid, *_args):
+            calls.append(("initial" if eid == initial.id else "edit", eid))
+            return True
+        async def comment(eid, *_args):
+            calls.append(("comment", eid))
+            return True
+        monkeypatch.setitem(main.JOB_HANDLERS, main.JobTask.vk_sync.value, publish)
+        monkeypatch.setitem(main.JOB_HANDLERS, main.JobTask.vk_calendar_comment.value, comment)
+        assert await main._run_due_jobs_once(db, None, max_jobs=1) == 1
+        assert calls[0][0] == ("comment" if ready_comment else "initial")
+        if ready_comment:
+            assert await main._run_due_jobs_once(db, None, max_jobs=1) == 1
+            assert calls[1] == ("initial", initial.id)
+    finally:
+        await db.close()
