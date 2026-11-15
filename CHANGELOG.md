@@ -42,6 +42,7 @@
 
 
 ### Fixed
+- Event gallery: the existing grouped LLM comparison explicitly deduplicates format and layout variants of the same poster content while preserving informative programme images.
 - Static-site cross-deploy recovery can use exact dataset-bound Kaggle terminal status when callbacks are missing; live, unknown or mismatched runs retain the existing single-flight barrier.
 - Keep related-event comments dormant before their known publication time, including early recovery; preserve their existing randomized due time and frozen selection.
 - Give already due VK comment jobs precedence over old missing-media retries and related-only static/media work, using the existing outbox priority; leave calendar delay and provider pacing unchanged.
