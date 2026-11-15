@@ -1276,3 +1276,51 @@ async def test_immediate_override_pulls_running_followup_forward_then_smart_rear
     assert _utc(rows[1].next_run_at) == latest + timedelta(minutes=15)
     assert rows[1].payload["event_ids"] == [2, 3, 4]
     await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("returncode", [0, 75])
+async def test_related_cross_release_recovery_uses_original_run_without_push(monkeypatch, returncode):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    old_sha, fingerprint = "a" * 40, "b" * 64
+    run_id = "static-site:production-original:run"
+    handoff = dict(build_id="production-original", run_id=run_id, repo_sha=old_sha,
+        candidate_token="c" * 43, snapshot_path="/data/original.sqlite",
+        manifest_path="/data/original.manifest.json", input_fingerprint=fingerprint,
+        current_datetime="2026-11-15T08:32:00+02:00", profile="related-only")
+    claim = SimpleNamespace(run_id=run_id, input_fingerprint=fingerprint,
+        dataset_ref="owner/original-input", effective_date="2026-11-15", claim_token="original",
+        remote_status="alive", remote_terminal_at=None)
+    monkeypatch.setenv("STATIC_SITE_BUILD_PROFILE", "related-only")
+    monkeypatch.setattr(main, "recoverable_static_site_build", lambda *a, **kw: claim)
+    monkeypatch.setattr(main, "validate_snapshot", lambda *a: SimpleNamespace(
+        snapshot_id="original", sha256="d" * 64, size_bytes=1))
+    commands = []
+    async def launch(*args, **kwargs):
+        commands.append(args)
+        async def communicate(): return b"", None
+        return SimpleNamespace(returncode=returncode, communicate=communicate)
+    monkeypatch.setattr(main.asyncio, "create_subprocess_exec", launch)
+    finish = AsyncMock(return_value=True)
+    monkeypatch.setattr(main, "_finish_static_site_candidate", finish)
+    recovery = main._recover_previous_static_site_attempt(
+        db=SimpleNamespace(path="/data/db.sqlite"), job_id=12,
+        request_payload={"remote_handoff": handoff}, limit=5000,
+        current_repo_sha="e" * 40, current_source_identity={
+            "manifest_path": "/app/current-manifest.json",
+            "image_source_manifest_sha256": "f" * 64,
+            "image_source_tree_sha256": "1" * 64})
+    if returncode == 75:
+        with pytest.raises(StaticSiteSingleFlightDeferred, match="remote_recovery_live"):
+            await recovery
+        finish.assert_not_awaited()
+    else:
+        assert await recovery == (True, True)
+        assert finish.await_args.kwargs["repo_sha"] == old_sha
+    assert len(commands) == 1
+    command = commands[0]
+    assert "--adopt-existing" in command
+    assert command[command.index("--repo-sha") + 1] == old_sha
+    assert command[command.index("--expected-dataset-ref") + 1] == "owner/original-input"
+    assert "--image-source-manifest" not in command

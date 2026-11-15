@@ -25502,7 +25502,11 @@ async def _recover_previous_static_site_attempt(
         else None
     )
     incompatible_reason = None
-    if required["repo_sha"] != current_repo_sha:
+    if (handoff.get("profile") == "related-only"
+            and os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only"):
+        # Adopt frozen data from its original run, independently of this app image.
+        current_source_identity = None
+    elif required["repo_sha"] != current_repo_sha:
         incompatible_reason = "static_site_recovery_cross_deploy_repo_sha_mismatch"
     if current_source_identity is not None:
         expected_source = {

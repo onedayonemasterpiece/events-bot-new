@@ -426,3 +426,23 @@ the change, with no real provider calls. This does not prove complete liveness:
 vector backoff, continuous intake, remaining cold-audit continuation and a
 hung remote calculation still require separate modeling and ordinary new VK
 publication evidence. No production delivery or incident closure is claimed.
+
+### 15 November: saved related data are independent of the current image
+
+The same data-only output was rejected after unrelated app releases because
+recovery compared its repo SHA and image tree to the new container, and the
+adoption runner resolved the current image manifest again. Already accepted
+related JSON survives those releases. Treat newly adopted frozen JSON the
+same way: keep the original run/input/clock and source/artifact validation,
+without demanding current app bytes. Both current and handoff profiles must
+be related-only; HTML candidate requirements are unchanged. The original
+cache is imported with its result through existing adoption, never salvaged
+separately. This neither covers later imports nor proves current quality.
+
+Four new recovery/result/CLI controls fail on the original functions; the
+unchanged fresh-result control passes. They include a still-live run that
+retains single-flight and an adoption CLI that must not resolve current
+source. After the change the focused exporter/debounce/related suite passes.
+Independent complexity review accepts this subtraction and rejects replacing
+the removed image gate with an ad hoc model/config matcher. Normal producer
+ordering, partial-audit fairness and actual new VK publication remain open.
