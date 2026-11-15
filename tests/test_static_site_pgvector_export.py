@@ -781,15 +781,20 @@ def test_shrinking_catalog_persists_bounded_audit_progress(tmp_path, monkeypatch
     monkeypatch.setattr(exporter, 'build_pgvector_related_chain', lambda *a, **k: {
         str(i): [{'event_id': 2 if i == 1 else 1, 'vector_similarity': .8,
                   'related_score': .8, 'slot_type': 'pure_related'}] for i in (1, 2, 3)})
+    retained_keys = set()
     for expected_ready in (1, 2, 3, 3):
         result = exporter.build_related(events, current_date='2026-11-15',
             related_mode='pgvector', cache_path=cache_path, gemma_verify=True,
             gemma_max_anchors=1)
         assert result['cache']['written']
         assert len(result['gemma_verification']['verified_event_ids']) == expected_ready
+        current_keys = set(json.loads(cache_path.read_text())['gemma_audit_cache'])
+        assert retained_keys.issubset(current_keys), 'successful progress must persist'
+        retained_keys = current_keys
     assert calls == [3, 2, 1]
     assert result['strict_verified_related']
     assert result['gemma_verification']['cache_hits'] == 3
     saved = json.loads(cache_path.read_text())
     assert saved['event_ids'] == [1, 2, 3]
-    assert saved['gemma_audit_cache']['previous-verdict'] == old_audit
+    assert 'previous-verdict' not in saved['gemma_audit_cache']
+    assert len(saved['gemma_audit_cache']) == 3
