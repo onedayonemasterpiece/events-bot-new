@@ -102,7 +102,7 @@ def test_first_publication_uses_changed_anchors_and_keeps_capped_work(tmp_path, 
     db.commit()
     edited = run(cap=1)
     assert not edited['related']['725']['strict_verified'], 'changed peer invalidates stale verdict'
-    completed = run()
+    completed = run(anchors={725, 726, 727, 728, 729})
     assert all(completed['related'][str(i)]['strict_verified'] for i in (1, 725, 726, 727, 728, 729))
     assert completed['related']['117']['strict_verified']
     # A policy edit cannot relabel stale old verdicts as globally current.
@@ -152,3 +152,65 @@ def test_initial_publication_scope_includes_captcha_and_excludes_terminal_or_pub
             (6, 'vk_sync', 'pending', None, None),
         ])
     assert related_publication_anchor_ids(str(path)) == [1, 5]
+
+
+def test_rollover_does_not_expand_pending_anchor_to_old_reverse_neighbors(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location(
+        'related_expiry_scope', os.getenv('RELATED_EXPORTER_PATH') or
+        Path(__file__).resolve().parents[1] / 'site/scripts/export-production-preview-data.py')
+    exporter = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(exporter)
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'test-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '1')
+    events = {i: dict(id=i, title=f'Программа {i}', start_date='2026-11-20',
+                      lifecycle_status='active', ticket={}) for i in range(1, 725)}
+    retrieval, audits = [], []
+
+    def rpc(_name, payload, **_kwargs):
+        anchor = payload['p_anchor_event_id']
+        retrieval.append(anchor)
+        return [{'event_id': min(set(events) - {anchor}), 'vector_similarity': .85}]
+
+    def audit(**kwargs):
+        audits.append(kwargs['anchor']['id'])
+        return {event['id']: {'llm_semantic_score': .9, 'confidence': .9,
+                'reject': False, 'similarity_class': 'highly_similar'}
+                for event in kwargs['candidates']}
+
+    monkeypatch.setattr(exporter, 'personalization_supabase_request', rpc)
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+
+    def run(anchors):
+        return exporter.build_related(list(events.values()), current_date='2026-11-15',
+            related_mode='pgvector', cache_path=tmp_path / 'cache.json',
+            gemma_verify=True, gemma_max_anchors=0, anchor_ids=set(anchors))
+
+    # Initialize through the real producer: every other anchor selects peer1.
+    seeded = run(events)
+    assert seeded['strict_verified_related']
+    assert len(retrieval) == len(audits) == 724
+    retrieval.clear()
+    audits.clear()
+    del events[1]  # Date rollover removes a heavily referenced peer.
+    events[725] = dict(id=725, title='Новый анонс', start_date='2026-11-20',
+                       lifecycle_status='active', ticket={})
+    result = run({725})
+    assert retrieval == audits == [725], 'expired peers must not trigger reverse graph rebuild'
+    assert result['related']['725']['strict_verified']
+    assert result['related']['725']['similar'] == [2], 'current full peer catalog remains available'
+    assert not result['related']['2']['strict_verified'], 'expired-peer verdict cannot be reused'
+    retrieval.clear()
+    audits.clear()
+    run({725})
+    assert retrieval == audits == [], 'unchanged pending own anchor reuses its verdict'
+
+    # Own anchor remains unchanged, but its selected peer has different facts.
+    events[2]['title'] = 'Изменённая программа'
+    changed = run({725})
+    assert set(retrieval) == set(audits) == {2, 725}
+    assert changed['related']['725']['strict_verified']
+    assert changed['related']['725']['similar'] == [2]
+    retrieval.clear()
+    audits.clear()
+    run({725})
+    assert retrieval == audits == []

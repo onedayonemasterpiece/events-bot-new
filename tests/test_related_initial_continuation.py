@@ -164,7 +164,7 @@ async def test_no_progress_or_legacy_cold_does_not_reset_provider_backoff(tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_mixed_capped_batch_advances_but_warm_reverse_hits_do_not_repeat_failed_anchor(tmp_path, monkeypatch):
+async def test_mixed_capped_batch_advances_without_retrieving_warm_reverse_anchors(tmp_path, monkeypatch):
     import importlib.util
     spec = importlib.util.spec_from_file_location('continuation_exporter',
         Path(__file__).resolve().parents[1] / 'site/scripts/export-production-preview-data.py')
@@ -177,7 +177,7 @@ async def test_mixed_capped_batch_advances_but_warm_reverse_hits_do_not_repeat_f
                         'STATIC_SITE_GEMMA_RELATED_RETRY_BACKOFF_SEC': '0'}.items():
         monkeypatch.setenv(name, value)
     events = [{'id': i, 'title': f'Event {i}'} for i in (1, 2, 3, 4)]
-    calls = []
+    calls, retrieval = [], []
 
     def audit(**kwargs):
         event_id = kwargs['anchor']['id']
@@ -189,6 +189,7 @@ async def test_mixed_capped_batch_advances_but_warm_reverse_hits_do_not_repeat_f
                 for peer in kwargs['candidates']}
 
     def retrieve(_events, *, anchor_ids=None, **_kwargs):
+        retrieval.append(set(anchor_ids))
         return {str(i): [{'event_id': 3 if i in (1, 4) else 1,
                          'vector_similarity': .8, 'related_score': .8,
                          'slot_type': 'pure_related'}] for i in anchor_ids}
@@ -239,11 +240,14 @@ async def test_mixed_capped_batch_advances_but_warm_reverse_hits_do_not_repeat_f
         assert 2 in remainder['gemma_verification']['verified_event_ids']
         await adopt(remainder, 2)
 
+        retrieval.clear()
         repeated = calculate({2, 3})
         meta = repeated['gemma_verification']
-        assert meta['cache_hits'] >= 2 and meta['attempted_anchors'] == 1
+        assert retrieval == [{3}], 'warm reverse anchors are not new publication work'
+        assert meta['cache_hits'] == 0 and meta['attempted_anchors'] == 1
         assert {item['anchor_event_id'] for item in meta['attempts'] if item['status'] == 'ok'} == set()
-        assert set(meta['changed_event_ids']) & set(meta['verified_event_ids']), 'this is the false warm-progress counterexample'
+        assert meta['changed_event_ids'] == [3]
+        assert {1, 2, 4}.issubset(meta['verified_event_ids'])
         with sqlite3.connect(db.path) as connection:
             connection.execute("UPDATE joboutbox SET status='error', attempts=2, last_error='provider_backoff', next_run_at=? WHERE task='event_vector_sync'",
                 ((datetime.now(timezone.utc)+timedelta(hours=1)).replace(tzinfo=None).isoformat(' '),))

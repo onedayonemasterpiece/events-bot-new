@@ -626,9 +626,12 @@ rebuild also fails when aggregate bytes exceed
 copied into `static_site_build_result.json`.
 
 A valid related-cache hit performs **zero** Supabase candidate RPCs and records
-zero request/row/byte counters with `source=cache`. A miss still recomputes the
-whole active graph once: changed-anchor-only recomputation remains forbidden
-because a new event can change old anchors. Duplicate anchor ids fail before
+zero request/row/byte counters with `source=cache`. An unscoped HTML/cold miss
+recomputes the whole active graph. Normal warm related-only publication retrieves
+pending own anchors and changed current anchors from the full candidate catalog;
+expired or changed peers do not expand this work to their old reverse neighbors.
+Existing per-anchor audit keys use current facts to invalidate stale verdicts
+without retrieving unrelated old anchors. Duplicate anchor ids fail before
 the first request, preventing a second corpus fetch inside one export. Astro
 continues to perform the full build for now; it consumes the generated related
 manifest and never retrieves the corpus again.
