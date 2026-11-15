@@ -1293,6 +1293,37 @@ def test_vk_carousel_cover_keeps_poster_edges_and_hint_in_wall_crop():
         assert wall.crop((0, 1160, 815, 1222)).convert("L").getextrema()[1] > 220
 
 
+
+@pytest.mark.parametrize("label", ["листай", "Похожие события"])
+def test_vk_carousel_wide_cover_keeps_edges_and_cue_in_landscape_wall_frame(label):
+    import main
+    from PIL import ImageOps
+
+    poster = Image.new("RGB", (1600, 570), "#202020")
+    poster.paste("green", (0, 0, 40, 570))
+    poster.paste("red", (1560, 0, 1600, 570))
+    source = io.BytesIO()
+    poster.save(source, "PNG")
+    with Image.open(io.BytesIO(main._vk_carousel_cover(source.getvalue(), label))) as cover:
+        assert cover.size == (1600, 900)
+        wall = ImageOps.fit(cover, (1600, 900))
+        assert wall.getpixel((10, 300))[1] > 100
+        assert wall.getpixel((1590, 300))[0] > 220
+        # Label and arrow are the only white ink in their footer regions.
+        assert wall.crop((900, 660, 1440, 810)).convert("L").getextrema()[1] > 220
+        assert wall.crop((1510, 690, 1570, 790)).convert("L").getextrema()[1] > 220
+
+
+def test_vk_carousel_square_source_keeps_existing_frame():
+    import main
+
+    source = io.BytesIO()
+    Image.new("RGB", (800, 800), "#204060").save(source, "PNG")
+    with Image.open(io.BytesIO(main._vk_carousel_cover(source.getvalue()))) as cover:
+        assert cover.size == (800, 876)
+        assert max(abs(a - b) for a, b in zip(cover.getpixel((400, 400)), (32, 64, 96))) < 3
+
+
 def test_vk_carousel_cover_composites_transparency_and_bounds_jpeg_decode(monkeypatch):
     import main
     from PIL import JpegImagePlugin

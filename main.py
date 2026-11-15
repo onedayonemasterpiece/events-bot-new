@@ -2351,10 +2351,10 @@ def _vk_carousel_cover(data: bytes, label: str = "листай") -> bytes:
     head = font_size / 3
     draw.line([(tip - head, middle - head), (tip, middle), (tip - head, middle + head)],
               fill="white", width=stroke)
-    # VK cropped the live portrait carousel to 2:3, including the footer.
-    if 3 * cover.width < 2 * cover.height:
-        width = (2 * cover.height + 2) // 3
-        cover = ImageOps.pad(cover, (width, cover.height), color="#18212b")
+    # Keep the whole photo and cue inside VK's 2:3 through 16:9 carousel frame.
+    width = max(cover.width, (2 * cover.height + 2) // 3)
+    height = max(cover.height, (9 * width + 15) // 16)
+    cover = ImageOps.pad(cover, (width, height), color="#18212b")
     out = BytesIO()
     cover.save(out, "JPEG", quality=95, subsampling=0)
     return out.getvalue()

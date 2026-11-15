@@ -123,6 +123,18 @@ JPEG draft уже работает до проверки; Pillow WebP draft не
 Локальный фикс и тесты не означают выпуск или восстановление этих заданий:
 координатор отдельно выполняет governed build, deploy и обычный product readback.
 
+## Широкая обложка обрезает подсказку, 16 ноября
+
+После выпуска уменьшения WebP ordinary initial события 10635 завершился DONE,
+пост 14726 содержит SOURCE и related card. Actual первое фото 1281×721 показывает,
+что VK обрезал широкую обложку 1600×721 до 16:9: подпись справа обрезана, стрелка
+исчезла. Прежний ImageOps.pad защищал только высокий кадр 2:3. Он обобщён
+одним вписыванием в диапазон 2:3..16:9; label selection и шаблоны не меняются.
+Wide regression моделирует 16:9 wall frame и проверяет оба края, текст и стрелку;
+portrait и square controls сохраняют прежние размеры/содержимое.
+Старый пост не редактировали; доставку и обычный следующий результат проверяет
+координатор после review и governed release.
+
 ## Treat as regression guard when
 
 При изменениях approved-галереи, полноты managed VK-поста, `vk_sync`, загрузки обложки и режима `wall.post` / `wall.edit`. Сохраняются контракты [дублей и частичной загрузки](INC-2026-06-09-event-media-duplicates.md), [разных визуально похожих снимков](INC-2026-05-11-poster-near-duplicate-and-tram-photo-dropped.md), [сбора изображений из нескольких источников](INC-2026-05-05-event-source-media-aggregation-gap.md) и [неопределённого исхода публикации](INC-2026-08-27-eventsbot-vk-image-publish-outcome-unknown.md).
