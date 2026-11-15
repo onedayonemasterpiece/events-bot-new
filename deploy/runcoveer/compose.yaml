@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:source-cited-type-20261115
+    image: runcoveer/events:vk-source-ocr-evidence-20261115
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

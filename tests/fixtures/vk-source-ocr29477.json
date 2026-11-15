@@ -1,0 +1,85 @@
+{
+  "provenance": {
+    "packet_id": 29477,
+    "source_url": "https://vk.com/wall-238448315_163",
+    "ocr": "Existing posterocrcache 17:06:42/17:06:45; not a new transcription or provider call. Media assignment is stubbed empty to reproduce the saved draft boundary."
+  },
+  "source_text": "Малый повзрослел!\n\nПесни Макса Коржа - это целая эпоха! \nДоставай свою лучшую олимпийку, зови друзей и забирай билеты прямо сейчас. Количество мест ограничено — этот отрыв ты будешь вспоминать еще очень долго!\nГде и когда встретимся?\n20 ноября | Бастион холл | Двери: 18:00\nБилеты - от 850 р по ссылке в комментариях!",
+  "decision": {
+    "disposition": "EVENTS_FOUND",
+    "enrichment_required": false,
+    "events": [
+      {
+        "city": "Калининград",
+        "date": "2026-11-20",
+        "emoji": "🎤",
+        "end_date": null,
+        "event_type": "концерт",
+        "festival": "",
+        "festival_context": "none",
+        "festival_full": "",
+        "is_free": false,
+        "location_address": "Судостроительная 6/1",
+        "location_name": "Бар Бастион",
+        "pushkin_card": false,
+        "search_digest": "Трибьют-шоу, посвященное творчеству Макса Коржа. В программе исполнение популярных хитов артиста. Мероприятие ориентировано на поклонников творчества и молодежную аудиторию.",
+        "short_description": "Концерт с исполнением песен Макса Коржа в исполнении команды Dvizh в Бастион холле.",
+        "ticket_link": "",
+        "ticket_price_max": null,
+        "ticket_price_min": 850,
+        "time": "18:00",
+        "title": "🎤 Трибьют-шоу «Dvizh Army»"
+      },
+      {
+        "city": "Калининград",
+        "date": "2026-11-21",
+        "emoji": "🎤",
+        "end_date": null,
+        "event_type": "концерт",
+        "festival": "",
+        "festival_context": "none",
+        "festival_full": "",
+        "is_free": false,
+        "location_address": "Судостроительная 6/1",
+        "location_name": "Бар Бастион",
+        "pushkin_card": false,
+        "search_digest": "Трибьют-шоу, посвященное творчеству Макса Коржа. В программе исполнение популярных хитов артиста. Мероприятие ориентировано на поклонников творчества и молодежную аудиторию.",
+        "short_description": "Концерт с исполнением песен Макса Коржа в исполнении команды Dvizh в Бастион холле.",
+        "ticket_link": "",
+        "ticket_price_max": null,
+        "ticket_price_min": 850,
+        "time": "",
+        "title": "🎤 Трибьют-шоу «Dvizh Army»"
+      }
+    ],
+    "evidence_complete": true,
+    "evidence_manifest": {
+      "attachment_count": 2,
+      "evidence_complete": true,
+      "included_chars": 435,
+      "ocr_blocks_available": 2,
+      "ocr_blocks_included": 2,
+      "ocr_complete": true,
+      "omitted_blocks": [],
+      "provider_output_truncated": false,
+      "raw_text_chars": 317,
+      "raw_text_hash": "59050d188ac3bc6ab3166439aea498dd2f442bd42a411441a28daa41be4ec32a",
+      "source_text_truncated": false,
+      "unavailable_attachment_count": 0
+    },
+    "lifecycle_actions": [],
+    "parse_version": "source-parse-v1"
+  },
+  "ocr": [
+    {
+      "sha256": "0c2a835d2231ff939362274a27ad2d544b0d4ada52b2e1117bca1d26919a20fe",
+      "text": "МАКС КОРЖ\nВ КАЛИНИНГРАДЕ\n21.11",
+      "title": "МАКС КОРЖ"
+    },
+    {
+      "sha256": "cd43165bff0ccb907faa9e34ac59a8c1862d4d437452f2868fa881d4075ea0ce",
+      "text": "наша команда совместно с DVIZH устраивает:\nМОЩНЕЙШЕЕ ТРИБЬЮТ - ШОУ\n\ndvizh Army\nмолодость",
+      "title": "МОЩНЕЙШЕЕ ТРИБЬЮТ - ШОУ"
+    }
+  ]
+}

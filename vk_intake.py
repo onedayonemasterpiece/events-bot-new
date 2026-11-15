@@ -3647,7 +3647,10 @@ async def build_event_drafts_from_vk(
                 is_free=clean_bool(data.get("is_free")),
                 pushkin_card=clean_bool(data.get("pushkin_card")),
                 links=links,
-                source_text=combined_text,
+                # Identity needs the complete source even when publishing-media
+                # assignment later leaves this child without any image.
+                source_text=("\n\n".join([combined_text, "OCR вложений:", *poster_texts])
+                             if len(parsed_events) > 1 and poster_texts else combined_text),
                 poster_media=list(poster_items),
                 poster_summary=poster_summary,
                 ocr_tokens_spent=ocr_tokens_spent,
