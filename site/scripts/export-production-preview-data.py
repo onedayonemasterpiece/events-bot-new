@@ -4958,7 +4958,7 @@ def build_related(
             if str(event_id) in (cached_raw_chains or {}) and (
                 not cached_raw_chains[str(event_id)] or gemma_related_audit_cache_key(
                     model=gemma_model, policy_signature=gemma_policy_signature,
-                    anchor_id=event_id, fingerprints=previous_fingerprints,
+                    anchor_id=event_id, fingerprints=fingerprints,
                     candidate_ids=[int(item["event_id"]) for item in cached_raw_chains[str(event_id)][:candidate_limit * pass_count]],
                 ) in (cache.get("gemma_audit_cache") or {})
             )
@@ -4967,10 +4967,6 @@ def build_related(
         # old page. Keep the complete catalog available to retrieval/verifier.
         targets = set(anchor_ids) | (changed_event_ids if previous_fingerprints else set())
         targets.difference_update(cached_verified_event_ids - changed_event_ids)
-        targets.update(
-            int(anchor) for anchor, chain in (cached_raw_chains or {}).items()
-            if any(int(item["event_id"]) in changed_event_ids for item in chain)
-        )
         targets.intersection_update(current_id_set)
         chains = copy.deepcopy(cache.get("chains") or {}) if cache_compatible else {}
         raw_chains_for_cache = copy.deepcopy(cached_raw_chains or chains)

@@ -1,5 +1,7 @@
 # Changelog
 
+- Related-only: expired or changed peers no longer trigger retrieval for every old reverse neighbor; pending own anchors revalidate against current peer facts.
+
 - Location normalization no longer replaces an unknown source venue through one shared word, such as a surname; explicit venue aliases remain supported.
 
 - Telegram: photos without OCR in mixed multi-event albums reach the existing visual media review instead of being discarded by text-poster scoring. Confident text-poster filtering remains unchanged; OCR-only event assignments retain their text poster and gain no-OCR carrier candidates. Explicit photo-only assignments keep their subset.
