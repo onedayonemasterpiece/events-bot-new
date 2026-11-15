@@ -451,3 +451,11 @@ UTC-day. Semantic uncertain/disagreement без временной ошибки 
 существующий deferred retry. Счётчик попыток и provider sends не сбрасываются.
 Лимит остаётся для семантически неопределённого результата и ошибок,
 для которых существующий transient scheduler не определяет повтор.
+
+### Semantic duplicate posters
+
+The existing gallery LLM request treats resolution, aspect ratio, orientation
+and layout variants of the same poster content as duplicates. Keep a separate
+image only when it adds substantial information, different content or a
+different picture. A cover and an informative programme can both remain;
+format variants alone do not fill VK carousel slots.
