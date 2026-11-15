@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:preserve-stage-type-20261115
+    image: runcoveer/events:guide-vk-owner-20261115
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
