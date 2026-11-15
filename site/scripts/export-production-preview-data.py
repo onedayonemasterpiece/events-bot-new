@@ -4532,9 +4532,12 @@ def maybe_apply_gemma_audit(
     policy_signature = gemma_related_policy_signature(model=model)
     audited = 0
     attempted_anchors = 0
-    for anchor in events:
-        if max_anchors > 0 and attempted_anchors >= max_anchors:
-            break
+    audit_order = sorted(
+        events,
+        key=lambda event: (int(event["id"]) in changed_event_ids, int(event["id"])),
+        reverse=True,
+    ) if max_anchors > 0 else events
+    for anchor in audit_order:
         anchor_id = str(anchor["id"])
         chain = chains.get(anchor_id) or []
         top_ids = [int(item["event_id"]) for item in chain[:total_candidate_limit]]
@@ -4554,6 +4557,8 @@ def maybe_apply_gemma_audit(
             audit = {int(k): v for k, v in cached.items()}
             meta["verified_event_ids"].append(anchor_int_id)
         else:
+            if max_anchors > 0 and attempted_anchors >= max_anchors:
+                continue
             attempted_anchors += 1
             try:
                 candidate_events = [by_id[cid] for cid in top_ids if cid in by_id]

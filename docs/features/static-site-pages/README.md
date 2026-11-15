@@ -16,6 +16,29 @@ source/runtime inventory and reviewed AS-IS evidence without changing Astro or
 creating/merging design-system resources. It keeps the immutable candidate and
 the independently published prelaunch root as separate identity planes.
 
+## Related-only cold audit budget (2026-11-15)
+
+`--gemma-related-max-anchors` / `STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS`
+limits new cache-miss anchor audits per export, not the number of anchors whose
+ready cache can be consumed. All compatible cache hits and empty candidate
+chains are still processed after that budget is exhausted. In a bounded run,
+changed/new event IDs come first, then descending event ID; `0` preserves the
+unbounded pass and its original ordering. Compatible completed verdicts remain
+in the existing audit cache, so successive runs advance the cold backlog.
+
+Each selected anchor keeps the same strict multi-pass semantic checks, models,
+keys and shared limiter. Skipped cold anchors remain unverified; initial VK
+publication still requires its own completed strict related result. No provider
+calls are made for compatible warm anchors. A fresh snapshot is still required
+for events arriving after the builder's frozen inputs.
+
+Operational recommendation for the existing related-only setting: start with
+`STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS=20`. The retained prior run spent
+234 calls / 75 minutes on 117 anchors; proportional planning gives roughly
+13 minutes for 20 cold anchors versus roughly 6.5 hours for 607. These are
+estimates, not a deadline: latency, retries and cache compatibility vary. This
+change does not alter production configuration or interrupt a running build.
+
 ## Focus-group product prototype (2026-07-27)
 
 The isolated focus-group branch adds page/product mechanics for a later UI
