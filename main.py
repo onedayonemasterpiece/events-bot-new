@@ -5619,6 +5619,13 @@ async def _resume_vk_captcha_outbox(
         )
         jobs = [_normalize_job(job) for job in rows.scalars().all()]
         for job in jobs:
+            payload = job.payload if isinstance(job.payload, dict) else {}
+            if job.task == JobTask.vk_calendar_comment and int(payload.get("publish_date") or 0) > now.timestamp():
+                job.status = JobStatus.pending
+                job.updated_at = now
+                job.next_run_at = datetime.fromtimestamp(int(payload["publish_date"]), timezone.utc)
+                session.add(job)
+                continue
             if job.task == JobTask.vk_sync:
                 event = await session.get(Event, job.event_id)
                 event_end = ((event.end_date or event.date) if event else "") or ""
@@ -19861,6 +19868,14 @@ async def _run_due_jobs_once_locked(
         jobs = [
             _normalize_job(job) for job in (await session.execute(stmt)).scalars().all()
         ]
+        initial_vk_jobs = set((await session.execute(
+            select(JobOutbox.id).select_from(JobOutbox).join(Event, Event.id == JobOutbox.event_id).where(
+                JobOutbox.id.in_([job.id for job in jobs]), Event.vk_source_hash.is_(None),
+                Event.source_vk_post_url.is_(None) | ~Event.source_vk_post_url.contains(
+                    f"wall-{str(VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or '').lstrip('-')}_", autoescape=True
+                )
+            )
+        )).scalars())
     # Ready public work waits for its own dependencies, not unrelated media.
     # Missing-media VK retains its existing higher-priority media lane below.
     priority = {
@@ -19949,6 +19964,8 @@ async def _run_due_jobs_once_locked(
     def _job_due_sort_key(j: JobOutbox) -> tuple[int, int, int, int]:
         task_priority = priority.get(j.task, 99)
         related_only = os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only"
+        if j.task == JobTask.vk_sync and j.id in initial_vk_jobs:
+            return (-2, -1, int(_ensure_utc(j.next_run_at).timestamp()), j.id)
         if related_only and j.task in {JobTask.vk_sync, JobTask.event_vector_sync, JobTask.static_site_build}:
             return (-2, 2, int(_ensure_utc(j.next_run_at).timestamp()), j.id)
         if j.task == JobTask.event_media_review and j.event_id is not None:

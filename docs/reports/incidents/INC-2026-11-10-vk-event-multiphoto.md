@@ -570,3 +570,32 @@ Preservation now additionally requires the existing related-title evidence.
 An unrelated proposal reaches the unchanged catastrophic merge rollback guard;
 test_late_incoherent_merge_rolls_back_and_creates_distinct remains unchanged.
 This check is one production line (total net+11, approved budget12).
+
+
+### Initial announcement priority after CAPTCHA recovery, 15 November
+
+Nov14 initial157205/event11002 started13:17:34. Another genuine CAPTCHA at
+13:23:11 (event10929/job155992) paused it before the900s lease could expire;
+there is no evidence of a stale lease recovery.13:34:22 recovery resumed239
+rows at30s cadence. A newly imported factual change requeued managed10654,
+which ran13:35:17 and received CAPTCHA13:35:22, pausing initial again.
+
+Recovery already recognizes an external sourceURL plus NULL successful source
+hash as a new announcement. Ordinary due sorting lacked that distinction. It
+now reuses that exact predicate and gives due initial VK jobs precedence over
+managed edits and background related compute. Ready calendars keep their
+existing higher priority. Future calendars with known payload publish_date
+resume pending at that public time without taking a30s cadence position.
+Legacy comments without publication metadata retain existing treatment.
+
+Six initialized controls distinguish future-cadence starvation from ordinary
+due ordering, retain ready/legacy comment priority, recognize external sources
+and reject managed-URL/previously-applied-hash decoys. Existing terminal filtering,
+30s recovery pacing, dependency and stale-running tests remain unchanged.
+No new state, queue, timer, retry, limiter or provider. Production net+17.
+
+Recovery does not persist the original randomly chosen comment deadline: ICS
+handler derives its existing deterministic URL-based delay, while the related
+handler retains its existing minimum guard. Normal producer randomized due
+remains unchanged. This source fix does not prove a new VK publication or
+resolve CAPTCHA; parent owns deployment and ordinary product verification.
