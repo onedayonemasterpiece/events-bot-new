@@ -252,6 +252,8 @@ def _candidate_prefilter(features: Mapping[str, Any]) -> tuple[bool, float]:
         return False, 0.0
     if same_source and same_channel_post:
         return True, 0.82 + token_score
+    if same_source and same_time:
+        return True, 0.6 + token_score
     if same_source and same_title_core and schedule_rollup:
         return True, 0.78 + token_score
     if same_source and (token_score >= 0.12 or len(shared_tokens) >= 3 or same_booking):
@@ -499,7 +501,8 @@ async def _ask_pair_judge_llm(left: Mapping[str, Any], right: Mapping[str, Any],
             "booking_url": left.get("booking_url"),
             "audience_fit": list(left.get("audience_fit") or []),
             "summary_one_liner": str(left.get("summary_one_liner") or ""),
-            "post_excerpt": collapse_ws(str(left.get("dedup_source_text") or ""))[:1400],
+            "guide_names": list(left.get("guide_names") or []),
+            "post_excerpt": collapse_ws(str(left.get("dedup_source_text") or "")),
         },
         "right": {
             "occurrence_id": int(right.get("id") or 0),
@@ -515,13 +518,17 @@ async def _ask_pair_judge_llm(left: Mapping[str, Any], right: Mapping[str, Any],
             "booking_url": right.get("booking_url"),
             "audience_fit": list(right.get("audience_fit") or []),
             "summary_one_liner": str(right.get("summary_one_liner") or ""),
-            "post_excerpt": collapse_ws(str(right.get("dedup_source_text") or ""))[:1400],
+            "guide_names": list(right.get("guide_names") or []),
+            "post_excerpt": collapse_ws(str(right.get("dedup_source_text") or "")),
         },
         "candidate_features": dict(features),
     }
     prompt = (
         "Ты решаешь задачу дедупликации анонсов экскурсий.\n"
         "Определи, описывают ли две карточки один и тот же конкретный выход экскурсии.\n"
+        "Название в рассказе или тизере может быть другим названием выхода из расписания того же поста.\n"
+        "Проверь такую связь по полному тексту, гиду, дате и времени; не считай разные названия сами по себе разными выходами.\n"
+        "Одно расписание может перечислять несколько разных экскурсий: связывай только конкретный выход с его гидом и маршрутом.\n"
         "Будь консервативен: совпадение даты, телефона или канала само по себе недостаточно.\n"
         "Если один пост выглядит как тизер/фокус на часть маршрута внутри более общего анонса на ту же дату, это same_occurrence.\n"
         "Верни только JSON без markdown.\n"

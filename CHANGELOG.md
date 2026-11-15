@@ -48,6 +48,8 @@
 
 ## [Unreleased]
 
+- Guide digest: compare same-source schedule slots with full source and guide context, preventing narrative title aliases from occupying two cards.
+
 - Fixed guide monitoring source links for VK wall items owned by another community or person: use the returned signed post owner instead of the requested wall.
 
 
