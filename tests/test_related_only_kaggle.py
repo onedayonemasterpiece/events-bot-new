@@ -384,6 +384,6 @@ async def test_related_adopts_old_deploy_data_but_not_changed_policy_or_input(tm
     claim.input_fingerprint = fingerprint
     html_payload = deepcopy(payload)
     html_payload["remote_handoff"]["profile"] = "production-candidate"
-    with pytest.raises(main.StaticSiteSingleFlightDeferred, match="cross_deploy_repo_sha_mismatch"):
+    with pytest.raises(main.StaticSiteSingleFlightDeferred, match="cross_deploy_source_identity_mismatch"):
         await recover(html_payload)
     assert commands == [("adopt-only",)]
