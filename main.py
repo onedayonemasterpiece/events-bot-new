@@ -19805,7 +19805,10 @@ async def _run_due_jobs_once_locked(
                     limit = min(limit, _static_site_pre_handoff_stale_seconds())
             age = (now - rjob.updated_at).total_seconds()
             if age > limit:
-                if rjob.task == JobTask.static_site_build:
+                if (
+                    rjob.task == JobTask.static_site_build
+                    and active_static_job_id == rjob.id
+                ):
                     remote_run_id = await asyncio.to_thread(
                         active_static_site_remote_run,
                         db.path,

@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vk-mixed-album-photos-20261115
+    image: runcoveer/events:static-owner-lease-20261115
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

@@ -1322,3 +1322,78 @@ async def test_related_cross_release_recovery_uses_original_run_without_push(mon
     assert command[command.index("--repo-sha") + 1] == old_sha
     assert command[command.index("--expected-dataset-ref") + 1] == "owner/original-input"
     assert "--image-source-manifest" not in command
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('ledger_status,heartbeat_age,orphan_age,owner_running,expected_admitted', [
+    ('alive', 0, 660, False, True),  # A different live run cannot protect the orphan.
+    ('alive', 0, 660, True, False),  # The actual durable owner keeps its live lease.
+    ('complete', 0, 660, False, True),    # Durable terminal unblocks stale cleanup.
+    ('alive', 7300, 660, False, True),    # Expired remote liveness also allows ordinary stale cleanup.
+    ('complete', 0, 300, False, False),   # Existing pre-handoff grace still applies.
+])
+async def test_durable_owner_admission_past_foreign_pre_handoff_orphan(
+        tmp_path, monkeypatch, ledger_status, heartbeat_age, orphan_age, owner_running, expected_admitted):
+    monkeypatch.setenv('STATIC_SITE_PRE_HANDOFF_STALE_SECONDS', '600')
+    monkeypatch.setattr(main, '_vk_captcha_needed', False)
+    db = main.Database(str(tmp_path / 'local.sqlite'))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    calls = []
+    try:
+        async with db.get_session() as session:
+            events = [main.Event(title=label, description='facts', source_text='facts',
+                date='2099-01-01', time='19:00', location_name='Venue')
+                for label in ('Durable remote owner', 'Foreign pre-handoff row')]
+            session.add_all(events)
+            await session.commit()
+            for event in events:
+                await session.refresh(event)
+            owner = main.JobOutbox(event_id=events[0].id, task=main.JobTask.static_site_build,
+                payload={'trigger': 'operator_request'},
+                status=main.JobStatus.running if owner_running else main.JobStatus.pending,
+                coalesce_key='static_site_build:prod',
+                updated_at=now-timedelta(hours=5) if owner_running else now,
+                next_run_at=now-timedelta(seconds=1))
+            orphan = main.JobOutbox(event_id=events[1].id, task=main.JobTask.static_site_build,
+                payload={'trigger': 'smart_update'}, status=main.JobStatus.running,
+                coalesce_key='static_site_build:prod', attempts=0,
+                last_error='static_site_single_flight_busy:offline-old-run',
+                updated_at=now-timedelta(seconds=orphan_age),
+                next_run_at=now-timedelta(seconds=orphan_age))
+            session.add_all([owner, orphan])
+            await session.commit()
+            await session.refresh(owner)
+            await session.refresh(orphan)
+            owner_id, orphan_id = owner.id, orphan.id
+            owner_event_id = events[0].id
+        main.claim_static_site_build(db.path, job_id=owner_id, run_id='offline-old-run',
+            input_fingerprint='a'*64, effective_date='2026-11-15', request_watermark=None)
+        async with db.get_session() as session:
+            await session.execute(sql_text('''INSERT INTO kaggle_run_ledger(
+                run_id,kind,status,token_hash,progress_json,created_at,updated_at,last_heartbeat_at,terminal_at
+                ) VALUES(:run_id,'static_site_builder',:status,'offline-only','{}',:created,:updated,:updated,:terminal)'''),
+                {'run_id': 'offline-old-run', 'status': ledger_status,
+                 'created': (now-timedelta(hours=6)).isoformat(),
+                 'updated': (now-timedelta(seconds=heartbeat_age)).isoformat(),
+                 'terminal': now.isoformat() if ledger_status == 'complete' else None})
+            await session.commit()
+        async def handler(event_id, _db, _bot):
+            calls.append(event_id)
+            return False  # Admission proof only; no remote/provider/publication effect.
+        monkeypatch.setitem(main.JOB_HANDLERS, 'static_site_build', handler)
+        await main._run_due_jobs_once(db, None, allowed_tasks={main.JobTask.static_site_build}, max_jobs=1)
+        async with db.get_session() as session:
+            owner = await session.get(main.JobOutbox, owner_id)
+            orphan = await session.get(main.JobOutbox, orphan_id)
+        observed = {'calls': calls, 'owner_status': owner.status.value,
+                    'owner_error': owner.last_error, 'orphan_status': orphan.status.value,
+                    'orphan_error': orphan.last_error}
+        assert (calls == [owner_event_id]) == expected_admitted, observed
+        if orphan_age > 600:
+            assert orphan.status == main.JobStatus.error, observed
+            assert orphan.last_error == 'stale', observed
+        if owner_running:
+            assert owner.status == main.JobStatus.running, observed
+    finally:
+        await db.engine.dispose()
