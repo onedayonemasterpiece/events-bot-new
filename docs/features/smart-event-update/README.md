@@ -1,5 +1,16 @@
 # Smart Event Update (Интеллектуальный импорт)
 
+## Canonical event type during merge
+
+The existing semantic merge can correct an inferred event type using
+`event_type_decision.value` and a literal `evidence_quote` from its candidate
+text or supplied poster OCR. Existing and candidate classification labels are
+context, not source evidence. Actual conflicting source statements retain the
+existing trust policy; a newer candidate alone does not replace the type.
+Absent or ungrounded decisions preserve the canonical type. An accepted choice,
+its source-linked type fact and the other merge changes commit together.
+This adds no classifier call, historical replay or automatic VK edits.
+
 ## Dedup adjudicator reason codes
 
 Proven different programmes use `distinct_show_keep`, separate sessions use
