@@ -41,6 +41,7 @@
 
 ### Fixed
 - Static-site cross-deploy recovery can use exact dataset-bound Kaggle terminal status when callbacks are missing; live, unknown or mismatched runs retain the existing single-flight barrier.
+- Keep related-event comments dormant before their known publication time, including early recovery; preserve their existing randomized due time and frozen selection.
 - Give already due VK comment jobs precedence over old missing-media retries and related-only static/media work, using the existing outbox priority; leave calendar delay and provider pacing unchanged.
 - Keep the complete canonical approved source gallery when applying duplicate-only imports; VK attachment limits apply only at publication, avoiding unnecessary edits of existing ten-photo posts.
 - Preserve source-photo detail after VK empty upload responses: try smaller JPEG encodings at prepared resolution before an 800 px fallback, retaining full-resolution PNG card recovery and the existing four-attempt bound.
