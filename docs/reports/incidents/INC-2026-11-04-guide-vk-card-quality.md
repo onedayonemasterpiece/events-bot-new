@@ -179,3 +179,50 @@ Scheduled version 13 exact recovery completed as ops 12285 PARTIAL with all 87 s
 One ordinary FULL, ops 12288 / run 34c50f791e83 / version 14, was submitted for all then-current 122 sources, including IDs 88–122. Its config was independently downloaded and compared. Local ops crashed on the deliberate runtime cutover, while the exact version 14 registry survived and remote processing continued. At 21:55 it completed 16 of 122 sources and read 55 posts. Do not repeat SaveKernel or start a competing scan; reconcile and import that exact result when complete. The current registry has 131 enabled rows; IDs 123–131 were added after config freeze and remain next-pass work. Raw rows are not a unique-wall count because canonical aliases exist.
 
 Evidence in the existing managed retained incident directory: guide-canonical-release-build-20261115.log, guide-canonical-preflight-health-20261115.log, guide-canonical-cutover-20261115.log, guide-canonical-live-health-20261115.json, preview-guide-canonical-four-selection-20261115.json, visual-preview-349.jpg, publish-guide-visual349-vk-20261115.log, guide-visual349-user-provider-readback-20261115.log, guide-visual349-live-wall-20261115.log and guide-visual349-canonical-receipt-20261115.log. Provider transport acceptance, public publication and later registry coverage are separate verified stages.
+
+
+### 2026-11-16: version 14 accepted; preserve source identity through startup
+
+Ordinary saved-input import `12299` accepted run `34c50f791e83`, version 14,
+as `partial` at November 15 21:30:42 UTC. All 122 source reports persisted:
+89 ok, 20 partial, 13 VK wall access-denied errors; 166 posts, 35 LLM OK,
+37 deferred and one LLM error. The exact recovery registry job is settled.
+Do not replay this accepted input. New rows 771–774 are one undated offer
+(digest ineligible) and three January museum visits outside the current
+45-day window. Primary post links were independently checked in production.
+
+PR #1001 fixes mechanical startup seeding that replaced the complete flags
+object and erased resolved VK IDs. It merges existing flags before explicit
+seed fields, net production +2 lines; no new retry, state or registration path.
+All four CI checks passed on integration head
+`4a4ce15609035840f392df03ddce6efd69c2657d`; six focused seed tests passed.
+Merged main `130c33607217d246bcbc7d9159ce358d6bad05ab` was delivered as
+`runcoveer/events:guide-seed-20261116`, immutable image
+`sha256:3339ebdf9e4cd00df961136dd175c8b6fa3a3776b137064ec970d12e2cefdfe7`.
+The running `4b6b06cb57e693e2baa9ff30248bc67e8c338550` was proved an ancestor;
+Docker/dependency inputs were unchanged and all 4,503 tracked files matched.
+Network-isolated preflight passed without mounting production data.
+Events-only cutover preserved effective environment, mounts and Kotopogoda.
+Rollback image is
+`sha256:05e203317fd740a7217989316a1fd3bab95997278d72f6fbdb61babdf38ee579`;
+Compose backup and cutover receipt remain in the candidate release directory.
+
+Live health returned ready, database ok, all enabled scheduler entries ok and
+no issues. The deployed ordinary seed function was called twice for existing
+source 23 with its real metadata and a seed flags subset: existing VK ID
+233346686 and every other runtime flag survived both calls. The transaction
+was rolled back to preserve source metadata. Explicit seed precedence was
+covered by the focused regression test. Production readback retained the
+accepted import receipt and all 147 enabled source rows. This does not prove
+that all 147 sources have been scanned: IDs 123–147 remain unscanned. Their
+next ordinary full scan must use the current registry after the November 16
+10:00 Kaliningrad Pacific-day quota reset, without changing provider limits,
+keys or models. Closed walls and deferred analysis are not no-event results.
+
+Retained evidence:
+`/home/dev/artifacts/events-bot-new/20261104T093210Z-guide-digest-vk-quality-20261104/`:
+`guide-import12299-terminal-20261115.json`, `guide-seed-build-20261116.log`,
+`guide-seed-preflight-health-20261116.log`, `guide-seed-cutover-20261116.log`,
+`guide-seed-live-acceptance-20261116.log`, `guide-seed-live-health-20261116.json`
+and `guide-registry-before-seed-release-20261116.json`.
+The verified live digest 349 / VK post 410 and its story were not replayed.
