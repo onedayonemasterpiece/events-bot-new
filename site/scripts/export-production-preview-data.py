@@ -4899,7 +4899,8 @@ def build_related(
     changed_event_ids = {
         int(event_id)
         for event_id, fingerprint in fingerprints.items()
-        if previous_fingerprints.get(event_id) != fingerprint
+        if int(event_id) not in previous_id_set or (
+            event_id in previous_fingerprints and previous_fingerprints[event_id] != fingerprint)
     }
     changed_event_ids.update(previous_id_set - current_id_set)
     cache_compatible = (
@@ -5120,8 +5121,9 @@ def build_related(
             else None
         ),
         "event_ids": event_ids,
-        "event_fingerprints": {key: value for key, value in fingerprints.items()
-                               if int(key) not in unfinished_anchor_ids},
+        "event_fingerprints": {key: (previous_fingerprints[key] if int(key) in unfinished_anchor_ids else value)
+                               for key, value in fingerprints.items()
+                               if int(key) not in unfinished_anchor_ids or key in previous_fingerprints},
         "chains": chains,
         "raw_chains": raw_chains_for_cache,
         "graph_reciprocity": graph_meta,

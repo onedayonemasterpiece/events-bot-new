@@ -91,7 +91,7 @@ def test_first_publication_uses_changed_anchors_and_keeps_capped_work(tmp_path, 
     assert not partial['related'][str(remainder[0])]['strict_verified']
     db.execute("INSERT INTO event VALUES (729, 'Ещё новая программа')")
     db.commit()
-    final = run(cap=2)
+    final = run(cap=2, anchors={726, 727, 728, 729})
     assert len(audits) == 5
     assert all(final['related'][str(i)]['strict_verified'] for i in (726, 727, 728, 729))
     saved = json.loads(cache_path.read_text())
@@ -302,3 +302,86 @@ def test_rollover_prunes_history_without_fabricating_verified_empty(tmp_path, mo
         gemma_verify=True, gemma_max_anchors=20)
     assert len(retrieval) == before + 1
     assert single['related']['5']['strict_verified']
+
+
+def test_missing_old_fingerprints_do_not_create_a_cold_audit_tail(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location(
+        'related_observed_changes', os.getenv('RELATED_EXPORTER_PATH') or
+        Path(__file__).resolve().parents[1] / 'site/scripts/export-production-preview-data.py')
+    exporter = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(exporter)
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'test-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '1')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS', '1')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_RETRY_BACKOFF_SEC', '0')
+    events = [dict(id=i, title=f'Event {i}', date='2026-11-20') for i in range(1, 7)]
+    old_fp = exporter.event_fingerprint(events[0])
+    cache_path = tmp_path / 'cache.json'
+    cache_path.write_text(json.dumps({
+        'schema_version': exporter.PGVECTOR_RELATED_CACHE_SCHEMA_VERSION,
+        'algorithm': exporter.PGVECTOR_RELATED_ALGORITHM,
+        'embedding_model': 'gemini-embedding-2', 'embedding_document_version': 'related_v1',
+        'event_ids': [1, 2, 3, 4, 5], 'event_fingerprints': {'1': old_fp},
+        'chains': {}, 'raw_chains': {}, 'gemma_verified_event_ids': []}))
+    retrieval, audits, fail = [], [], set()
+
+    def retrieve(_events, *, anchor_ids, **kwargs):
+        retrieval.append(sorted(anchor_ids))
+        return {str(i): [{'event_id': 2 if i == 1 else 1,
+                 'vector_similarity': .85, 'related_score': .85, 'slot_type': 'pure_related'}]
+                for i in anchor_ids}
+
+    def audit(**kwargs):
+        anchor = kwargs['anchor']['id']
+        audits.append(anchor)
+        if anchor in fail:
+            raise RuntimeError('offline permanent failure')
+        return {event['id']: {'llm_semantic_score': .9, 'confidence': .9,
+                'reject': False, 'similarity_class': 'highly_similar'}
+                for event in kwargs['candidates']}
+
+    monkeypatch.setattr(exporter, 'build_pgvector_related_chain', retrieve)
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+
+    def run(anchors):
+        return exporter.build_related(
+            events, current_date='2026-11-15', related_mode='pgvector',
+            cache_path=cache_path, gemma_verify=True, gemma_max_anchors=1, anchor_ids=anchors)
+
+    first = run({6})
+    assert retrieval == [[6]] and audits == [6]
+    assert first['related']['6']['strict_verified']
+    assert not first['related']['2']['strict_verified']
+    run({6})
+    assert retrieval == [[6]] and audits == [6]
+    demanded = run({2})
+    assert retrieval[-1] == [2] and audits == [6, 2]
+    assert demanded['related']['2']['strict_verified']
+    events[0]['title'] = 'Actual source change'
+    fail.add(1)
+    for _ in range(2):
+        failed = run(set())
+        assert retrieval[-1] == [1] and not failed['related']['1']['strict_verified']
+        assert json.loads(cache_path.read_text())['event_fingerprints']['1'] == old_fp
+    assert audits == [6, 2, 1, 1]
+    fail.clear()
+    completed = run(set())
+    assert completed['related']['1']['strict_verified']
+    assert audits == [6, 2, 1, 1, 1]
+    run(set())
+    assert audits == [6, 2, 1, 1, 1]
+    before_change = json.loads(cache_path.read_text())['event_fingerprints']
+    events[0]['title'] = 'Second actual change'
+    events[1]['title'] = 'Other actual change'
+    run(set())
+    saved = json.loads(cache_path.read_text())['event_fingerprints']
+    unfinished = [event for event in events[:2]
+                  if saved[str(event['id'])] != exporter.event_fingerprint(event)]
+    assert len(unfinished) == 1
+    pending_id = str(unfinished[0]['id'])
+    assert saved[pending_id] == before_change[pending_id]
+    run(set())
+    assert retrieval[-1] == [int(pending_id)]
+    count = len(audits)
+    run(set())
+    assert len(audits) == count

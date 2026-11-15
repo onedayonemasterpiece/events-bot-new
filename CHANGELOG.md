@@ -1,5 +1,7 @@
 # Changelog
 
+- Related-only: missing historical fingerprints are not source changes. Pending first posts still request their own anchors; failed or capped known changes retain their previous fingerprint until successful verification.
+
 - Related cache drops departed events, peer links and unreachable verifier entries without treating missing retrieval data as verified empty.
 
 - Related-only: expired or changed peers no longer trigger retrieval for every old reverse neighbor; pending own anchors revalidate against current peer facts.
