@@ -431,15 +431,10 @@ def match_known_venue(value: str | None, *, city: str | None = None) -> KnownVen
     if not key_tokens:
         return None
 
-    from collections import Counter
-
-    freq: Counter[str] = Counter()
     venue_tokens: list[tuple[KnownVenue, set[str]]] = []
     for venue in venues:
         venue_token_set = _tokens(venue.name_key)
         venue_tokens.append((venue, venue_token_set))
-        for token in venue_token_set:
-            freq[token] += 1
 
     best: tuple[int, KnownVenue, set[str]] | None = None
     second_score = 0
@@ -455,13 +450,8 @@ def match_known_venue(value: str | None, *, city: str | None = None) -> KnownVen
     if not best or best[0] <= 0:
         return None
 
-    overlap = key_tokens & best[2]
     if best[0] >= 2 and (best[0] - second_score) >= 1:
         return best[1]
-    if best[0] == 1 and (best[0] - second_score) >= 1:
-        only = next(iter(overlap)) if overlap else ""
-        if only and freq.get(only, 0) == 1:
-            return best[1]
     return None
 
 
