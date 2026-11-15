@@ -85,6 +85,26 @@ def test_build_gemma_related_audit_prompt_is_compact_and_xml_escaped() -> None:
     assert len(prompt) < 2100
 
 
+def test_verifier_occurrence_classes_have_slot_time_and_invalidate_time_edits():
+    exporter = _load_exporter_module()
+    anchor = {"id": 10, "title": "Трибьют", "start_date": "2026-11-20", "start_time": "18:00"}
+    later = {**anchor, "id": 11, "start_time": "20:00"}
+    prompt = exporter.build_gemma_related_audit_prompt(anchor=anchor, candidates=[later], fact_max_chars=360)
+    assert "<time>18:00</time>" in prompt and "<time>20:00</time>" in prompt
+    assert "duplicate_same_slot, same_occurrence_group," in prompt
+    fingerprints = {"10": exporter.event_fingerprint(anchor), "11": exporter.event_fingerprint(later)}
+    assert exporter.event_fingerprint(anchor) == exporter.event_fingerprint({**anchor, "start_time": "20:00"})
+    kwargs = dict(model="test", policy_signature="test", anchor_id=10,
+                  fingerprints=fingerprints, candidate_ids=[11])
+    original = exporter.gemma_related_audit_cache_key(**kwargs, events_by_id={10: anchor, 11: later})
+    assert original != exporter.gemma_related_audit_cache_key(
+        **kwargs, events_by_id={10: {**anchor, "start_time": "19:00"}, 11: later})
+    assert original != exporter.gemma_related_audit_cache_key(
+        **kwargs, events_by_id={10: anchor, 11: {**later, "start_time": "21:00"}})
+    assert original == exporter.gemma_related_audit_cache_key(
+        **kwargs, events_by_id={10: anchor, 11: later, 12: {**later, "start_time": "22:00"}})
+
+
 def test_city_level_fallback_is_not_exported_as_a_venue() -> None:
     exporter = _load_exporter_module()
 

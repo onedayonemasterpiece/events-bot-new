@@ -4180,6 +4180,7 @@ def _related_audit_event_block(event: dict[str, Any], *, tag: str, fact_max_char
     venue = _related_audit_text(event.get("venue_name") or "", max_chars=120)
     city = _related_audit_text(event.get("city") or "", max_chars=80)
     date = _related_audit_text(event.get("start_date") or "", max_chars=40)
+    time = _related_audit_text(event.get("start_time") or "", max_chars=40)
     event_id = int(event["id"])
     return (
         f'<{tag} id="{event_id}">\n'
@@ -4190,6 +4191,7 @@ def _related_audit_event_block(event: dict[str, Any], *, tag: str, fact_max_char
         f"<venue>{venue}</venue>\n"
         f"<city>{city}</city>\n"
         f"<date>{date}</date>\n"
+        f"<time>{time}</time>\n"
         f"</{tag}>"
     )
 
@@ -4218,7 +4220,8 @@ def build_gemma_related_audit_prompt(
         "Оценка: 0.90+ почти тот же интерес; 0.72+ можно показывать в блоке «Похожие»; 0.55-0.71 слабая/смежная рекомендация; <0.55 reject=true.\n"
         "Оцени самостоятельные события. Общий анонс, фестиваль или турнир может содержать разные программы: учитывай факты выбранного title/type, а не всего расписания.\n"
         "Если событие просто другое, даже качественное, ставь reject=true.\n"
-        "similarity_class выбери строго из: identical_or_near_identical, highly_similar, thematically_close, weak_or_adjacent_related, different_topic.\n"
+        "similarity_class выбери строго из: duplicate_same_slot, same_occurrence_group, identical_or_near_identical, highly_similar, thematically_close, weak_or_adjacent_related, different_topic.\n"
+        "Та же программа в том же подтверждённом сеансе — duplicate_same_slot (не утверждай тот же сеанс при неизвестном времени); та же программа в другую дату или время — same_occurrence_group. Общие место, жанр или время сами по себе не делают самостоятельные программы одной программой.\n"
         "confidence: 0..1, насколько достаточно фактов и насколько ты уверен в оценке; снижай при скудном описании или спорной похожести.\n"
         "Не объясняй решение, не возвращай лишние поля.\n\n"
         "<anchor>\n"
@@ -4453,17 +4456,21 @@ def gemma_related_policy_signature(*, model: str) -> str:
             120,
             int(os.getenv("STATIC_SITE_GEMMA_RELATED_FACT_MAX_CHARS", "360") or "360"),
         ),
-        "prompt_version": "related_gemma4_schema_v8_complete_anchor_two_pass",
+        "prompt_version": "related_gemma4_schema_v9_occurrence_slot",
     }
     return hashlib.sha1(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
 
-def gemma_related_audit_cache_key(*, model, policy_signature, anchor_id, fingerprints, candidate_ids):
+def gemma_related_audit_cache_key(*, model, policy_signature, anchor_id, fingerprints, candidate_ids, events_by_id):
     return hashlib.sha1(json.dumps({
         "model": model,
         "policy_signature": policy_signature,
         "anchor": fingerprints.get(str(anchor_id)),
         "candidates": {str(cid): fingerprints.get(str(cid)) for cid in candidate_ids},
+        "start_times": {
+            str(eid): events_by_id.get(int(eid), {}).get("start_time")
+            for eid in [anchor_id, *candidate_ids]
+        },
     }, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
 
@@ -4559,7 +4566,7 @@ def maybe_apply_gemma_audit(
         anchor_int_id = int(anchor["id"])
         cache_key = gemma_related_audit_cache_key(
             model=model, policy_signature=policy_signature, anchor_id=anchor_id,
-            fingerprints=fingerprints, candidate_ids=top_ids,
+            fingerprints=fingerprints, events_by_id=by_id, candidate_ids=top_ids,
         )
         cached = audit_cache.get(cache_key)
         if cached:
@@ -4588,7 +4595,7 @@ def maybe_apply_gemma_audit(
                         continue
                     pass_key = gemma_related_audit_cache_key(
                         model=model, policy_signature=policy_signature, anchor_id=anchor_id,
-                        fingerprints=fingerprints, candidate_ids=[event["id"] for event in pass_candidates])
+                        fingerprints=fingerprints, events_by_id=by_id, candidate_ids=[event["id"] for event in pass_candidates])
                     if pass_key in audit_cache:
                         audit.update({int(k): v for k, v in audit_cache[pass_key].items()})
                         successful_passes += 1
@@ -4880,6 +4887,7 @@ def build_related(
     related_corpus_revision = str(related_corpus_revision or "").strip()
     generated_at = datetime.now(timezone.utc).isoformat()
     fingerprints = {str(event["id"]): event_fingerprint(event) for event in events}
+    event_by_id = {int(event["id"]): event for event in events}
     event_ids = [int(event["id"]) for event in events]
     cache = load_related_cache(cache_path) or {}
     graph_meta: dict[str, Any] = {
@@ -4968,7 +4976,7 @@ def build_related(
             if str(event_id) in (cached_raw_chains or {}) and (
                 not cached_raw_chains[str(event_id)] or gemma_related_audit_cache_key(
                     model=gemma_model, policy_signature=gemma_policy_signature,
-                    anchor_id=event_id, fingerprints=fingerprints,
+                    anchor_id=event_id, fingerprints=fingerprints, events_by_id=event_by_id,
                     candidate_ids=[int(item["event_id"]) for item in cached_raw_chains[str(event_id)][:candidate_limit * pass_count]],
                 ) in (cache.get("gemma_audit_cache") or {})
             )
@@ -5103,7 +5111,7 @@ def build_related(
         audit_keys = {
             int(anchor): gemma_related_audit_cache_key(
                 model=gemma_model, policy_signature=gemma_policy_signature, anchor_id=anchor,
-                fingerprints=fingerprints, candidate_ids=[int(item["event_id"]) for item in chain[:candidate_limit * pass_count]])
+                fingerprints=fingerprints, events_by_id=event_by_id, candidate_ids=[int(item["event_id"]) for item in chain[:candidate_limit * pass_count]])
             for anchor, chain in raw_chains_for_cache.items()
         }
         retained_keys = set(audit_keys.values())
@@ -5112,7 +5120,7 @@ def build_related(
             retained_keys.update(
                 gemma_related_audit_cache_key(
                     model=gemma_model, policy_signature=gemma_policy_signature, anchor_id=anchor,
-                    fingerprints=fingerprints, candidate_ids=top_ids[offset:offset + candidate_limit])
+                    fingerprints=fingerprints, events_by_id=event_by_id, candidate_ids=top_ids[offset:offset + candidate_limit])
                 for offset in range(0, len(top_ids), candidate_limit))
         retained_keys &= (cache.get("gemma_audit_cache") or {}).keys()
         cache["gemma_audit_cache"] = {key: cache["gemma_audit_cache"][key] for key in retained_keys}

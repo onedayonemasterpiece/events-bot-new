@@ -216,6 +216,17 @@ remaining lower-ranked pgvector candidates should be shown later only under a
 separate adjacent/discovery heading such as “Возможно, вам будет интересно”,
 not silently mixed into strict similar cards.
 
+The same verifier distinguishes `duplicate_same_slot` (the same programme in the
+same confirmed date/time slot) and `same_occurrence_group` (the same programme
+on another date or time). Both existing classes are excluded from standalone
+semantic recommendations; canonical linked occurrences still own the separate
+other-dates card. Similar independent programmes remain eligible even if their
+venue, genre or slot coincides. An unknown time does not establish a duplicate.
+Compact verifier facts include the existing start time. Start-time changes affect
+only the existing audit keys of the anchor/candidates; graph fingerprints remain
+unchanged so releasing this contract does not mark the whole catalogue changed.
+
+
 Prompt/schema audit evidence:
 
 - Gemini Pro review: `artifacts/codex/related-gemma-prompt-audit-20260630/gemini-3.1-pro-review.md`.
