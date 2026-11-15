@@ -711,6 +711,14 @@ profile. Return to `production-candidate` when site restoration is ready; the
 same exporter/cache remains in use. A computation-only completion releases the
 site claim with a `related_ready` receipt rather than recording an HTML success.
 
+Across an unrelated Events release, data-only adoption keeps the original
+`run_id`, input fingerprint, dataset, original source receipt, model/policy
+configuration and JSON artifact checks. It does not compare the old Kaggle
+result with the **new** app image/source tree. An incompatible semantic
+configuration is rejected by the existing terminal handoff path; incomplete
+Gemma anchors stay unverified. Full HTML candidates retain strict cross-deploy
+source matching and publication checks.
+
 For API-started Kaggle static-site builds, do **not** depend on Kaggle UI Secrets for Gemma verification. The documented project pattern is encrypted split datasets. `scripts/run_static_site_builder_kaggle.py` now creates two short-lived private datasets when `--gemma-related-verify` is enabled:
 
 - cipher dataset: `secrets.enc` plus non-secret `config.json`;
