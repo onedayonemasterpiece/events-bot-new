@@ -113,6 +113,7 @@ async def _programme_decisions(db, children, past=120, future=365, limit=800):
         for eid, peers in chunk.items():
             for pid, relation in peers.items():
                 if verdicts.setdefault(eid, {}).get(pid, relation) != relation:
+                    logging.warning("programme_identity_rejected reason=contradictory_chunks target_id=%s peer_id=%s", eid, pid)
                     return {}  # Contradictory chunks cannot supply programme identity.
                 verdicts[eid][pid] = relation
     return verdicts
@@ -192,6 +193,9 @@ async def _programme_chunk(db, children, target_ids, past, future, limit):
             k: ({'type': 'string', 'enum': ['duplicate_same_slot', 'independent_event']} if k == 'relation' else {'type': 'integer' if k.endswith('_id') else 'string'})
             for k in ('target_id', 'peer_id', 'relation', 'target_quote', 'peer_quote')},
             'required': ['target_id', 'peer_id', 'relation', 'target_quote', 'peer_quote']}}}, 'required': ['groups', 'decisions']}
+    logging.info("programme_identity_request targets=%s participants=%s scoped_proofs=%s nonempty_proofs=%s",
+        target_ids, list(packets), sum(bool(children.get(i)) for i in packets),
+        sum(bool(p["proof"]) for p in packets.values()))
     answer = await _ask_gemma_json(prompt, schema, max_tokens=6000, label='programme_identity')
     decisions = {i: {} for i in target_ids if i in packets}
     evidence = {i: [p['title'], p['proof']] for i, p in packets.items()}
@@ -201,12 +205,15 @@ async def _programme_chunk(db, children, target_ids, past, future, limit):
         ids = [m.get('event_id') for m in members]
         if (len(ids) < 2 or any(type(i) is not int or i not in packets for i in ids)
             or len(set(ids)) != len(ids) or seen.intersection(ids)):
+            logging.warning("programme_identity_rejected reason=invalid_members targets=%s member_count=%s", target_ids, len(ids))
             return {}
         if any(not isinstance(m.get('quote'), str) or not m['quote'] or not any(m['quote'] in part for part in evidence[m['event_id']])
             or m['quote'].strip() in packets[m['event_id']]['address'] for m in members):
+            logging.warning("programme_identity_rejected reason=unverified_quote targets=%s member_ids=%s", target_ids, ids)
             return {}
         slots = [(events[i].date, events[i].time) for i in ids]
         if len(set(slots)) != len(slots):
+            logging.warning("programme_identity_rejected reason=duplicate_slot targets=%s member_ids=%s", target_ids, ids)
             return {}  # Same-slot copies are not another date; no existing-row merge is implied.
         seen.update(ids)
         for i in ids:
@@ -224,10 +231,13 @@ async def _programme_chunk(db, children, target_ids, past, future, limit):
                 (events[tid].date, events[tid].time) == (events[pid].date, events[pid].time)
                 and tq.strip() not in packets[tid]['address'] and pq.strip() not in packets[pid]['address']))):
             if decisions[tid].get(pid, relation) != relation:
+                logging.warning("programme_identity_rejected reason=contradictory_pair target_id=%s peer_id=%s", tid, pid)
                 return {}  # Contradictory pair output supplies no new semantic evidence.
             decisions[tid][pid] = relation
             if pid in decisions:
                 decisions[pid][tid] = relation
+    logging.info("programme_identity_result targets=%s groups=%s returned_decisions=%s accepted_pairs=%s",
+        target_ids, len((answer or {}).get("groups", [])), len((answer or {}).get("decisions", [])), sum(map(len, decisions.values())))
     return decisions
 
 
