@@ -1,5 +1,9 @@
 # Static Site Event Pages
 
+## Самостоятельная оптимизация генерации — 18 октября 2026
+
+[Проект ускорения Astro](../../architecture/astro-static-generation-optimization.md) и [отчёт исследования](../../reports/astro-static-generation-design-review-2026-10-18.md) описывают быстрый локальный dev/build на DevCoveer и оптимизацию production-сборок на Kaggle. Действующие Astro, Python, данные и release contracts сохраняются. Полное переписывание бота отложено; первые улучшения не зависят от [Smart Update Ultra](../../architecture/smart-update-ultra-targeted-implementation.md) и публичного cutover. Это план новой работы, не заявление о выполненном ускорении или готовности public landing.
+
 Опубликованные тестовые сборки, их назначение, даты данных и фактические
 ссылки: [единый реестр](review-builds.yaml) и [порядок обновления](review-builds.md).
 
@@ -1152,3 +1156,4 @@ resolver persist its live ledger before export.
 
 The CTA icon assets are exact CC0 SVG Repo library copies with metadata and
 visual-selection notes in `site/public/assets/icons/question-cta/PROVENANCE.md`.
+
