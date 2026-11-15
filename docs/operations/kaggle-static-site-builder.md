@@ -630,6 +630,10 @@ zero request/row/byte counters with `source=cache`. An unscoped HTML/cold miss
 recomputes the whole active graph. Normal warm related-only publication retrieves
 pending own anchors and changed current anchors from the full candidate catalog;
 expired or changed peers do not expand this work to their old reverse neighbors.
+An existing event without a previous fingerprint has an unknown baseline, not
+an observed source change; its own pending publication still requests retrieval.
+Known failed or capped changes retain the previous fingerprint until verified,
+so later batches can detect and retry the real change without a cold audit tail.
 Existing per-anchor audit keys use current facts to invalidate stale verdicts
 without retrieving unrelated old anchors. Saved chains keep only current anchors
 and peers; enabled-verifier runs retain only reachable current audit keys.
