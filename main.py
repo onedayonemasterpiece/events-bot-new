@@ -25142,6 +25142,22 @@ async def _finish_static_site_candidate(
             effective_date=clock.effective_date, success=False,
             receipt={"status": "related_ready", "published": False},
         )
+        related_payload = json.loads((output_dir / "event_related.json").read_text(encoding="utf-8"))
+        audit = related_payload.get("gemma_verification") or {}
+        targets = set(audit.get("changed_event_ids") or [])
+        verified = set(audit.get("verified_event_ids") or [])
+        remaining = targets - verified
+        newly_verified = int(audit.get("attempted_anchors") or 0) - len({
+            item["anchor_event_id"] for item in (audit.get("errors") or [])
+        })
+        if (related_payload.get("cache", {}).get("state") == "incremental"
+                and newly_verified > 0 and remaining):
+            await enqueue_static_site_build_request(
+                db, reason="related_selected_remaining", event_ids=sorted(remaining),
+                trigger="smart_update",
+            )
+            logging.info("related_remaining run_id=%s newly_verified=%s remaining=%s",
+                         run_id, newly_verified, len(remaining))
         logging.info("related_ready run_id=%s build_id=%s published=false", run_id, build_id)
         return True
     result, candidate_archive = await asyncio.to_thread(

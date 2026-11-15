@@ -183,6 +183,11 @@ async def test_related_completion_releases_claim_without_site_success(tmp_path, 
                                    input_fingerprint='b' * 64, effective_date='2026-11-12',
                                    request_watermark=None)
     (tmp_path / 'static_site_build_result.json').write_text(json.dumps({'profile': 'related-only'}))
+    # The runner validates and imports this mandatory artifact before completion.
+    (tmp_path / 'event_related.json').write_text(json.dumps({
+        'related': {}, 'cache': {'state': 'incremental'},
+        'gemma_verification': {'changed_event_ids': [], 'verified_event_ids': []},
+    }))
     async def patch(*a, **kw):
         pass
     monkeypatch.setattr(main, '_patch_static_site_request_payload', patch)
