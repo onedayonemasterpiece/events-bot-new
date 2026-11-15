@@ -114,6 +114,7 @@ jobs:
           tests/test_smart_update_prod_audit.py
           tests/test_scheduling.py::test_scheduler_and_extract_do_not_import_main
           tests/test_event_identity.py
+          tests/test_event_type_normalization.py
           tests/test_smart_update_identity_gate.py
           tests/test_smart_update_identity_incident_replay.py
           tests/test_smart_update_identity_persistence.py
