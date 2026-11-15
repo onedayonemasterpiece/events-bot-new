@@ -174,9 +174,20 @@ async def test_terminal_recovery_rejects_cross_owner_output_identity(monkeypatch
         )
 
 
+@pytest.mark.parametrize("callback_terminal, status, matches", [
+    (True, "COMPLETE", True),
+    (False, "COMPLETE", True),
+    (False, "FAILED", True),
+    (False, "RUNNING", True),
+    (False, "UNKNOWN", True),
+    (False, "NOT_FOUND", True),
+    (False, "COMPLETE", False),
+    (False, "COMPLETE", None),
+    (False, "exception", True),
+])
 @pytest.mark.asyncio
 async def test_terminal_remote_recovery_rejects_cross_deploy_then_allows_replacement(
-    monkeypatch,
+    monkeypatch, callback_terminal, status, matches,
 ):
     fingerprint = "a" * 64
     calls = []
@@ -192,11 +203,34 @@ async def test_terminal_remote_recovery_rejects_cross_deploy_then_allows_replace
                 "input_fingerprint": fingerprint,
                 "effective_date": "2026-08-09",
                 "dataset_ref": "owner/exact-input",
-                "remote_status": "done",
-                "remote_terminal_at": "2026-08-09T12:30:00Z",
+                "remote_status": "done" if callback_terminal else "alive",
+                "remote_terminal_at": "2026-08-09T12:30:00Z" if callback_terminal else None,
+                "kernel_ref": "owner/exact-kernel",
             },
         )(),
     )
+
+    from video_announce.kaggle_client import KaggleClient
+    probes = []
+
+    def source_probe(_self, kernel_ref, expected_sources):
+        assert not callback_terminal  # Callback evidence must not invoke Kaggle.
+        assert kernel_ref == "owner/exact-kernel" and expected_sources == ["owner/exact-input"]
+        probes.append("sources")
+        if matches is None:
+            raise FileNotFoundError("missing kernel metadata")
+        return matches, {"dataset_sources": expected_sources if matches else ["owner/other-input"]}
+
+    def status_probe(_self, kernel_ref):
+        assert kernel_ref == "owner/exact-kernel" and matches is True
+        probes.append("status")
+        if status == "exception":
+            raise RuntimeError("status unavailable")
+        return {"status": status}
+
+    monkeypatch.setattr(KaggleClient, "__init__", lambda self: None)
+    monkeypatch.setattr(KaggleClient, "kernel_has_dataset_sources", source_probe)
+    monkeypatch.setattr(KaggleClient, "get_kernel_status", status_probe)
 
     async def forbidden_subprocess(*_args, **_kwargs):
         raise AssertionError("cross-deploy recovery crossed the subprocess boundary")
@@ -245,7 +279,7 @@ async def test_terminal_remote_recovery_rejects_cross_deploy_then_allows_replace
         "current_datetime": "2026-08-09T12:00:00+02:00",
     }
 
-    result = await main._recover_previous_static_site_attempt(
+    recovery = main._recover_previous_static_site_attempt(
         db=type("Database", (), {"path": "/data/db.sqlite"})(),
         job_id=17,
         request_payload={
@@ -258,7 +292,15 @@ async def test_terminal_remote_recovery_rejects_cross_deploy_then_allows_replace
         current_source_identity=None,
     )
 
-    assert result == (False, None)
+    if not callback_terminal and (matches is not True or status not in {"COMPLETE", "FAILED"}):
+        with pytest.raises(StaticSiteSingleFlightDeferred, match="terminal_evidence_pending"):
+            await recovery
+        assert calls == []  # No reconcile, deletion, finish or payload mutation.
+    else:
+        assert await recovery == (False, None)
+    assert probes == ([] if callback_terminal else ["sources", "status"] if matches else ["sources"])
+    if not calls:
+        return
     assert [call[0] for call in calls] == [
         "reconcile",
         "validate_cleanup",
