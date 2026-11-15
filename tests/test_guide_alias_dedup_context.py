@@ -40,9 +40,23 @@ def test_judge_preserves_full_source_and_guide_identity():
     namespace['_get_dedup_client'] = lambda: (Client(), [])
     tail = 'РАСПИСАНИЕ: 17 ноября 14:00 Зелёные истории, Ольга Рубцова.'
     source = 'Рассказ о Достоевском. ' * 100 + tail
-    row = {'id': 745, 'dedup_source_text': source, 'guide_names': ['Ольга Рубцова']}
+    row = {'id': 745, 'dedup_source_text': source, 'guide_names': ['Ольга Рубцова'],
+           'city': 'Калининград', 'source_post_url': 'https://vk.com/wall41501067_3447'}
     asyncio.run(namespace['_ask_pair_judge_llm'](row, dict(row, id=753), {}))
     payload = json.loads(captured['prompt'].split('Input:\n', 1)[1])
     for side in ['left', 'right']:
         assert payload[side]['post_excerpt'].endswith(tail)
         assert payload[side]['guide_names'] == ['Ольга Рубцова']
+
+        assert payload[side]['city'] == 'Калининград'
+        assert payload[side]['source_post_url'] == row['source_post_url']
+
+
+def test_unknown_place_sentinel_does_not_reach_card_text():
+    path = Path(__file__).parents[1] / 'guide_excursions' / 'visual_digest.py'
+    tree = ast.parse(path.read_text())
+    functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == '_plain']
+    namespace = dict(Any=Any, collapse_ws=lambda text: ' '.join(text.split()))
+    exec(compile(ast.Module(body=functions, type_ignores=[]), str(path), 'exec'), namespace)
+    assert namespace['_plain']('not_specified') == ''
+    assert namespace['_plain']('Калининград') == 'Калининград'

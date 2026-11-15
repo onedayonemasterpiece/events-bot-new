@@ -495,6 +495,8 @@ async def _ask_pair_judge_llm(left: Mapping[str, Any], right: Mapping[str, Any],
             "title": str(left.get("canonical_title") or ""),
             "date": str(left.get("date") or ""),
             "time": left.get("time"),
+            "city": left.get("city"),
+            "source_post_url": left.get("source_post_url") or left.get("channel_url"),
             "meeting_point": left.get("meeting_point"),
             "price_text": left.get("price_text"),
             "booking_text": left.get("booking_text"),
@@ -512,6 +514,8 @@ async def _ask_pair_judge_llm(left: Mapping[str, Any], right: Mapping[str, Any],
             "title": str(right.get("canonical_title") or ""),
             "date": str(right.get("date") or ""),
             "time": right.get("time"),
+            "city": right.get("city"),
+            "source_post_url": right.get("source_post_url") or right.get("channel_url"),
             "meeting_point": right.get("meeting_point"),
             "price_text": right.get("price_text"),
             "booking_text": right.get("booking_text"),
@@ -531,6 +535,8 @@ async def _ask_pair_judge_llm(left: Mapping[str, Any], right: Mapping[str, Any],
         "Одно расписание может перечислять несколько разных экскурсий: связывай только конкретный выход с его гидом и маршрутом.\n"
         "Будь консервативен: совпадение даты, телефона или канала само по себе недостаточно.\n"
         "Если один пост выглядит как тизер/фокус на часть маршрута внутри более общего анонса на ту же дату, это same_occurrence.\n"
+        "Для canonical_side выбери карточку, чьи название, гид, место и ссылка записи подтверждаются текстом именно этого выхода.\n"
+        "Не предпочитай более подробную карточку, если её факты взяты из биографического рассказа, другой экскурсии или ссылка записи отсутствует в исходнике.\n"
         "Верни только JSON без markdown.\n"
         "Не выводи рассуждение, пояснения или thinking traces.\n"
         f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
