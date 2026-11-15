@@ -592,3 +592,5 @@ full source text and guide names so a narrative/teaser title can be related
 to its exact schedule entry. This candidate rule does not itself merge
 rows: different routes or guides at the same slot remain distinct unless
 the source evidence establishes the same concrete outing.
+
+Canonical visual dedup variants are chosen against the full outing source, including city and source URL. Narrative biography details and invented booking links do not make a variant preferable. Card row text uses pixel width before portraits; unknown place sentinels are hidden and four rows leave room for the footer.

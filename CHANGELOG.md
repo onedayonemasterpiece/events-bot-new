@@ -1,5 +1,7 @@
 # Changelog
 
+- Guide visual digests choose the source-grounded canonical variant; card text fits before portraits, unknown location sentinels stay hidden, and four rows clear the footer.
+
 - Explicit theatre event types survive mentions of cinema in actor credits; the film-keyword fallback applies only when no type was supplied.
 
 - Related audit keeps successful candidate batches in the existing cache when another batch fails, so normal retries continue missing work and retain full-anchor readiness semantics.
