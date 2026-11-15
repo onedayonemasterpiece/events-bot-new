@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:facts-target-lists-20261115
+    image: runcoveer/events:vk-native-webp-resize-20261116
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import math
 import re
+import subprocess
+from contextlib import ExitStack
 from dataclasses import dataclass
 from io import BytesIO
 
@@ -48,10 +50,20 @@ def prepare_consumer_jpeg(data: bytes, *, max_side: int = 1600) -> bytes:
     """Bound a working copy for VK and visual review; keep canonical bytes intact."""
     from PIL import Image, ImageOps
 
-    with Image.open(BytesIO(data)) as source:
-        # A 38 MP WebP peaked at 640 MiB on the 1.6 GiB host (1 GiB available).
-        # Keep a 40 MP source ceiling and decode consumers sequentially.
+    with ExitStack() as images:
+        source = images.enter_context(Image.open(BytesIO(data)))
         scale = max(1, max(source.size) / max_side)
+        if (source.format == "WEBP" and source.width * source.height > 40_000_000
+                and not source.is_animated):
+            # Pillow decodes the full WebP raster; libwebp scales during decode.
+            exif = source.info.get("exif")
+            resized = subprocess.run(
+                ["dwebp", "-resize", *(str(max(1, int(side / scale))) for side in source.size),
+                 "-o", "-", "--", "-"], input=data, capture_output=True, check=True,
+            ).stdout
+            source = images.enter_context(Image.open(BytesIO(resized)))
+            if exif:
+                source.info["exif"] = exif
         source.draft("RGB", tuple(max(1, int(side / scale)) for side in source.size))
         if source.width * source.height > 40_000_000:
             raise ValueError("consumer image source exceeds 40 MP")
