@@ -152,6 +152,29 @@ def test_seed_guide_sources_keeps_platforms_and_merges_profile_links(tmp_path) -
             cur = await conn.execute("SELECT source_links_json FROM guide_profile WHERE slug='library'")
             row = await cur.fetchone()
 
+            await conn.execute(
+                "UPDATE guide_source SET flags_json=? WHERE platform='vk' AND username='libraryvk'",
+                (json.dumps({"vk_id": 190663987, "vk_public": False}),),
+            )
+            await seed_guide_sources(
+                conn,
+                sources=(GuideSourceSpec(
+                    username="libraryvk",
+                    profile_slug="library",
+                    profile_kind="organization",
+                    display_name="Library",
+                    marketing_name="Library",
+                    source_kind="organization_with_tours",
+                    trust_level="medium",
+                    platform="vk",
+                    flags={"vk_public": True},
+                ),),
+            )
+            cur = await conn.execute(
+                "SELECT flags_json FROM guide_source WHERE platform='vk' AND username='libraryvk'"
+            )
+            assert json.loads((await cur.fetchone())[0]) == {"vk_id": 190663987, "vk_public": True}
+
         links = json.loads(row[0])
         assert links == ["https://t.me/librarytg", "https://vk.com/libraryvk"]
 

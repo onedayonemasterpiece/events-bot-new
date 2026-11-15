@@ -106,6 +106,7 @@ Production override удерживает store около `256 MiB` и треб�
 
 - отдельный guide-track в основной SQLite;
 - seed-пак Telegram-источников из casebook;
+- повторный startup seed сохраняет runtime-поля `guide_source.flags_json` (в том числе найденный `vk_id`); явно заданные поля seed имеют приоритет при совпадении ключей;
 - seed-пак guide-источников теперь также включает `@art_from_the_Baltic` как provisional `guide_project` source, `@jeeptours39` как branded off-road / jeep-tour source, `@murnikovaT` и `@progulki_s_katey` как personal guide sources for Kaliningrad excursions, `@kaliningradlibrary` как institutional `organization_with_tours` source для экскурсионных/краеведческих прогулок библиотеки, а также VK publics `vk.ru/balticsyndicate`, `vk.com/konb39`, `vk.com/ruin.keepers` и `vk.com/narodexcursovod` через тот же Kaggle guide-monitoring runtime;
 - guide-specific Kaggle runtime: [kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py](/workspaces/events-bot-new/kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py);
 - secure Kaggle push/poll/download через тот же split-secrets pattern, что и в Telegram Monitoring;
