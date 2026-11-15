@@ -214,3 +214,91 @@ def test_rollover_does_not_expand_pending_anchor_to_old_reverse_neighbors(tmp_pa
     audits.clear()
     run({725})
     assert retrieval == audits == []
+
+
+def test_rollover_prunes_history_without_fabricating_verified_empty(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location(
+        'related_cache_rollover', os.getenv('RELATED_EXPORTER_PATH') or
+        Path(__file__).resolve().parents[1] / 'site/scripts/export-production-preview-data.py')
+    exporter = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(exporter)
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'test-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '1')
+    retrieval, audits = [], []
+
+    def retrieve(events, **kwargs):
+        ids = {event['id'] for event in events}
+        anchors = kwargs.get('anchor_ids', ids)
+        retrieval.extend(sorted(anchors))
+        return {str(anchor): [{'event_id': min(ids - {anchor}),
+                 'vector_similarity': .86, 'related_score': .86, 'slot_type': 'pure_related'}] if ids - {anchor} else []
+                for anchor in anchors}
+
+    def audit(**kwargs):
+        audits.append(kwargs['anchor']['id'])
+        return {event['id']: {'llm_semantic_score': .86, 'confidence': .9,
+                'reject': False, 'similarity_class': 'highly_similar'}
+                for event in kwargs['candidates']}
+
+    monkeypatch.setattr(exporter, 'build_pgvector_related_chain', retrieve)
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+    cache_path = tmp_path / 'cache.json'
+
+    def run(ids, anchors, *, verify=True):
+        events = [dict(id=i, title=f'Programme {i}', date=f'2026-11-{20+i:02d}',
+                       description=f'Grounded programme {i}') for i in ids]
+        return exporter.build_related(
+            events, current_date='2026-11-15', anchor_ids=anchors,
+            related_mode='pgvector', cache_path=cache_path,
+            gemma_verify=verify, gemma_max_anchors=20)
+
+    for ids, anchors in [([1, 2, 3], {1, 2, 3}), ([2, 3, 4], {4}), ([3, 4, 5], {5})]:
+        result = run(ids, anchors)
+        saved = json.loads(cache_path.read_text())
+        for field in ('chains', 'raw_chains'):
+            assert set(map(int, saved[field])).issubset(ids)
+            if field == 'chains':
+                assert set(map(int, saved[field])) == set(ids)
+            assert all(int(item['event_id']) in ids
+                       for chain in saved[field].values() for item in chain)
+        assert len(saved['gemma_audit_cache']) <= len(ids)
+        assert all(int(item['event_id']) in ids
+                   for anchor in result['related'].values() for item in anchor['chain'])
+    assert len(retrieval) == len(audits) == 5
+    assert not result['related']['3']['strict_verified']
+    saved_key5 = set(saved['gemma_audit_cache'])
+    scoped_cache = cache_path.read_text()
+    full_events = [dict(id=i, title=f'Programme {i}', date=f'2026-11-{20+i:02d}',
+                        description=f'Grounded programme {i}') for i in [3, 4, 5]]
+    full = exporter.build_related(
+        full_events, current_date='2026-11-15', related_mode='pgvector',
+        cache_path=cache_path, gemma_verify=True, gemma_max_anchors=20)
+    assert full['related']['3']['strict_verified']
+    assert len(retrieval) == 8, 'unscoped incomplete raw cache needs actual retrieval'
+    assert 3 in audits[5:]
+    assert 5 not in audits[5:], 'valid current audit must survive full rebuild'
+    del retrieval[5:]
+    del audits[5:]
+    cache_path.write_text(scoped_cache)
+    repeat = run([3, 4, 5], {5})
+    assert not repeat['related']['3']['strict_verified']
+    assert len(retrieval) == len(audits) == 5
+    assert set(json.loads(cache_path.read_text())['gemma_audit_cache']) == saved_key5
+    demanded = run([3, 4, 5], {3})
+    assert demanded['related']['3']['strict_verified']
+    assert len(retrieval) == len(audits) == 6
+    # A disabled verifier must not interpret None as a new policy and discard
+    # successful enabled-verifier verdicts on otherwise unchanged input.
+    valid_keys = set(json.loads(cache_path.read_text())['gemma_audit_cache'])
+    run([3, 4, 5], set(), verify=False)
+    assert set(json.loads(cache_path.read_text())['gemma_audit_cache']) == valid_keys
+
+    run([5], set())
+    assert json.loads(cache_path.read_text())['raw_chains'] == {}
+    before = len(retrieval)
+    single = exporter.build_related(
+        [dict(id=5, title='Programme 5', date='2026-11-25', description='Grounded programme 5')],
+        current_date='2026-11-15', related_mode='pgvector', cache_path=cache_path,
+        gemma_verify=True, gemma_max_anchors=20)
+    assert len(retrieval) == before + 1
+    assert single['related']['5']['strict_verified']

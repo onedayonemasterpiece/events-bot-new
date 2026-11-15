@@ -1,5 +1,7 @@
 # Changelog
 
+- Related cache drops departed events, peer links and unreachable verifier entries without treating missing retrieval data as verified empty.
+
 - Related-only: expired or changed peers no longer trigger retrieval for every old reverse neighbor; pending own anchors revalidate against current peer facts.
 
 - Location normalization no longer replaces an unknown source venue through one shared word, such as a surname; explicit venue aliases remain supported.

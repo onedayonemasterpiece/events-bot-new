@@ -4921,6 +4921,8 @@ def build_related(
         and isinstance(cache.get("chains"), dict)
     )
     gemma_policy_signature = gemma_related_policy_signature(model=gemma_model) if gemma_verify else None
+    candidate_limit = max(6, min(12, int(os.getenv("STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT", "10") or "10")))
+    pass_count = max(1, min(3, int(os.getenv("STATIC_SITE_GEMMA_RELATED_PASSES", "2") or "2")))
     cached_verified_event_ids = {
         int(value)
         for value in (cache.get("gemma_verified_event_ids") or [])
@@ -4951,8 +4953,6 @@ def build_related(
         if not cache_compatible:
             cached_verified_event_ids = set()
             cached_raw_chains = None
-        candidate_limit = max(6, min(12, int(os.getenv("STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT", "10") or "10")))
-        pass_count = max(1, min(3, int(os.getenv("STATIC_SITE_GEMMA_RELATED_PASSES", "2") or "2")))
         cached_verified_event_ids = {
             event_id for event_id in cached_verified_event_ids
             if str(event_id) in (cached_raw_chains or {}) and (
@@ -5012,7 +5012,7 @@ def build_related(
             "errors": [],
         }
         graph_meta = copy.deepcopy(cache.get("graph_reciprocity") or graph_meta)
-    elif cache_valid and cached_raw_chains:
+    elif cache_valid and cached_raw_chains and current_id_set.issubset(map(int, cached_raw_chains)):
         # Previous runs may contain partially Gemma-filtered display chains.
         # Always apply the verifier to the unfiltered pgvector chains so a
         # smoke/partial run cannot permanently hide candidate events.
@@ -5080,6 +5080,32 @@ def build_related(
             changed_event_ids=changed_event_ids,
         )
     log_stage("gemma_audit_complete", **gemma_meta)
+    raw_chains_for_cache = raw_chains_for_cache or copy.deepcopy(chains)
+    empty_anchor_ids = {int(anchor) for anchor, chain in raw_chains_for_cache.items() if not chain}
+    chains = {anchor: [item for item in chain if int(item["event_id"]) in current_id_set]
+              for anchor, chain in chains.items() if int(anchor) in current_id_set}
+    raw_chains_for_cache = {
+        anchor: [item for item in chain if int(item["event_id"]) in current_id_set]
+        for anchor, chain in raw_chains_for_cache.items() if int(anchor) in current_id_set
+        and (any(int(item["event_id"]) in current_id_set for item in chain) or int(anchor) in empty_anchor_ids)
+    }
+    if gemma_verify:
+        audit_keys = {
+            int(anchor): gemma_related_audit_cache_key(
+                model=gemma_model, policy_signature=gemma_policy_signature, anchor_id=anchor,
+                fingerprints=fingerprints, candidate_ids=[int(item["event_id"]) for item in chain[:candidate_limit * pass_count]])
+            for anchor, chain in raw_chains_for_cache.items()
+        }
+        retained_keys = set(audit_keys.values()) & (cache.get("gemma_audit_cache") or {}).keys()
+        cache["gemma_audit_cache"] = {key: cache["gemma_audit_cache"][key] for key in retained_keys}
+        previous_verified_ids = gemma_meta["verified_event_ids"]
+        gemma_meta["verified_event_ids"] = [
+            event_id for event_id in previous_verified_ids
+            if int(event_id) in current_id_set and (
+                int(event_id) in empty_anchor_ids or audit_keys.get(int(event_id)) in retained_keys)
+        ]
+        if gemma_meta["verified_event_ids"] != previous_verified_ids:
+            gemma_meta["status"] = "ok" if current_id_set.issubset(set(gemma_meta["verified_event_ids"])) and not gemma_meta["errors"] else ("partial" if gemma_meta["verified_event_ids"] else "failed")
     cache_payload = {
         "schema_version": cache_schema_version,
         "algorithm": algorithm,
@@ -5097,7 +5123,7 @@ def build_related(
         "event_fingerprints": {key: value for key, value in fingerprints.items()
                                if int(key) not in unfinished_anchor_ids},
         "chains": chains,
-        "raw_chains": raw_chains_for_cache or copy.deepcopy(chains),
+        "raw_chains": raw_chains_for_cache,
         "graph_reciprocity": graph_meta,
         "retrieval_receipt": retrieval_receipt,
         "gemma_audit_cache": cache.get("gemma_audit_cache", {}),

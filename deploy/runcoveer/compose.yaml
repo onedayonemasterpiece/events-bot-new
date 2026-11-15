@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:related-own-anchor-scope-20261115
+    image: runcoveer/events:related-cache-current-catalog-20261115
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
