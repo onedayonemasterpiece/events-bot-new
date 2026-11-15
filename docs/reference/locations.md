@@ -7,6 +7,7 @@
 # - Keep names stable: they are used for `location_name` normalization in parsers/LLM.
 # - Extra per-location behavior flags live in `docs/reference/location-flags.md`.
 # - Spelling aliases / typo variants live in `docs/reference/location-aliases.md`.
+# - A single shared word does not identify a venue; preserve unmatched source names.
 
 Филиал Третьяковской галереи, Парадная наб. 3, Калининград
 Научная библиотека, Мира 9, Калининград

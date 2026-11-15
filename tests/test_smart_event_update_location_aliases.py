@@ -139,6 +139,21 @@ def test_generic_city_park_not_fuzzy_bound_via_location_reference() -> None:
     )
 
 
+def test_botanical_garden_is_not_replaced_by_a_shared_surname() -> None:
+    # Candidate 29191 contained this correct venue before canonicalization.
+    payload = {
+        "location_name": "Ботанический сад БФУ им. И. Канта",
+        "location_address": None,
+        "city": "Калининград",
+    }
+    expected = dict(payload)
+    normalise_event_location_from_reference(payload)
+    assert payload == expected
+    island = match_known_venue("острове Канта", city="Калининград")
+    assert island is not None
+    assert island.name == "Остров Канта"
+
+
 def test_new_incident_location_aliases_resolve_to_canonical_venues() -> None:
     camember = match_known_venue('сырный магазин "Камамбер"', city="Зеленоградск")
     assert camember is not None
