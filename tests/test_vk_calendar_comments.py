@@ -40,7 +40,7 @@ async def test_bad_date_is_not_invented():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("linked", [False, True])
+@pytest.mark.parametrize("linked", [False, True, "individual"])
 async def test_new_post_schedules_user_calendar_after_actual_public_time_once(tmp_path, monkeypatch, linked):
     from datetime import datetime, timedelta, timezone
     from models import JobOutbox, JobStatus, JobTask
@@ -52,11 +52,14 @@ async def test_new_post_schedules_user_calendar_after_actual_public_time_once(tm
         async with db.get_session() as session:
             session.add(ev)
             session.add(event(id=2, date=future_date, source_vk_post_url='https://vk.com/wall-231920894_5'))
-            session.add(event(id=3, date=future_date, time='19:00', source_vk_post_url='https://vk.com/wall-231920894_10'))
+            session.add(event(id=3, date=future_date, time='19:00', source_vk_post_url=(
+                'https://vk.com/wall-231920894_5' if linked == 'individual' else 'https://vk.com/wall-231920894_10')))
             await session.commit()
         publish_event, _ = await main._prepare_same_day_linked_publish_event(db, ev)
+        if linked == "individual":
+            publish_event = ev
         public_header = next(line for line in main.build_vk_source_header(publish_event, None) if line.startswith('📅 '))
-        if linked:
+        if linked is True:
             assert '18:00 и 19:00' in public_header
             assert ev.time == '18:00'  # Calendar keeps the original occurrence, not the combined view.
         monkeypatch.setattr(main, 'VK_AFISHA_GROUP_ID', '231920894')
@@ -151,7 +154,9 @@ async def test_new_post_schedules_user_calendar_after_actual_public_time_once(tm
             assert (await session.get(Event, 1)).time == '18:00'
             assert (await session.get(Event, 1)).source_vk_post_url == 'https://vk.com/wall-231920894_20'
             assert (await session.get(Event, 2)).source_vk_post_url.endswith('_5')
-            assert (await session.get(Event, 3)).source_vk_post_url.endswith('_20')
+            assert (await session.get(Event, 3)).source_vk_post_url.endswith(
+                '_5' if linked == 'individual' else '_20'
+            )
             assert (await session.get(JobOutbox, jobs[0].id)).status == JobStatus.done
         after = list(calls)
         assert await main._run_due_jobs_once(db, None) == 0
