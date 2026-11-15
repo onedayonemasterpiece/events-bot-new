@@ -19964,7 +19964,7 @@ async def _run_due_jobs_once_locked(
     def _job_due_sort_key(j: JobOutbox) -> tuple[int, int, int, int]:
         task_priority = priority.get(j.task, 99)
         related_only = os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only"
-        if j.task == JobTask.vk_sync and j.id in initial_vk_jobs:
+        if j.task == JobTask.vk_sync and j.id in initial_vk_jobs and j.last_error != "vk_initial_waiting_related":
             return (-2, -1, int(_ensure_utc(j.next_run_at).timestamp()), j.id)
         if related_only and j.task in {JobTask.vk_sync, JobTask.event_vector_sync, JobTask.static_site_build}:
             return (-2, 2, int(_ensure_utc(j.next_run_at).timestamp()), j.id)

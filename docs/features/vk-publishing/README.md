@@ -4,6 +4,8 @@
 
 ## Event Posts
 
+- Initial announcements retain priority over edits. An initial already deferred with `vk_initial_waiting_related` returns to the existing related-only due-order lane, allowing older static/vector work to prepare its strict graph. Due calendar comments keep their existing higher priority; dependencies and publication guards are unchanged.
+
 - Related cards show a multi-day event's known end date with «до», using the existing date tile and an even ink-to-ink gap before weekday/time. Original date ranges remain in the post and comment lists. Graphical medallions are circular. A complete existing short description (or search digest) appears in smaller Cygre Regular only when it fits the text area beside the medallions; it is otherwise omitted, never truncated or regenerated.
 - A typed final identity `MATCH` for the selected canonical owner is reused through the merge path; the same candidate is not independently adjudicated again before updating that owner. Other merge paths retain their existing identity gate, and an explicitly distinct occurrence still follows normal creation. This prevents contradictory decisions from creating a second event that later forces an old announcement into a combined-time edit.
 

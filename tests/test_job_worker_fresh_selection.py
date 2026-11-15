@@ -476,3 +476,45 @@ async def test_captcha_future_comment_keeps_slot_for_initial_then_normal_worker_
             assert calls[1] == ("initial", initial.id)
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('dependency', [main.JobTask.static_site_build, main.JobTask.event_vector_sync])
+@pytest.mark.parametrize('waiting_related', [True, False], ids=['blocked-initial', 'ready-initial'])
+async def test_initial_waiting_related_yields_to_older_own_compute(
+    tmp_path, monkeypatch, dependency, waiting_related
+):
+    db = main.Database(str(tmp_path / 'initial-related-dependency.sqlite'))
+    await db.init()
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
+    monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '231920894')
+    monkeypatch.setattr(main, '_vk_captcha_needed', False)
+    now = datetime.now(timezone.utc)
+    try:
+        async with db.get_session() as session:
+            fresh = main.Event(title='Fresh initial', description='d', source_text='s',
+                               date='2099-01-01', time='12:00', location_name='Venue')
+            managed = main.Event(title='Managed edit', description='d', source_text='s',
+                                 date='2099-01-01', time='12:00', location_name='Venue',
+                                 source_vk_post_url='https://vk.com/wall-231920894_14478',
+                                 vk_source_hash='applied')
+            session.add_all([fresh, managed])
+            await session.flush()
+            fresh_id = fresh.id
+            session.add(main.JobOutbox(event_id=fresh.id, task=dependency,
+                                      next_run_at=now-timedelta(seconds=60)))
+            session.add(main.JobOutbox(event_id=fresh.id, task=main.JobTask.vk_sync,
+                                      last_error='vk_initial_waiting_related' if waiting_related else None,
+                                      next_run_at=now-timedelta(seconds=1)))
+            session.add(main.JobOutbox(event_id=managed.id, task=main.JobTask.vk_sync,
+                                      next_run_at=now-timedelta(seconds=30)))
+            await session.commit()
+        calls = []
+        async def compute(eid, *_args): calls.append(('compute', eid))
+        async def publish(eid, *_args): calls.append(('vk', eid))
+        monkeypatch.setitem(main.JOB_HANDLERS, dependency.value, compute)
+        monkeypatch.setitem(main.JOB_HANDLERS, main.JobTask.vk_sync.value, publish)
+        assert await main._run_due_jobs_once(db, None, max_jobs=1) == 1
+        assert calls == [('compute' if waiting_related else 'vk', fresh_id)]
+    finally:
+        await db.close()
