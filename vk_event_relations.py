@@ -54,15 +54,24 @@ async def presentation(db, event):
                       if row.get('post_type') == 'post' and not row.get('is_deleted')}
         logging.info('vk_related_public_peers event_id=%s candidates=%s visible=%s',
                      event.id, len(peer_ids), len(public_ids))
-    related, seen_urls = [], {event.source_vk_post_url}
+    programmes = []
+    for row in rows.values():
+        programme = {row.id, *(row.linked_event_ids or [])}
+        for known in programmes[:]:
+            if programme & known:
+                programme.update(known)
+                programmes.remove(known)
+        programmes.append(programme)
+    related, repeats, seen_programmes, seen_urls = [], [], set(), {event.source_vk_post_url}
     for i in similar_ids:
         row = rows.get(i)
         if not row or peer_ids.get(i) not in public_ids or row.source_vk_post_url in seen_urls:
             continue
         seen_urls.add(row.source_vk_post_url)
-        related.append(row)
-        if len(related) == 5:
-            break
+        programme = next(index for index, ids in enumerate(programmes) if row.id in ids)
+        (repeats if programme in seen_programmes else related).append(row)
+        seen_programmes.add(programme)
+    related = (related + repeats)[:5]
     from tg_graphic_medallions import resolve_event_graphic_medallions
     def item(row):
         start, _, span_end = row.date.partition('..')
@@ -96,7 +105,7 @@ def append_list(message, data):
     return message + '\n\nПОХОЖИЕ СОБЫТИЯ\n' + listing(data['related'])
 
 
-def render_card(items, *, schedule=False):
+def render_card(items, *, schedule=False, more_related=False):
     from guide_excursions.hook_cards import _strip_emoji
     from guide_excursions.visual_digest import PALETTES, _draw_date_tile, _wrap_by_width
     image = Image.new('RGBA', (1080, 1350), '#F7F5EF')
@@ -164,8 +173,9 @@ def render_card(items, *, schedule=False):
         if height != 174:
             layer = layer.resize((996, height), Image.Resampling.LANCZOS)
         image.alpha_composite(layer, (42, 314 + i * (height + 12)))
-    if not schedule:
-        draw.text((58, 1290), 'Ссылки на события — в комментарии ↓', font=font(30, True), fill=palette.text)
+    if not schedule or more_related:
+        draw.text((58, 1290), 'Похожие события →' if schedule else 'Ссылки на события — в комментарии ↓',
+                  font=font(30, True), fill=palette.text)
     out = BytesIO()
     image.convert('RGB').save(out, 'PNG')
     return out.getvalue()
@@ -176,7 +186,8 @@ async def cards(data, slots):
     result = []
     for key in ('dates', 'related'):
         if data[key] and len(result) < slots:
-            result.append(await asyncio.to_thread(render_card, data[key], schedule=key == 'dates'))
+            result.append(await asyncio.to_thread(render_card, data[key], schedule=key == 'dates',
+                more_related=key == 'dates' and bool(data['related']) and slots > 1))
     return result
 
 
