@@ -4540,6 +4540,13 @@ def maybe_apply_gemma_audit(
         key=lambda event: (int(event["id"]) in changed_event_ids, int(event["id"])),
         reverse=True,
     ) if max_anchors > 0 else events
+    if max_anchors > 0 and anchor_ids is not None:
+        previous_attempts = (cache.get("gemma_verification") or {}).get("attempts") or []
+        if previous_attempts:
+            last_anchor_id = int(previous_attempts[-1]["anchor_event_id"])
+            boundary = next((index + 1 for index, event in enumerate(audit_order)
+                             if int(event["id"]) == last_anchor_id), 0)
+            audit_order = audit_order[boundary:] + audit_order[:boundary]
     for anchor in audit_order:
         if anchor_ids is not None and int(anchor["id"]) not in anchor_ids:
             continue
