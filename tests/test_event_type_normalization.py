@@ -1,10 +1,21 @@
+import pytest
+
 from main import normalize_event_type
 
 
-def test_normalize_event_type_film():
+@pytest.mark.parametrize("event_type", [None, "", "кинопоказ"])
+def test_normalize_event_type_film(event_type):
     title = "\ud83c\udfa5 Очень страшное кино"
     desc = "Показ культового фильма 'Очень страшное кино' в Заре."
-    assert normalize_event_type(title, desc, "спектакль") == "кинопоказ"
+    assert normalize_event_type(title, desc, event_type) == "кинопоказ"
+
+
+def test_explicit_stage_type_survives_actor_cinema_credits():
+    assert normalize_event_type(
+        "Любовь и голуби",
+        "Спектакль с участием звёзд российского театра и кино.",
+        "спектакль",
+    ) == "спектакль"
 
 
 def test_normalize_event_type_no_change():
