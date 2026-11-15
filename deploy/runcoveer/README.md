@@ -13,6 +13,11 @@ Host: `78.111.90.203`, Serverspace `l72s1332671`, Ubuntu 26.04,
 Scope: Events Bot and Kotopogoda application runtimes. Yandex Object Storage,
 CDN, Supabase, Kaggle and other managed dependencies stay external.
 
+The Dockerfile installs `libatomic1` before running Playwright: the bundled Node
+driver needs `libatomic.so.1` to start even its `install --with-deps` command on
+a fresh `python:3.12-slim` base. Keep this prerequisite in the declared OS
+dependency layer alongside `webp`.
+
 ## Release during ordinary imports, owner decision 2026-11-12
 
 Active imports or background jobs do not by themselves block a prepared,
