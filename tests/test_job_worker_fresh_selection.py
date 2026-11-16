@@ -9,6 +9,44 @@ import main
 
 
 @pytest.mark.asyncio
+async def test_initial_picker_does_not_flush_timestamp_normalization(tmp_path, monkeypatch):
+    from sqlalchemy import event as sa_event
+
+    db = main.Database(str(tmp_path / "picker-read.sqlite"))
+    await db.init()
+    due = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)
+    async with db.get_session() as session:
+        event = main.Event(title="Pending", description="d", source_text="src", date="2099-01-01",
+                           time="12:00", location_name="venue")
+        session.add(event)
+        await session.flush()
+        session.add(main.JobOutbox(event_id=event.id, task=main.JobTask.festival_pages,
+                                  next_run_at=due, updated_at=due))
+        await session.commit()
+    updates = []
+    picker_reads = []
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _executemany):
+        if statement.lstrip().upper().startswith("UPDATE JOBOUTBOX"):
+            updates.append(statement)
+        if "JOIN event ON event.id = joboutbox.event_id" in statement:
+            picker_reads.append(statement)
+            assert not updates, "Selecting initial jobs must not flush normalized timestamps"
+
+    async def noop(*args, **kwargs):
+        return None
+
+    monkeypatch.setitem(main.JOB_HANDLERS, "festival_pages", noop)
+    sa_event.listen(db.engine.sync_engine, "before_cursor_execute", capture)
+    try:
+        await main._run_due_jobs_once(db, None, max_jobs=1)
+        assert len(picker_reads) == 1
+    finally:
+        sa_event.remove(db.engine.sync_engine, "before_cursor_execute", capture)
+        await db.close()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("background", [True, False], ids=["background-refresh", "explicit-full-drain"])
 async def test_new_media_precedes_remaining_background_batch(tmp_path, monkeypatch, background):
     db = main.Database(str(tmp_path / "fresh-selection.sqlite"))

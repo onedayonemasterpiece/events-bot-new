@@ -19885,9 +19885,7 @@ async def _run_due_jobs_once_locked(
             # creates a retry/notification storm and continually extends the
             # outage window.
             stmt = stmt.where(JobOutbox.task.notin_(VK_JOB_TASKS))
-        jobs = [
-            _normalize_job(job) for job in (await session.execute(stmt)).scalars().all()
-        ]
+        jobs = (await session.execute(stmt)).scalars().all()
         initial_vk_jobs = set((await session.execute(
             select(JobOutbox.id).select_from(JobOutbox).join(Event, Event.id == JobOutbox.event_id).where(
                 JobOutbox.id.in_([job.id for job in jobs]), Event.vk_source_hash.is_(None),
@@ -19896,6 +19894,7 @@ async def _run_due_jobs_once_locked(
                 )
             )
         )).scalars())
+    jobs = [_normalize_job(job) for job in jobs]
     # Ready public work waits for its own dependencies, not unrelated media.
     # Missing-media VK retains its existing higher-priority media lane below.
     priority = {

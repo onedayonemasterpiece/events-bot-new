@@ -437,3 +437,15 @@ source. After the change the focused exporter/debounce/related suite passes.
 Independent complexity review accepts this subtraction and rejects replacing
 the removed image gate with an ad hoc model/config matcher. Normal producer
 ordering, partial-audit fairness and actual new VK publication remain open.
+
+### 16 November: selecting due jobs must remain a read
+
+Three worker cycles at 00:00:01, 00:00:39 and 00:01:11 UTC failed with SQLite
+`database is locked` during the initial-VK selector. `_normalize_job` assigned
+aware timestamps to attached ORM rows; the following SELECT autoflushed 702
+backlog rows. Normalize the detached rows after both read queries instead.
+This preserves UTC ordering and removes the unintended write, without a new
+retry, lock or queue. Regression: observe real SQLAlchemy statements through
+the normal worker and require no JobOutbox UPDATE before its initial selector.
+The normal run was nevertheless adopted at 00:01:51; first publications and
+absence of this failure after release still need live verification.
