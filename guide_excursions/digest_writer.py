@@ -885,7 +885,7 @@ async def ask_vk_narrative(payload: Mapping[str, Any], *, issue_id: int) -> dict
                 temperature=0.7,
                 candidate_key_ids=candidate_key_ids,
             ),
-            timeout=float(GUIDE_DIGEST_WRITER_TOTAL_TIMEOUT_SECONDS),
+            timeout=float(max(GUIDE_DIGEST_WRITER_TOTAL_TIMEOUT_SECONDS, GUIDE_DIGEST_WRITER_LLM_TIMEOUT_SECONDS)),
         )
     except Exception as exc:
         logger.warning("guide_vk_narrative issue_id=%s outcome=failed error_type=%s", issue_id, type(exc).__name__)

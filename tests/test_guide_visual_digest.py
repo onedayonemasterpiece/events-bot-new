@@ -441,7 +441,8 @@ def test_writer_uses_same_roles_as_visual_and_sees_time():
 @pytest.mark.asyncio
 async def test_test_publication_uses_real_writer_and_card_but_only_notifies_test_recipient(monkeypatch):
     async def writer(payload, *, issue_id):
-        return dict(NARRATIVE_349, lead="[[1|Ольга Рубцова]] ведёт прогулку.")
+        return dict(NARRATIVE_349, lead="[[1|Ольга Рубцова]] ведёт прогулку.",
+                    outro="[[3|Ноза Усманова]] тоже проводит экскурсию.")
 
     async def issue(*args):
         return {"items": EDITION_349}
@@ -452,7 +453,8 @@ async def test_test_publication_uses_real_writer_and_card_but_only_notifies_test
 
     async def post(group, text, *args, **kwargs):
         assert group == "243343951"
-        assert "Ольга Рубцова ведёт прогулку" in text
+        assert "[id1134828279|Ольга Рубцова] ведёт прогулку" in text
+        assert "Ноза Усманова тоже проводит экскурсию." in text
         assert re.findall(r"\[id(\d+)\|", text) == ["1134828279"]
         assert kwargs["attachments"] == ["photo-243343951_1"]
         return "https://vk.ru/wall-243343951_123"
@@ -461,7 +463,19 @@ async def test_test_publication_uses_real_writer_and_card_but_only_notifies_test
     monkeypatch.setattr(vd, "ask_vk_narrative", writer)
     monkeypatch.setattr(vd, "load_visual_digest_issue", issue)
     monkeypatch.setattr(vd, "VISUAL_DIGEST_VK_MENTIONS_ENABLED", True)
-    result = await vd._publish_visual_digest_to_vk_once(
+    result = await vd.publish_visual_digest_to_vk(
         object(), issue_id=349, group_id=243343951, test_mention=1134828279, publish_date=0,
         vk_api_fn=_fake_shortener, upload_vk_photo_bytes_fn=upload, post_to_vk_fn=post)
     assert result["url"].endswith("_123")
+
+
+@pytest.mark.asyncio
+async def test_review_marks_test_recipient_when_the_story_has_no_confirmed_name(monkeypatch):
+    async def writer(*args, **kwargs):
+        return NARRATIVE_349
+
+    monkeypatch.setattr(vd, "ask_vk_narrative", writer)
+    text = await build_visual_digest_vk_text(EDITION_349, issue_id=349, test_mention=858363572,
+                                             vk_api_fn=_fake_shortener)
+    assert text.endswith("Проверка уведомления: [id858363572|тестовый получатель]")
+    assert text.count("[id") == 1

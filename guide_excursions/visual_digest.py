@@ -2006,24 +2006,31 @@ async def _assemble_vk_narrative(
     mention_ids: Mapping[int, tuple[int, str]],
     mentions_enabled: bool,
     shorten: Callable[[str], Awaitable[str]],
+    test_mention: int | None = None,
 ) -> str | None:
     """Wrap the written prose with exact titles, dates, prices, contacts and hashtags from the rows."""
-    def names(text: str) -> str | None:
-        plain = _VK_NAME_MARK_RE.sub(lambda m: m[2], text)
-        if "[" in plain or "]" in plain:
-            return None  # unpaired writer markup would become broken VK markup
-        if not mentions_enabled:
-            return plain
-        def mention(m: re.Match[str]) -> str:
-            owner, name = mention_ids.get(int(m[1]), (0, ""))
-            same = owner and collapse_ws(m[2]).casefold() == name.casefold()
-            return f"[id{owner}|{m[2]}]" if same else m[2]
+    texts = [narrative["lead"], narrative.get("outro") or "", *(p["text"] for p in narrative["paragraphs"])]
+    if any(re.search(r"[\[\]]", _VK_NAME_MARK_RE.sub(lambda m: m[2], text)) for text in texts):
+        return None
 
+    test_tag = ""
+
+    def mention(m: re.Match[str]) -> str:
+        nonlocal test_tag
+        label = m[2]
+        owner, name = mention_ids.get(int(m[1]), (0, ""))
+        if not owner or collapse_ws(label).casefold() != name.casefold():
+            return label
+        if test_mention is not None:
+            if test_tag:
+                return label
+            test_tag = f"[id{test_mention}|{label}]"
+            return test_tag
+        return f"[id{owner}|{label}]" if mentions_enabled else label
+
+    def names(text: str) -> str:
         return _VK_NAME_MARK_RE.sub(mention, text)
 
-    texts = [narrative["lead"], narrative.get("outro") or "", *(p["text"] for p in narrative["paragraphs"])]
-    if any(names(text) is None for text in texts):
-        return None
     by_id = {int(row.get("id") or 0): row for row in items}
     blocks = [f"ЭКСКУРСИИ {period.upper()}".strip() + "\n" + (names(narrative["lead"]) or ""),
               "Это дайджест экскурсий по Калининградской области от «Ух ты, Калининград!». "
@@ -2058,7 +2065,14 @@ async def _assemble_vk_narrative(
     if narrative.get("outro"):
         blocks.append(names(narrative["outro"]) or "")
     blocks.append(" ".join(_digest_hashtags(items)))
-    return "\n\n".join(blocks)
+    text = "\n\n".join(blocks)
+    if test_mention is not None:
+        remaining = text.replace(test_tag, "", 1) if test_tag else text
+        if re.search(r"[\[\]@]|\*[\w.-]+", remaining):
+            raise ValueError("Unexpected VK mention markup in test digest")
+        if not test_tag:
+            text += f"\n\nПроверка уведомления: [id{test_mention}|тестовый получатель]"
+    return text
 
 
 async def build_visual_digest_vk_text(
@@ -2084,13 +2098,9 @@ async def build_visual_digest_vk_text(
     narrative = await ask_vk_narrative(payload, issue_id=int(issue_id)) if items else None
     if narrative:
         text = await _assemble_vk_narrative(items, narrative, period=period, mention_ids=mention_ids,
-                                            mentions_enabled=VISUAL_DIGEST_VK_MENTIONS_ENABLED and test_mention is None,
-                                            shorten=shorten)
+                                            mentions_enabled=VISUAL_DIGEST_VK_MENTIONS_ENABLED,
+                                            shorten=shorten, test_mention=test_mention)
         if text:
-            if test_mention is not None:
-                if re.search(r"[\[\]@]|\*[\w.-]+", text):
-                    raise ValueError("Unexpected VK mention markup in test digest")
-                return f"{text}\n\nПроверка уведомления: [id{test_mention}|тестовый получатель]"
             return text
         logger.warning("guide_vk_narrative issue_id=%s outcome=rejected reason=stray_markup", issue_id)
     if test_mention is not None:
@@ -2188,17 +2198,21 @@ async def publish_visual_digest_to_vk(
         built = await build_visual_digest_issue(db, max_cards=max_cards)
         issue_id = int(built["issue_id"])
     group = await _resolve_vk_group_id(db=db, bot=bot, group_id=group_id, target=target, vk_api_fn=vk_api_fn)
+    async def send_one():
+        return await _publish_visual_digest_to_vk_once(
+            db, bot, issue_id=issue_id, max_cards=max_cards, group_id=group, target=target,
+            publish_date=publish_date, vk_api_fn=vk_api_fn, post_to_vk_fn=post_to_vk_fn,
+            upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn, publish_stories=publish_stories, test_mention=test_mention)
+    if test_mention is not None:
+        # Each deliberate review run is a new post, including for the same issue.
+        return await send_one()
+
     async with db.raw_conn() as conn:
         cur = await conn.execute("SELECT published_targets_json FROM guide_digest_issue WHERE id=?", (issue_id,))
         saved = await cur.fetchone()
     for key, receipt in _json_load(saved[0] if saved else None, {}).items():
         if key.startswith("vk:") and int(receipt.get("group_id") or 0) == group and receipt.get("post_urls"):
             return dict(receipt, published=True, issue_id=issue_id, target=key, url=receipt["post_urls"][0])
-    async def send_one():
-        return await _publish_visual_digest_to_vk_once(
-            db, bot, issue_id=issue_id, max_cards=max_cards, group_id=group, target=target,
-            publish_date=publish_date, vk_api_fn=vk_api_fn, post_to_vk_fn=post_to_vk_fn,
-            upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn, publish_stories=publish_stories, test_mention=test_mention)
     return await run_legacy_delivery(db, issue_id=issue_id, provider="vk", target_id=str(group), send=send_one)
 
 
@@ -2265,8 +2279,7 @@ async def _publish_visual_digest_to_vk_once(
         raise RuntimeError("Guide visual digest VK wall.post failed")
 
     if test_mention is not None:
-        # The existing delivery record already covers this group. Only a regular
-        # publication should consume the excursions for the daily selection.
+        # A review post leaves the issue available for regular daily publication.
         return {"published": True, "issue_id": issue_id, "url": url, "group_id": group,
                 "text": text, "cards_count": len(card_bytes), "attachments_count": len(attachments)}
 
