@@ -450,6 +450,76 @@ def test_pgvector_cache_hit_makes_zero_related_rpc_calls_and_records_receipt(mon
     assert second["retrieval_receipt"]["source"] == "cache"
 
 
+def test_scoped_pgvector_ranks_programmes_before_repeated_dates(monkeypatch):
+    exporter = _load_exporter_module()
+    events = [_related_event(i, f"Programme {i}", day=1) for i in range(1, 58)]
+    for event in events:
+        if 2 <= event["id"] <= 42:
+            # Reciprocal links may form a chain, not a clique.
+            event["other_date_ids"] = [i for i in (event["id"] - 1, event["id"] + 1) if 2 <= i <= 42]
+    events[42]["other_date_ids"] = [2]  # One-way, so 43 is independent.
+    matches = list(range(2, 58))
+    calls = []
+
+    def rpc(_name, payload, **_kwargs):
+        calls.append(payload["p_anchor_event_id"])
+        return [{"event_id": i, "vector_similarity": 1 - i / 100} for i in matches]
+
+    monkeypatch.setattr(exporter, "personalization_supabase_request", rpc)
+    graph = exporter.build_pgvector_related_chain(events, current_date="2026-07-20", anchor_ids={1})
+    assert calls == [1]
+    selected = [row["event_id"] for row in graph["1"]]
+    assert selected == [2, *range(43, 58), *range(3, 27)]
+    assert graph["1"][1]["vector_similarity"] == .57
+    assert set(graph) == {"1"}
+
+
+def test_legacy_programme_order_migrates_requested_anchors_lazily(tmp_path, monkeypatch):
+    exporter = _load_exporter_module()
+    events = [_related_event(i, f"Programme {i}", day=i) for i in range(1, 7)]
+    events[1]["other_date_ids"], events[2]["other_date_ids"] = [3], [2]
+    replies, audits = [], []
+
+    def rpc(_name, payload, **_kwargs):
+        anchor = payload["p_anchor_event_id"]
+        replies.append(anchor)
+        return [{"event_id": i, "vector_similarity": .91 - i / 100}
+                for i in range(1, 7) if i != anchor]
+
+    def audit(**kwargs):
+        audits.append(kwargs["anchor"]["id"])
+        return {e["id"]: {"llm_semantic_score": .9, "confidence": .9, "reject": False}
+                for e in kwargs["candidates"]}
+
+    monkeypatch.setattr(exporter, "personalization_supabase_request", rpc)
+    monkeypatch.setattr(exporter, "call_gemma_related_audit", audit)
+    monkeypatch.setenv("GOOGLE_API_KEY4", "test-only")
+    cache_path = tmp_path / "cache.json"
+
+    def run(anchors):
+        return exporter.build_related(events, current_date="2026-07-20", related_mode="pgvector",
+                                      cache_path=cache_path, gemma_verify=True, anchor_ids=anchors)
+
+    run(None)
+    legacy = json.loads(cache_path.read_text())
+    legacy["schema_version"] = "event_pgvector_related_chain_v2_cache_20261114_content_vector_only"
+    legacy["event_fingerprints"] = {str(e["id"]): exporter.event_fingerprint({**e, "other_date_ids": []}) for e in events}
+    cache_path.write_text(json.dumps(legacy))
+    replies.clear()
+    scoped = run({1})
+    assert replies == [1]
+    assert scoped["related"]["1"]["strict_verified"]
+    assert not scoped["related"]["6"]["strict_verified"]
+    assert scoped["related"]["6"]["pure_related"] == [item["event_id"] for item in legacy["chains"]["6"]]
+    run({1})
+    assert replies == [1]
+    run({6})
+    assert replies == [1, 6]
+    full = run(None)
+    assert set(replies[2:]) == set(range(1, 7))
+    assert full["graph_reciprocity"]["policy"] == "pgvector_selective_reciprocity_v1"
+
+
 def test_pgvector_rejects_duplicate_anchor_fetch_before_rpc(monkeypatch) -> None:
     exporter = _load_exporter_module()
     calls = 0
