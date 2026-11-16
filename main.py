@@ -3670,7 +3670,7 @@ def redact_params(params: dict[str, Any]) -> dict[str, Any]:
     """Redact sensitive parameters like access tokens."""
     redacted: dict[str, Any] = {}
     for k, v in params.items():
-        redacted[k] = "<redacted>" if "token" in k else v
+        redacted[k] = "<redacted>" if "token" in k or k == "file" else v
     return redacted
 
 
@@ -4123,7 +4123,7 @@ async def _vk_api(
                     "vk captcha sid=%s method=%s params=%s",
                     _vk_captcha_sid,
                     method,
-                    str(orig_params)[:200],
+                    str(redact_params(orig_params))[:200],
                 )
                 if db and bot:
                     await notify_vk_captcha(db, bot, _vk_captcha_img)
