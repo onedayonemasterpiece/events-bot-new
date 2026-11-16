@@ -104,8 +104,14 @@ def test_konb_room_location_negative_controls() -> None:
     )
 
 
-def test_generic_vorota_is_not_forced_into_zakheim_bucket() -> None:
-    assert su._normalize_location("Ворота") == "ворота"
+def test_bare_vorota_resolves_only_as_structured_venue() -> None:
+    assert su._normalize_location("ВОРОТА") == "закхаймские ворота"
+    payload = {"location_name": "«Ворота»", "city": "Калининград"}
+    normalise_event_location_from_reference(payload)
+    assert payload["location_name"] == "Закхаймские ворота"
+    assert payload["location_address"] == "Литовский Вал 61"
+    for text in ("улица Ворота, 7", "Спектакль «Ворота»", "По дороге к воротам"):
+        assert find_known_venue_in_text(text, city="Калининград") is None
 
 
 def test_generic_city_park_not_fuzzy_bound_via_location_reference() -> None:

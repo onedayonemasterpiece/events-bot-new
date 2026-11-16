@@ -480,7 +480,7 @@ def find_known_venue_in_text(text: str | None, *, city: str | None = None) -> Kn
     matches: list[tuple[int, KnownVenue]] = []
 
     for alias_key, canonical_key in alias_by_key.items():
-        if not alias_key or len(alias_key) < 4:
+        if not alias_key or len(alias_key) < 4 or alias_key == "ворота":
             continue
         if not _contains_normalized_phrase(text_key, alias_key):
             continue
