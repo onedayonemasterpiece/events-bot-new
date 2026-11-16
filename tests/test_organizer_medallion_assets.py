@@ -11,6 +11,14 @@ from tg_graphic_medallions import resolve_event_graphic_medallions
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize('name', ['Дома-музея Германа Брахерта', 'Доме-музее Германа Брахерта'])
+def test_brachert_declined_venue_names(name):
+    resolved = resolve_event_graphic_medallions(SimpleNamespace(location_name=name))
+    assert [item['slug'] for item in resolved] == ['brachert']
+    unrelated = SimpleNamespace(location_name='Дом культуры', location_address='улица Брахерта, 2')
+    assert resolve_event_graphic_medallions(unrelated) == []
+
+
 @pytest.mark.parametrize('slug,name', [('bar-bastion', 'Бар Бастион'),
                                       ('dom-kitoboya', 'Дом китобоя'),
                                       ('dom-semyi', 'Дом семьи')])
