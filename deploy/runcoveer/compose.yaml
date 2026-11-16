@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vk-managed-source-consumer-bound-20261116
+    image: runcoveer/events:vk-gallery-grid-with-cards-20261116
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

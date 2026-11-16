@@ -16103,7 +16103,7 @@ async def _managed_vk_post_state(ev: Event, *, extra_photos: int = 0) -> tuple[b
             isinstance(att, dict) and att.get("type") == "photo"
             for att in (item.get("attachments") or [])
         )
-        mode = "carousel" if extra_photos else _vk_event_gallery_mode(ev.id, expected_count)
+        mode = _vk_event_gallery_mode(ev.id, expected_count)
         reported_mode = item.get("primary_attachments_mode")
         return photos >= expected_count and (mode is None or reported_mode in (None, mode))
 

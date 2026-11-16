@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- VK event galleries keep the existing grid/carousel selection when recommendation cards are present, with source photos before other dates and related events in both formats. Existing posts are not rewritten to change their layout.
+
 ### Fixed
 
 - Occurrence scope review receives already-read assigned poster OCR alongside the caption, using the same bounded text for source quotations and grounding; literal inflected city names survive the existing city rail without admitting regional adjectives.

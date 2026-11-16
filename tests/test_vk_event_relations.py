@@ -10,6 +10,27 @@ import vk_event_relations as relations
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('event_id,expected_mode', [(2, 'grid'), (3, 'carousel')])
+@pytest.mark.parametrize('sources,cards', [(['source-a', 'source-b'], [b'other-dates', b'related']), (['source-a'], [b'related'])])
+async def test_relation_cards_preserve_source_order_and_existing_gallery_mode(monkeypatch, event_id, expected_mode, sources, cards):
+    hints = []
+    async def photo(group, url, *args, **kwargs):
+        hints.append((url, kwargs.get('swipe_hint')))
+        return url
+    async def card(group, payload, *args, **kwargs):
+        return payload.decode()
+    monkeypatch.setattr(main, 'upload_vk_photo', photo)
+    monkeypatch.setattr(main, 'upload_vk_photo_bytes', card)
+    attachments, mode = await main._upload_vk_event_gallery(
+        '1', sources, event_id, None, None, cards,
+    )
+    assert attachments == sources + [card.decode() for card in cards]
+    assert mode == expected_mode
+    assert dict(hints)['source-a'] == ('листай' if expected_mode == 'carousel' else None)
+    assert all(hint is None for url, hint in hints if url != 'source-a')
+
+
+@pytest.mark.asyncio
 async def test_legacy_related_job_without_carousel_selection_sends_nothing(tmp_path, monkeypatch):
     from unittest.mock import AsyncMock
     db = main.Database(str(tmp_path / 'legacy-related.sqlite'))
@@ -144,7 +165,7 @@ async def test_shared_graph_keeps_original_gallery_and_semantic_only(tmp_path, m
         monkeypatch.setattr(main, 'upload_vk_photo_bytes', card)
         attachments, mode = await main._upload_vk_event_gallery('1', event.photo_urls, event.id, db, None, cards)
         assert attachments == ['poster-a', 'poster-b', 'card-0', 'card-1']
-        assert mode == 'carousel'  # Also for even event IDs.
+        assert mode == 'carousel'
         old_data = json.dumps(data, sort_keys=True)
         path.write_text(json.dumps({'related': {'1': {'pure_related': [4]}}}))
         updated = await relations.presentation(db, event)
