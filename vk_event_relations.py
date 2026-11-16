@@ -88,7 +88,7 @@ async def presentation(db, event):
                 'place': row.location_name or '', 'event_type': row.event_type or '',
                 'url': row.source_vk_post_url or '',
                 'description': row.search_digest or '', 'daily_hours': daily_hours,
-                'medallions': [str(Path(m['asset_path']).relative_to(ROOT))
+                'medallions': [str(m['asset_path'])
                                for m in resolve_event_graphic_medallions(row, limit=2)],
                 'is_free': bool(row.is_free)}
     return {'dates': [item(row) for row in dates[:6]],

@@ -122,9 +122,15 @@ async def test_early_related_job_keeps_same_job_pending_until_publication(tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_shared_graph_keeps_original_gallery_and_semantic_only(tmp_path, monkeypatch):
+@pytest.mark.parametrize('external_avatar', [False, True])
+async def test_shared_graph_keeps_original_gallery_and_semantic_only(tmp_path, monkeypatch, external_avatar):
     monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '1')
     monkeypatch.setattr(main, 'VK_AFISHA_GROUP_ID', '1')
+    if external_avatar:
+        avatar = tmp_path / 'source-avatar.png'
+        Image.new('RGBA', (100, 100), 'green').save(avatar)
+        monkeypatch.setattr('tg_graphic_medallions.resolve_event_graphic_medallions',
+                            lambda *args, **kwargs: [{'asset_path': str(avatar)}])
     db = main.Database(str(tmp_path / 'db.sqlite'))
     await db.init()
     try:
@@ -150,7 +156,7 @@ async def test_shared_graph_keeps_original_gallery_and_semantic_only(tmp_path, m
         data = await relations.presentation(db, event)
         assert [r['id'] for r in data['related']] == [2]
         assert [r['id'] for r in data['dates']] == [3]
-        assert data['related'][0]['medallions'][0].endswith('kant-island.png')
+        assert data['related'][0]['medallions'][0].endswith('source-avatar.png' if external_avatar else 'kant-island.png')
         assert data['related'][0]['is_free']
         assert data['related'][0]['event_type'] == 'концерт'
         assert data['related'][0]['description'] == 'Готовое описание ежедневного анонса'
