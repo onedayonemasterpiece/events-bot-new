@@ -273,10 +273,9 @@ def test_rollover_prunes_history_without_fabricating_verified_empty(tmp_path, mo
     full = exporter.build_related(
         full_events, current_date='2026-11-15', related_mode='pgvector',
         cache_path=cache_path, gemma_verify=True, gemma_max_anchors=20)
-    assert full['related']['3']['strict_verified']
-    assert len(retrieval) == 8, 'unscoped incomplete raw cache needs actual retrieval'
-    assert 3 in audits[5:]
-    assert 5 not in audits[5:], 'valid current audit must survive full rebuild'
+    assert not full['related']['3']['strict_verified']
+    assert len(retrieval) == len(audits) == 5, 'warm full export leaves unchanged old tail outside scope'
+    assert full['related']['5']['strict_verified']
     del retrieval[5:]
     del audits[5:]
     cache_path.write_text(scoped_cache)
@@ -299,7 +298,7 @@ def test_rollover_prunes_history_without_fabricating_verified_empty(tmp_path, mo
     single = exporter.build_related(
         [dict(id=5, title='Programme 5', date='2026-11-25', description='Grounded programme 5')],
         current_date='2026-11-15', related_mode='pgvector', cache_path=cache_path,
-        gemma_verify=True, gemma_max_anchors=20)
+        gemma_verify=True, gemma_max_anchors=20, anchor_ids={5})
     assert len(retrieval) == before + 1
     assert single['related']['5']['strict_verified']
 
@@ -359,17 +358,20 @@ def test_missing_old_fingerprints_do_not_create_a_cold_audit_tail(tmp_path, monk
     assert demanded['related']['2']['strict_verified']
     events[0]['title'] = 'Actual source change'
     fail.add(1)
-    for _ in range(2):
+    for _ in range(6):
         failed = run(set())
-        assert retrieval[-1] == [1] and not failed['related']['1']['strict_verified']
+        assert 1 in retrieval[-1] and set(retrieval[-1]).issubset({1, 2, 6})
+        assert not failed['related']['1']['strict_verified']
         assert json.loads(cache_path.read_text())['event_fingerprints']['1'] == old_fp
-    assert audits == [6, 2, 1, 1]
+    assert audits.count(1) >= 2
+    assert set(audits) == {1, 2, 6}, "failure must not start an unchanged old audit tail"
     fail.clear()
-    completed = run(set())
-    assert completed['related']['1']['strict_verified']
-    assert audits == [6, 2, 1, 1, 1]
+    for _ in range(6):
+        completed = run(set())
+    assert all(completed['related'][str(i)]['strict_verified'] for i in (1, 2, 6))
+    completed_count = len(audits)
     run(set())
-    assert audits == [6, 2, 1, 1, 1]
+    assert len(audits) == completed_count
     before_change = json.loads(cache_path.read_text())['event_fingerprints']
     events[0]['title'] = 'Second actual change'
     events[1]['title'] = 'Other actual change'
@@ -377,11 +379,112 @@ def test_missing_old_fingerprints_do_not_create_a_cold_audit_tail(tmp_path, monk
     saved = json.loads(cache_path.read_text())['event_fingerprints']
     unfinished = [event for event in events[:2]
                   if saved[str(event['id'])] != exporter.event_fingerprint(event)]
-    assert len(unfinished) == 1
-    pending_id = str(unfinished[0]['id'])
-    assert saved[pending_id] == before_change[pending_id]
-    run(set())
-    assert retrieval[-1] == [int(pending_id)]
+    assert unfinished
+    assert all(saved[str(event['id'])] == before_change[str(event['id'])] for event in unfinished)
+    for _ in range(6):
+        completed = run(set())
+    assert all(completed['related'][str(i)]['strict_verified'] for i in (1, 2, 6))
+    saved = json.loads(cache_path.read_text())['event_fingerprints']
+    assert all(saved[str(event['id'])] == exporter.event_fingerprint(event) for event in events)
     count = len(audits)
     run(set())
     assert len(audits) == count
+
+
+def test_linked_dates_invalidate_warm_related_candidates(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location(
+        'related_link_change', os.getenv('RELATED_EXPORTER_PATH') or
+        Path(__file__).resolve().parents[1] / 'site/scripts/export-production-preview-data.py')
+    exporter = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(exporter)
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'test-only')
+    events = [dict(id=i, title=f'Programme {i}', other_date_ids=[]) for i in range(1, 5)]
+    calls = []
+    peers = {1: [2, 3], 2: [1, 3], 3: [4], 4: [3]}
+
+    def rpc(_name, payload, **kwargs):
+        anchor = payload['p_anchor_event_id']
+        calls.append(anchor)
+        return [{'event_id': peer, 'vector_similarity': .86 - rank * .01}
+                for rank, peer in enumerate(peers[anchor])]
+
+    def audit(*, candidates, **kwargs):
+        return {row['id']: {'llm_semantic_score': .9, 'confidence': .9,
+                            'reject': False, 'similarity_class': 'highly_similar'}
+                for row in candidates}
+
+    monkeypatch.setattr(exporter, 'personalization_supabase_request', rpc)
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+    cache_path = tmp_path / 'related.json'
+
+    def run(anchors):
+        return exporter.build_related(events, current_date='2026-11-16', related_mode='pgvector',
+                                      cache_path=cache_path, gemma_verify=True, anchor_ids=anchors)
+
+    assert run(None)['related']['1']['similar'] == [2, 3]
+    unlinked_cache = cache_path.read_text()
+    events[0]['other_date_ids'] = [2]
+    events[1]['other_date_ids'] = [1]
+    for anchors in (None, {1}):
+        cache_path.write_text(unlinked_cache)
+        calls.clear()
+        linked = run(anchors)['related']
+        assert linked['1']['similar'] == [3]
+        assert linked['2']['similar'] == [3]
+        assert linked['4']['similar'] == [3]
+        assert set(calls) == {1, 2}
+        calls.clear()
+        run(anchors)
+        assert calls == []
+
+    events[0]['other_date_ids'] = []
+    events[1]['other_date_ids'] = []
+    assert run({1})['related']['1']['similar'] == [2, 3]
+    assert calls == [1, 2]
+
+
+def test_scoped_anchor_sees_a_split_below_its_audit_cutoff(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location(
+        'related_programme_split', os.getenv('RELATED_EXPORTER_PATH') or
+        Path(__file__).resolve().parents[1] / 'site/scripts/export-production-preview-data.py')
+    exporter = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(exporter)
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'test-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT', '10')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '2')
+    events = [dict(id=i, title=f'Programme {i}', start_date='2026-11-17') for i in range(1, 28)]
+    events[1]['other_date_ids'] = [3]
+    events[2]['other_date_ids'] = [4, 2]
+    events[3]['other_date_ids'] = [3]
+    calls = []
+
+    def rpc(_name, payload, **kwargs):
+        anchor = payload['p_anchor_event_id']
+        calls.append(anchor)
+        ids = range(2, 28) if anchor == 1 else [27 if anchor != 27 else 26]
+        return [{'event_id': i, 'vector_similarity': .86 - rank * .001}
+                for rank, i in enumerate(ids)]
+
+    def audit(*, candidates, **kwargs):
+        return {row['id']: {'llm_semantic_score': .9, 'confidence': .99, 'reject': False}
+                for row in candidates}
+
+    monkeypatch.setattr(exporter, 'personalization_supabase_request', rpc)
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+    cache = tmp_path / 'related.json'
+
+    def run(anchors):
+        return exporter.build_related(events, current_date='2026-11-16', related_mode='pgvector',
+                                      cache_path=cache, gemma_verify=True, anchor_ids=anchors)
+
+    assert 4 not in run(None)['related']['1']['pure_related']
+    # Only 3 and 4 change direct links. Anchor 1's audited representative is 2.
+    events[2]['other_date_ids'] = [2]
+    events[3]['other_date_ids'] = []
+    calls.clear()
+    result = run({1})['related']['1']
+    assert result['strict_verified'] and 4 in result['pure_related']
+    assert calls == [1, 2, 3, 4]
+    calls.clear()
+    run({1})
+    assert not calls

@@ -11,6 +11,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Reuse incremental pgvector recommendations across scoped and full exports; update stale programme dependents without rebuilding unchanged catalogue entries, and retain bounded progress after partial verifier failures. Full export applies global topology validation only to a complete graph, preserving cold-bootstrap rejection of unhealthy graphs.
 - Guide import preserves the extractor's negative digest eligibility decision instead of promoting it from filled logistics fields, including offers restricted to an organized group.
 - Redact signed VK upload tickets in existing API error and CAPTCHA logs while preserving upload requests and cached recovery parameters.
 - Explain rejected rich facts in the existing warning with quote presence/length and full-source lexical support metrics, without logging source quotes or changing fact admission.

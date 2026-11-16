@@ -55,7 +55,7 @@ SPARSE_RELATED_RETRIEVAL_METHOD = "local_tfidf_sparse_v1"
 PGVECTOR_RELATED_ALGORITHM = "event_pgvector_related_chain_v2_two_doc"
 PGVECTOR_RELATED_SCHEMA_VERSION = "event_pgvector_related_chain_v2"
 PGVECTOR_RELATED_RETRIEVAL_METHOD = "supabase_pgvector_hnsw_cosine_v1"
-PGVECTOR_RELATED_CACHE_SCHEMA_VERSION = "event_pgvector_related_chain_v2_cache_20261114_content_vector_only"
+PGVECTOR_RELATED_CACHE_SCHEMA_VERSION = "event_pgvector_related_chain_v2_cache_20261116_programme_order"
 RELATED_CACHE_SCHEMA_VERSION = "event_sparse_related_chain_v1_cache_20260628b"
 BGE_RELATED_ALGORITHM = "event_bge_m3_related_chain_v1"
 BGE_RELATED_SCHEMA_VERSION = "event_bge_m3_related_chain_v1"
@@ -3445,7 +3445,7 @@ def event_embedding_document(event: dict[str, Any]) -> str:
     return clean_text(" ".join(part for part in parts if part))
 
 
-def event_fingerprint(event: dict[str, Any]) -> str:
+def event_fingerprint(event: dict[str, Any], programme: Iterable[int] = ()) -> str:
     payload = {
         "title": event.get("title"),
         "event_type": event.get("event_type"),
@@ -3462,6 +3462,11 @@ def event_fingerprint(event: dict[str, Any]) -> str:
         "age_restriction_status": event.get("age_restriction_status"),
         "age_recommendation": event.get("age_recommendation"),
     }
+    if event.get("other_date_ids") or programme:
+        peers = set(programme).union(int(peer) for peer in event.get("other_date_ids") or [])
+        peers.discard(int(event["id"]))
+        if peers:
+            payload["other_date_ids"] = sorted(peers)
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
@@ -3497,8 +3502,11 @@ def sparse_cosine(left: dict[str, float], right: dict[str, float]) -> float:
     return float(sum(value * right.get(token, 0.0) for token, value in left.items()))
 
 
-def eligible_related_pair(left: dict[str, Any], right: dict[str, Any]) -> bool:
-    if int(left["id"]) == int(right["id"]):
+def eligible_related_pair(left: dict[str, Any], right: dict[str, Any], programmes: dict[int, int] | None = None) -> bool:
+    left_id, right_id = int(left["id"]), int(right["id"])
+    if left_id == right_id:
+        return False
+    if programmes and programmes.get(left_id, left_id) == programmes.get(right_id, right_id):
         return False
     if int(right["id"]) in [int(item) for item in left.get("other_date_ids", [])]:
         return False
@@ -3596,6 +3604,7 @@ def apply_pgvector_graph_reciprocity(
     events: list[dict[str, Any]],
     chains: dict[str, list[dict[str, Any]]],
     *,
+    programmes: dict[int, int] | None = None,
     high_confidence_threshold: float = 0.88,
 ) -> dict[str, Any]:
     """Repair only high-signal graph asymmetry without creating an echo chamber."""
@@ -3631,7 +3640,7 @@ def apply_pgvector_graph_reciprocity(
             for right_id in candidates:
                 left = by_id[left_id]
                 right = by_id[right_id]
-                if not eligible_related_pair(left, right):
+                if not eligible_related_pair(left, right, programmes):
                     continue
                 source = forward_item(right_id, left_id) or forward_item(left_id, right_id) or {
                     "related_score": 0.0,
@@ -3657,7 +3666,7 @@ def apply_pgvector_graph_reciprocity(
             right_id = int(item.get("event_id") or 0)
             if right_id not in by_id or float(item.get("vector_similarity") or 0) < high_confidence_threshold:
                 continue
-            if not eligible_related_pair(by_id[right_id], by_id[left_id]):
+            if not eligible_related_pair(by_id[right_id], by_id[left_id], programmes):
                 continue
             before = forward_item(right_id, left_id)
             _insert_forced_related(
@@ -3686,7 +3695,7 @@ def apply_pgvector_graph_reciprocity(
         if not outgoing:
             continue
         neighbor_id = int(outgoing["event_id"])
-        if not eligible_related_pair(by_id[neighbor_id], by_id[event_id]):
+        if not eligible_related_pair(by_id[neighbor_id], by_id[event_id], programmes):
             continue
         before = forward_item(neighbor_id, event_id)
         _insert_forced_related(
@@ -3703,7 +3712,7 @@ def apply_pgvector_graph_reciprocity(
         if len(ids) != 2:
             continue
         left_id, right_id = ids
-        if not eligible_related_pair(by_id[left_id], by_id[right_id]) or not eligible_related_pair(by_id[right_id], by_id[left_id]):
+        if not eligible_related_pair(by_id[left_id], by_id[right_id], programmes) or not eligible_related_pair(by_id[right_id], by_id[left_id], programmes):
             continue
         if not forward_item(left_id, right_id) or not forward_item(right_id, left_id):
             exact_missing.append(sorted([left_id, right_id]))
@@ -3948,6 +3957,14 @@ def personalization_supabase_request(
         raise RuntimeError(f"Supabase RPC {function_name} failed HTTP {exc.code}: {detail}") from exc
 
 
+def related_programme_members(events: list[dict[str, Any]]) -> dict[int, list[int]]:
+    from scripts.sync_event_search_vectors_to_supabase import build_occurrence_projections
+
+    return {event_id: projection["occurrence_member_ids"]
+            for event_id, projection in build_occurrence_projections(events).items()
+            if len(projection["occurrence_member_ids"]) > 1}
+
+
 def build_pgvector_related_chain(
     events: list[dict[str, Any]],
     *,
@@ -3960,11 +3977,28 @@ def build_pgvector_related_chain(
     retrieval_receipt_out: dict[str, Any] | None = None,
     response_max_bytes: int = DEFAULT_RELATED_RESPONSE_MAX_BYTES,
     total_response_max_bytes: int | None = None,
+    programme_members: dict[int, list[int]] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     by_id = {int(event["id"]): event for event in events}
     if len(by_id) != len(events):
         raise RuntimeError("pgvector related build requires unique anchor event ids")
-    allowed_ids = set(by_id)
+    if programme_members is None:
+        programme_members = related_programme_members(events)
+    programmes = {event_id: members[0] for event_id, members in programme_members.items()}
+
+    def programmes_first(chain):
+        seen = set()
+        first, repeats = [], []
+        for item in chain:
+            peer = item["event_id"]
+            programme = programmes.get(peer, peer)
+            if programme in seen:
+                repeats.append(item)
+            else:
+                first.append(item)
+                seen.add(programme)
+        return first + repeats
+
     chains: dict[str, list[dict[str, Any]]] = {}
     retrieval_metrics: dict[str, Any] = {
         "schema_version": "static_related_retrieval_receipt_v1",
@@ -4001,18 +4035,13 @@ def build_pgvector_related_chain(
             expected_row_fields=COMPACT_RELATED_FIELDS,
         ) or []
         scored: list[dict[str, Any]] = []
-        excluded_ids = {event_id, *[int(item) for item in event.get("other_date_ids") or []]}
         for row in rows:
             try:
                 candidate_id = int(row.get("event_id"))
             except Exception:
                 continue
             candidate = by_id.get(candidate_id)
-            if not candidate or candidate_id not in allowed_ids or candidate_id in excluded_ids:
-                continue
-            if int(event_id) in [int(item) for item in candidate.get("other_date_ids") or []]:
-                continue
-            if not eligible_related_pair(event, candidate):
+            if not candidate or not eligible_related_pair(event, candidate, programmes):
                 continue
             vector_similarity = max(0.0, min(1.0, float(row.get("vector_similarity") or 0)))
             slot_type = "pure_related" if vector_similarity >= 0.80 else "adjacent_discovery"
@@ -4034,8 +4063,13 @@ def build_pgvector_related_chain(
                 "display_eligible": True,
             })
         scored.sort(key=lambda item: (-float(item["related_score"]), -float(item.get("vector_similarity") or 0), int(item["event_id"])))
-        chains[str(event_id)] = scored[:40]
-    graph_meta = apply_pgvector_graph_reciprocity(events, chains)
+        chains[str(event_id)] = programmes_first(scored)[:40]
+    graph_meta = apply_pgvector_graph_reciprocity(events, chains, programmes=programmes)
+    # Graph repair can insert/re-sort edges. Keep its membership and its topology.
+    chains = {anchor: programmes_first(chain) for anchor, chain in chains.items()
+              if anchor_ids is None or int(anchor) in anchor_ids}
+    if anchor_ids is not None:
+        graph_meta["policy"] = "scoped_pgvector_candidates"
     if graph_meta_out is not None:
         graph_meta_out.clear()
         graph_meta_out.update(graph_meta)
@@ -4482,6 +4516,7 @@ def maybe_apply_gemma_audit(
     max_anchors: int,
     changed_event_ids: set[int] | None = None,
     anchor_ids: set[int] | None = None,
+    fingerprints: dict[str, str] | None = None,
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
     changed_event_ids = set(changed_event_ids or set())
     meta = {
@@ -4532,7 +4567,8 @@ def maybe_apply_gemma_audit(
         return chains, meta
     by_id = {int(event["id"]): event for event in events}
     audit_cache = cache.setdefault("gemma_audit_cache", {})
-    fingerprints = {str(event["id"]): event_fingerprint(event) for event in events}
+    if fingerprints is None:
+        fingerprints = {str(event["id"]): event_fingerprint(event) for event in events}
     candidate_limit = int(meta["retry_policy"]["candidate_limit"])
     pass_count = int(meta["retry_policy"].get("pass_count") or 1)
     total_candidate_limit = candidate_limit * pass_count
@@ -4883,7 +4919,9 @@ def build_related(
         embedding_doc_version = "event_embedding_doc_v1"
     related_corpus_revision = str(related_corpus_revision or "").strip()
     generated_at = datetime.now(timezone.utc).isoformat()
-    fingerprints = {str(event["id"]): event_fingerprint(event) for event in events}
+    programme_members = related_programme_members(events) if related_mode == "pgvector" else {}
+    fingerprints = {str(event["id"]): event_fingerprint(event, programme_members.get(int(event["id"]), ()))
+                    for event in events}
     event_ids = [int(event["id"]) for event in events]
     cache = load_related_cache(cache_path) or {}
     graph_meta: dict[str, Any] = {
@@ -4924,7 +4962,6 @@ def build_related(
     )
     cache_valid = (
         cache_compatible
-        and (related_mode != "pgvector" or cache.get("related_corpus_revision") == related_corpus_revision)
         and (
             related_mode != "bge"
             or cache.get("shared_bge_artifact_sha256")
@@ -4963,10 +5000,28 @@ def build_related(
     raw_chains_for_cache: dict[str, list[dict[str, Any]]] | None = None
     cached_raw_chains = cache.get("raw_chains") if isinstance(cache.get("raw_chains"), dict) else None
     unfinished_anchor_ids: set[int] = set()
-    if anchor_ids is not None and related_mode == "pgvector":
+    if related_mode == "pgvector":
+        graph_meta = {"policy": "scoped_pgvector_candidates"}
+        if cache_valid:
+            graph_meta.update(copy.deepcopy(cache.get("graph_reciprocity") or {}))
         if not cache_compatible:
-            cached_verified_event_ids = set()
-            cached_raw_chains = None
+            cached_verified_event_ids.clear()
+            # Old rankings remain visible until requested. Only a fresh scoped RPC
+            # can certify the new order; identical verifier packets can reuse their verdicts.
+            cache_compatible = (
+                cache.get("schema_version") == "event_pgvector_related_chain_v2_cache_20261114_content_vector_only"
+                and cache.get("algorithm") == algorithm and cache.get("embedding_model") == embedding_model
+                and cache.get("embedding_document_version") == embedding_doc_version
+            )
+            if cache_compatible:
+                # Older fingerprints omit links. Only a different content fingerprint
+                # proves an existing row actually changed during this upgrade.
+                changed_event_ids.difference_update(
+                    int(event["id"]) for event in events if event.get("other_date_ids")
+                    and previous_fingerprints.get(str(event["id"])) == event_fingerprint({**event, "other_date_ids": []})
+                )
+            else:
+                cached_raw_chains = None
         cached_verified_event_ids = {
             event_id for event_id in cached_verified_event_ids
             if str(event_id) in (cached_raw_chains or {}) and (
@@ -4979,25 +5034,33 @@ def build_related(
         }
         # First publications need their own anchors, not a cold audit of every
         # old page. Keep the complete catalog available to retrieval/verifier.
-        targets = set(anchor_ids) | (changed_event_ids if previous_fingerprints else set())
+        targets = set(anchor_ids if anchor_ids is not None else (current_id_set if not previous_fingerprints or not cache_compatible else ()))
+        targets.update(changed_event_ids if previous_fingerprints else ())
         targets.difference_update(cached_verified_event_ids - changed_event_ids)
+        targets.update(
+            int(anchor) for anchor, chain in (cached_raw_chains or {}).items()
+            if int(anchor) not in cached_verified_event_ids
+            and any(int(item["event_id"]) in changed_event_ids & current_id_set for item in chain)
+        )
         targets.intersection_update(current_id_set)
         chains = copy.deepcopy(cache.get("chains") or {}) if cache_compatible else {}
         raw_chains_for_cache = copy.deepcopy(cached_raw_chains or chains)
         fresh = build_pgvector_related_chain(
-            events, current_date=current_date, anchor_ids=targets,
+            events, current_date=current_date,
+            anchor_ids=None if anchor_ids is None and targets == current_id_set else targets,
             embedding_model=embedding_model,
             embedding_doc_kind=embedding_doc_version,
             graph_meta_out=graph_meta, retrieval_receipt_out=retrieval_receipt,
             response_max_bytes=related_response_max_bytes,
             total_response_max_bytes=related_total_response_max_bytes,
+            programme_members=programme_members,
         ) if targets else {}
         fresh = {key: chain for key, chain in fresh.items() if int(key) in targets}
         raw_chains_for_cache.update(copy.deepcopy(fresh))
         fresh, gemma_meta = maybe_apply_gemma_audit(
             events, fresh, enabled=gemma_verify, model=gemma_model,
             key_env=gemma_key_env, cache=cache, max_anchors=gemma_max_anchors,
-            changed_event_ids=targets, anchor_ids=targets,
+            changed_event_ids=targets, anchor_ids=targets, fingerprints=fingerprints,
         )
         chains.update(fresh)
         gemma_meta["verified_event_ids"] = sorted(
@@ -5007,7 +5070,13 @@ def build_related(
         if gemma_verify:
             gemma_meta["status"] = "ok" if current_id_set.issubset(set(gemma_meta["verified_event_ids"])) and not gemma_meta["errors"] else ("partial" if gemma_meta["verified_event_ids"] else "failed")
         unfinished_anchor_ids = targets - set(gemma_meta["verified_event_ids"]) if gemma_verify else set()
-        cache_state = "incremental"
+        unfinished_anchor_ids.update(
+            int(item["event_id"]) for anchor in list(unfinished_anchor_ids)
+            for item in (cached_raw_chains or {}).get(str(anchor), [])
+            if int(item["event_id"]) in changed_event_ids & current_id_set
+        )
+        retrieval_receipt["source"] = "compact_rpc" if targets else "cache"
+        cache_state = "incremental" if targets else "hit"
     elif cache_valid and (not gemma_verify or gemma_cache_ready):
         chains = cache["chains"]
         raw_chains_for_cache = copy.deepcopy(cached_raw_chains or chains)
@@ -5043,25 +5112,12 @@ def build_related(
             key_env=gemma_key_env,
             cache=cache,
             max_anchors=gemma_max_anchors,
-            changed_event_ids=set(),
+            changed_event_ids=set(), fingerprints=fingerprints,
         )
     else:
         salt = hashlib.sha1(json.dumps({"ids": event_ids, "fp": fingerprints}, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:12]
         log_stage(f"{related_mode}_rebuild_start", event_count=len(events), cache_salt=salt, changed_event_count=len(changed_event_ids), embedding_model=embedding_model)
-        if related_mode == "pgvector":
-            graph_meta = {}
-            chains = build_pgvector_related_chain(
-                events,
-                current_date=current_date,
-                embedding_model=embedding_model,
-                embedding_doc_kind=os.getenv("STATIC_SITE_PGVECTOR_RELATED_DOC_KIND", "related_v1") or "related_v1",
-                graph_meta_out=graph_meta,
-                retrieval_receipt_out=retrieval_receipt,
-                response_max_bytes=related_response_max_bytes,
-                total_response_max_bytes=related_total_response_max_bytes,
-            )
-            retrieval_receipt["source"] = "compact_rpc"
-        elif related_mode == "bge":
+        if related_mode == "bge":
             if not shared_bge_artifact:
                 raise RuntimeError("BGE related mode requires the shared in-memory vector artifact")
             graph_meta = {
@@ -5091,7 +5147,7 @@ def build_related(
             key_env=gemma_key_env,
             cache=cache,
             max_anchors=gemma_max_anchors,
-            changed_event_ids=changed_event_ids,
+            changed_event_ids=changed_event_ids, fingerprints=fingerprints,
         )
     log_stage("gemma_audit_complete", **gemma_meta)
     raw_chains_for_cache = raw_chains_for_cache or copy.deepcopy(chains)
@@ -6892,7 +6948,8 @@ def main() -> int:
             else None
         ),
     )
-    if args.catalog_mode == "full" and args.related_mode == "pgvector" and args.related_anchor_ids is None:
+    if (args.catalog_mode == "full" and args.related_mode == "pgvector" and args.related_anchor_ids is None
+            and (related_payload.get("graph_reciprocity") or {}).get("policy") != "scoped_pgvector_candidates"):
         validate_pgvector_graph_release(related_payload.get("graph_reciprocity") or {})
     (out_dir / "preview-related.json").write_text(json.dumps(related_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Exported {len(events)} events to {out_dir}")
