@@ -15749,6 +15749,23 @@ async def enqueue_job(
                     )
                     job = None
         if job:
+            if (
+                task in VK_JOB_TASKS
+                and job.terminal_reason == "failed"
+                and isinstance(job.payload, dict)
+                and int(job.payload.get("captcha_attempts") or 0) >= CAPTCHA_MAX_ATTEMPTS
+            ):
+                logline("ENQ", event_id, "skipped", job_key=job_key, reason="captcha_attempts_exhausted")
+                return "skipped"
+            if (
+                task in VK_JOB_TASKS and (payload is None or isinstance(payload, dict))
+                and isinstance(job.payload, dict)
+                and "captcha_attempts" in job.payload
+            ):
+                payload = {
+                    **(payload if isinstance(payload, dict) else job.payload),
+                    "captcha_attempts": job.payload["captcha_attempts"],
+                }
             captcha_schedule = (job.next_run_at, job.last_error, job.updated_at) if (
                 task in VK_JOB_TASKS and job.status in {JobStatus.pending, JobStatus.paused}
                 and (job.last_error or "").startswith("captcha_wait:")
@@ -20687,6 +20704,17 @@ async def _run_due_jobs_once_locked(
                     status = JobStatus.paused
                     pause = False
                     retry = False
+                if pause and obj.task in VK_JOB_TASKS:
+                    payload = dict(obj.payload) if isinstance(obj.payload, dict) else {}
+                    payload["captcha_attempts"] = int(payload.get("captcha_attempts") or 0) + 1
+                    obj.payload = payload
+                    if payload["captcha_attempts"] >= CAPTCHA_MAX_ATTEMPTS:
+                        status = JobStatus.error
+                        obj.terminal_reason = "failed"
+                        logging.warning(
+                            "VK_CAPTCHA_TERMINAL job_id=%s task=%s event_id=%s captcha_attempts=%s limit=%s",
+                            obj.id, obj.task.value, obj.event_id, payload["captcha_attempts"], CAPTCHA_MAX_ATTEMPTS,
+                        )
                 obj.status = status
                 obj.last_error = err
                 obj.updated_at = datetime.now(timezone.utc)

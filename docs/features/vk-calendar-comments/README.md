@@ -1,11 +1,8 @@
 # Calendar files in Afisha comments
 
-Automatic calendar task creation is temporarily disconnected after a single
-scheduled `docs.save` still returned code 14 at 20:40:07 UTC on November 12.
-The affected task is contained with its receipt preserved; a successful
-`wall.get` must not be mistaken for proof that document writes work.
-Photo publication remains enabled. The scheduled helper below is retained
-for transport repair and tests; it is not currently called by `post_to_vk`.
+Ordinary one-shot calendar delivery was restored on November 13 after the
+owner-requested live pilot. The earlier November 12 containment is historical.
+A successful `wall.get` still does not prove document writes are available.
 
 Only a newly created postponed event announcement schedules a calendar comment.
 The successful `post_to_vk` call knows its exact publication timestamp and adds
@@ -44,3 +41,25 @@ comments, which share the existing task enum. Future tasks remain excluded by
 the existing due-time SQL predicate; random delays, pacing, CAPTCHA handling
 and the one-job worker are unchanged. An already running operation is not
 preempted, so this ordering correction is not a hard wall-clock deadline proof.
+
+## Per-job CAPTCHA limit, 16 November
+
+Repeated `docs.save` code 14 on one new calendar job could pause every VK job
+again after each harmless-read recovery. The shared worker now counts only code
+14 outcomes in the existing job payload (`captcha_attempts`) and applies the
+existing `CAPTCHA_MAX_ATTEMPTS` setting, default 2. Ordinary network failures
+remain in the separate existing `attempts` counter.
+
+On exhaustion the job ends with `status=error`, `terminal_reason=failed` and a
+structured `VK_CAPTCHA_TERMINAL` warning. This means the document/comment was
+not delivered. The real challenge still invokes the existing shared cooldown;
+marker-scoped recovery resumes other tasks and excludes this failed job. No
+write probe, token rotation, challenge bypass or new worker is introduced.
+
+Restart and same-job enqueue retain the CAPTCHA count. Omitting an enqueue
+payload retains the frozen post URL, selection and publication time. Ordinary
+enqueue cannot clear an exhausted CAPTCHA terminal or trigger another attempt.
+New jobs without CAPTCHA and non-VK tasks do not acquire this metadata.
+Existing delivered receipts are not changed, replayed or rewritten. Source
+checks and mocked tests do not establish that VK has cleared an account block;
+ordinary new publication and comment receipts remain the live acceptance.

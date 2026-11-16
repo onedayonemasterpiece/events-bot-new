@@ -268,3 +268,26 @@ legacy controls pass. Final controls must show zero early VK/recovery calls, the
 same job pending at its future deadline, and exactly one comment after due.
 Evidence is retained in gallery-release/canonical-quality-release/calendar-priority-release.
 This source fix alone does not prove a live comment was delivered on time.
+
+
+## Recurring new-document CAPTCHA loop, 16 November
+
+Job159768/event11086 received `docs.save` code14 at12:16,12:28 and12:42 UTC.
+Existing harmless-read recovery resumed the cohort at12:26:36 and12:39:44,
+then the same earlier calendar job blocked its neighbours again. Generic
+`attempts` stayed0 because the pause branch does not consume its retry budget.
+The declared `CAPTCHA_MAX_ATTEMPTS` had no runtime consumer.
+
+The local correction uses one CAPTCHA-only integer in the existing payload and
+the existing limit; unrelated transport failures are not counted. Exhaustion
+is a failed delivery, preserving the final shared challenge cooldown. Same-job
+enqueue preserves metadata/frozen content and cannot rearm the exhausted row.
+No historical queue migration, old VK rewrite, new schema/controller, provider
+actor or CAPTCHA bypass is added. Prior failures are not backfilled.
+
+Mandatory checks: real SQLite worker/recovery loop with two code14 outcomes;
+prior generic attempts=5; restart; enqueue with payload or None before/after
+terminal failure; unchanged unrelated error retry and one frozen neighbour
+execution. Also run the existing calendar and marker-scoped CAPTCHA suites.
+Release and live delivery remain separate from these mocked checks. Evidence:
+retained captcha-exact-payload-counter-review-20261116.md and root test logs.
