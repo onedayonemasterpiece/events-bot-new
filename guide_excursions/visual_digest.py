@@ -833,7 +833,10 @@ def _draw_avatar(draw_img: Image.Image, row: Mapping[str, Any], x: int, y: int, 
     d.ellipse((x - 4, y - 4, x + size + 4, y + size + 4), fill=_rgba(pal.card, 255), outline=_rgba(accent, 255), width=5)
     key = _avatar_key(row)
     path = _AVATAR_DIR / _AVATAR_FILES.get(key, "")
-    if key and path.is_file():
+    dynamic = Path(str(row.get("source_avatar_path") or ""))
+    if dynamic.is_file():
+        path = dynamic
+    if path.is_file():
         avatar = _crop_circle(Image.open(path), size - 4)
         layer.alpha_composite(avatar, (x + 2, y + 2))
         d.ellipse((x + 2, y + 2, x + size - 2, y + size - 2), outline=(255, 255, 255, 235), width=4)
@@ -1018,6 +1021,15 @@ def render_visual_digest_card(
         focus = _focus_line(row)
         if focus:
             rd.text((tx, ty + 2), "".join(_wrap_by_width(rd, focus, focus_font, 515, 1)), font=focus_font, fill=_hex(palette.focus))
+            ty += 27 if expanded else 23
+        description = _plain(row.get("digest_blurb") or row.get("summary_one_liner"))
+        description_font = _font(_MAIN_FONT, 21 if expanded else 18)
+        line_h = 25 if expanded else 22
+        available_lines = max(0, min(2, (row_h - ty - 12) // line_h))
+        if description and available_lines:
+            for line in _wrap_by_width(rd, description, description_font, 515, available_lines):
+                rd.text((tx, ty + 2), line, font=description_font, fill=_hex(palette.route))
+                ty += line_h
         seats = _seats_text(row)
         if seats:
             _draw_chip(rd, seats, 654, row_h - (54 if expanded else 52), accent)
@@ -1178,6 +1190,8 @@ async def build_visual_digest_issue(
 ) -> dict[str, Any]:
     max_items = max(1, min(int(max_cards), 10)) * max(1, int(card_limit))
     rows = await select_visual_digest_rows(db, max_items=max_items)
+    from source_avatars import prepare_guide_avatars
+    await prepare_guide_avatars(rows)
     media_payload = {
         "kind": "visual_schedule_card",
         "card_limit": int(card_limit),
@@ -1306,6 +1320,8 @@ async def load_visual_digest_issue(db: Database, issue_id: int | None = None) ->
         ids = _issue_occurrence_ids(issue["items_json"])
         rows = await _fetch_rows_by_ids(conn, ids)
     payload = dict(issue)
+    from source_avatars import prepare_guide_avatars
+    await prepare_guide_avatars(rows)
     payload["items"] = rows
     return payload
 

@@ -90,6 +90,13 @@ organizers.forEach(({ item:organizer, evidence }) => {
     layoutRole,
   });
 });
+for (const source of event.source_medallions || []) {
+  tokens.push({
+    kind:'source', key:`source:vk:${source.owner_id}`, label:source.name,
+    ariaLabel:`Источник события: ${source.name}`, title:`Источник: ${source.name}`,
+    imageUrl:source.image_url, slug:`vk-source-${source.owner_id}`, layoutRole:'secondary',
+  });
+}
 if (railTransport) {
   tokens.push({
     kind:'program',

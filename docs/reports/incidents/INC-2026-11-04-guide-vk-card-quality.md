@@ -179,3 +179,26 @@ Scheduled version 13 exact recovery completed as ops 12285 PARTIAL with all 87 s
 One ordinary FULL, ops 12288 / run 34c50f791e83 / version 14, was submitted for all then-current 122 sources, including IDs 88–122. Its config was independently downloaded and compared. Local ops crashed on the deliberate runtime cutover, while the exact version 14 registry survived and remote processing continued. At 21:55 it completed 16 of 122 sources and read 55 posts. Do not repeat SaveKernel or start a competing scan; reconcile and import that exact result when complete. The current registry has 131 enabled rows; IDs 123–131 were added after config freeze and remain next-pass work. Raw rows are not a unique-wall count because canonical aliases exist.
 
 Evidence in the existing managed retained incident directory: guide-canonical-release-build-20261115.log, guide-canonical-preflight-health-20261115.log, guide-canonical-cutover-20261115.log, guide-canonical-live-health-20261115.json, preview-guide-canonical-four-selection-20261115.json, visual-preview-349.jpg, publish-guide-visual349-vk-20261115.log, guide-visual349-user-provider-readback-20261115.log, guide-visual349-live-wall-20261115.log and guide-visual349-canonical-receipt-20261115.log. Provider transport acceptance, public publication and later registry coverage are separate verified stages.
+
+
+### 2026-11-16: missing source portraits and unused descriptions
+
+Owner observed missing avatars in visual issue 349 after publication. Source
+inspection found only a curated `_AVATAR_FILES` inventory, so newly registered
+VK sources always fell back to initials. Event medallions likewise read only
+curated manifests. Existing guide rows already contain `digest_blurb` and
+`summary_one_liner`; the renderer did not consume them.
+
+Correction uses one shared signed-owner VK portrait cache at existing async
+collection/render boundaries, existing reader credentials and CDN storage.
+Event portraits are labelled sources, without manufacturing organizer or
+venue bindings. Static-site staging carries the public source-avatar index
+into the Kaggle source bundle. Cards fit the existing blurb in spare space;
+no extra semantic classification or description generation is introduced.
+
+Mandatory acceptance: new group and personal-page portraits reach guide and
+event renderers; equal numeric group/user IDs remain distinct; repeated reads
+reuse the downloaded file; missing images retain the current fallback; card
+geometry and source identity stay correct; no unsolicited public post is made.
+Focused tests and production delivery evidence are recorded in the task state.
+Deployment and live visual acceptance have not yet run for this change.

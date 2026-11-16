@@ -6348,6 +6348,8 @@ async def crawl_once(
         default_time = group.get("default_time")
         stats["groups_checked"] += 1
         await asyncio.sleep(random.uniform(0.7, 1.2))  # safety pause
+        from source_avatars import ensure_vk_avatar
+        await ensure_vk_avatar(abs(gid) if owner_type == "user" else -abs(gid))
         exporter.upsert_group_meta(
             gid,
             screen_name=group.get("screen_name"),

@@ -181,6 +181,7 @@ export interface PreviewEvent {
   age_recommendation_label: string | null;
   source_url: string | null;
   source_urls?: string[];
+  source_medallions?: { owner_id: number; name: string; image_url: string; source_url: string }[];
   source_count?: number;
   /** Build-time-only link to an already-published VK event post. */
   question_cta?: EventQuestionCta | null;

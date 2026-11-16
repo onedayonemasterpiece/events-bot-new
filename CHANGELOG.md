@@ -1,5 +1,7 @@
 # Changelog
 
+- VK source avatars are fetched through the existing reader and reused by tour cards and event source medallions; tour cards use their existing description when space permits. No extra LLM generation step.
+
 ## [Unreleased]
 
 - Calendar comment jobs start 5–12 minutes after public release, leaving three minutes inside the requested 5–15 minute window for existing upload pacing and retries; known-publication deferral uses the same schedule.

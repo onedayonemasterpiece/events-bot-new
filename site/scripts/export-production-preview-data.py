@@ -35,6 +35,9 @@ for _candidate in (SCRIPT_PATH.parents[1], SCRIPT_PATH.parents[2] if len(SCRIPT_
         sys.path.insert(0, str(_candidate))
 
 BUILD_TIME_ZONE = ZoneInfo("Europe/Kaliningrad")
+from source_avatars import source_medallions
+_source_avatars_path = SCRIPT_PATH.parents[1] / "src" / "data" / "sourceAvatars.json"
+_SOURCE_AVATARS = json.loads(_source_avatars_path.read_text()) if _source_avatars_path.is_file() else {}
 CURRENT_DATE_DEFAULT = datetime.now(BUILD_TIME_ZONE).date().isoformat()
 EXPECTED_IMAGE_GEOMETRY_MODEL = (
     os.getenv("EVENT_IMAGE_GEOMETRY_MODEL") or "gemma-4-31b-it"
@@ -2704,6 +2707,7 @@ def build_event(
         **age_projection,
         "source_url": source_url,
         "source_urls": source_urls,
+        "source_medallions": source_medallions(source_urls, index=_SOURCE_AVATARS),
         "source_count": len(source_urls),
         "question_cta": event_question_cta(con, event_id, row),
         "telegraph_url": clean_text(row["telegraph_url"]) or None,
