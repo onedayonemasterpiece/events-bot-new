@@ -324,11 +324,11 @@ EDITION_349 = [
 ]
 NARRATIVE_349 = {
     "lead_occurrence_id": 745,
-    "lead": "Где начинается рассвет в два часа дня?",
+    "lead": "Что растёт вдоль ручья? У Нозы Усмановой — другой маршрут, на ферме — осетры.",
     "paragraphs": [
-        {"details": [], "occurrence_ids": [745, 747], "text": "Вдоль ручья пройдёмся с [[1|Ольгой Рубцовой]]."},
-        {"details": [], "occurrence_ids": [746], "text": "У [[3|Нозы Усмановой]] другая отправная точка."},
-        {"details": [], "occurrence_ids": [763], "text": "А в воскресенье можно побывать на осетровой ферме с [[4|Марией Морозовой]]."},
+        {"details": [], "lead_anchor": "ручья", "occurrence_ids": [745, 747], "text": "Вдоль ручья пройдёмся с [[1|Ольгой Рубцовой]]."},
+        {"details": [], "lead_anchor": "Нозы Усмановой", "occurrence_ids": [746], "text": "У [[3|Нозы Усмановой]] другая отправная точка."},
+        {"details": [], "lead_anchor": "на ферме", "occurrence_ids": [763], "text": "А в воскресенье можно побывать на ферме с [[4|Марией Морозовой]]."},
     ],
     "outro": "Пешком или на ферму?",
 }
@@ -355,7 +355,7 @@ async def test_vk_text_wraps_written_story_with_exact_dates_contacts_and_plain_n
     assert [p["name"] for p in seen["people"]] == ["Ольга Рубцова", "80 лет единства", "Ноза Усманова", "Мария Морозова"]
     assert seen["excursions"][3]["movement"] == []
 
-    assert text.startswith("ЭКСКУРСИИ 17–22 НОЯБРЯ\nГде начинается рассвет в два часа дня?\n\n")
+    assert text.startswith("ЭКСКУРСИИ 17–22 НОЯБРЯ\nЧто растёт вдоль ручья? У Нозы Усмановой — другой маршрут, на ферме — осетры.\n\n")
     assert "дайджест экскурсий по Калининградской области от «Ух ты, Калининград!»" in text
     assert ("ЗЕЛЁНЫЕ ИСТОРИИ\nВдоль ручья пройдёмся с Ольгой Рубцовой.\n"
             "17 ноября (вт), 14:00 · 21 ноября (сб), 11:00\n💳 500 руб. · 🔗 Запись: vk.cc/d3XqaE") in text
@@ -406,8 +406,8 @@ async def test_writer_rejects_story_that_drops_or_invents_an_excursion(monkeypat
         {"lead_occurrence_id": 745, "outro": "", "lead": "Хук", "paragraphs": [{"details": [], "occurrence_ids": [745], "text": "Один абзац."}]},
         {"lead_occurrence_id": 745, "outro": "", "lead": "Хук", "paragraphs": [{"details": [], "occurrence_ids": [745, 746, 999], "text": "Лишний id."}]},
         {"lead_occurrence_id": 745, "outro": "", "lead": "Хук", "paragraphs": [{"details": [], "occurrence_ids": [745, 746], "text": "Оба на месте."}]},
-        {"lead_occurrence_id": 745, "outro": "", "lead": "Хук", "paragraphs": [{"details": [], "occurrence_ids": [745], "text": "Один."},
-                                       {"details": [], "occurrence_ids": [746], "text": "Другой."},
+        {"lead_occurrence_id": 745, "outro": "", "lead": "Дуб и река.", "paragraphs": [{"details": [], "lead_anchor": "дуб", "occurrence_ids": [745], "text": "Дуб растёт."},
+                                       {"details": [], "lead_anchor": "река", "occurrence_ids": [746], "text": "Река течёт."},
                                        {"details": [], "occurrence_ids": [], "text": ""}]},
     ])
 
@@ -585,13 +585,13 @@ async def test_vk_writer_heading_is_removed_only_when_it_is_a_separate_matching_
     from guide_excursions import digest_writer as dw
 
     paragraphs = [
-        {"details": [], "occurrence_ids": [745, 747], "text": "ЗЕЛЁНЫЕ ИСТОРИИ\nПройдёмся от Зубров вдоль ручья."},
-        {"details": [], "occurrence_ids": [746], "text": "РАССВЕТ НАД БАЛТИКОЙ проходит в городе."},
-        {"details": [], "occurrence_ids": [763], "text": "ДРУГОЙ ЗАГОЛОВОК\nНа ферме покажут осетров."},
+        {"details": [], "lead_anchor": "ручья", "occurrence_ids": [745, 747], "text": "ЗЕЛЁНЫЕ ИСТОРИИ\nПройдёмся от Зубров вдоль ручья."},
+        {"details": [], "lead_anchor": "в городе", "occurrence_ids": [746], "text": "РАССВЕТ НАД БАЛТИКОЙ проходит в городе."},
+        {"details": [], "lead_anchor": "на ферме", "occurrence_ids": [763], "text": "ДРУГОЙ ЗАГОЛОВОК\nНа ферме покажут осетров."},
     ]
 
     async def generated(*args, **kwargs):
-        return dict(NARRATIVE_349, paragraphs=paragraphs)
+        return dict(NARRATIVE_349, lead="Вдоль ручья. В городе и на ферме.", paragraphs=paragraphs)
 
     monkeypatch.setattr(dw, "_get_digest_writer_runtime", lambda: (object(), None))
     monkeypatch.setattr(dw, "_generate_json", generated)
@@ -666,7 +666,7 @@ async def test_vk_writer_groups_745_and_747_with_paired_title_quotes(monkeypatch
     payload, _ = vd._vk_narrative_payload(rows)
     first, repeat = payload["excursions"]
     answer = {"lead_occurrence_id": 745, "outro": "", "lead": "Что растёт у ручья?", "paragraphs": [
-        {"details": [], "occurrence_ids": [745, 747], "text": "Две даты одной прогулки."},
+        {"details": [], "lead_anchor": "ручья", "occurrence_ids": [745, 747], "text": "Две даты прогулки вдоль ручья."},
     ]}
 
     async def generate(*args, **kwargs):
@@ -751,3 +751,51 @@ async def test_loader_adds_earlier_posts_of_the_same_route_and_guide_only(tmp_pa
         """)
         earlier = await vd._load_earlier_route_posts(conn, [3], {3: [{"text": "Расписание ноября."}]})
     assert [p["text"] for p in earlier[3]] == ["Маршрут идёт по проспекту.", "История района."]
+
+
+def test_card_checks_each_route_stop_against_the_selected_outing():
+    posts = [{"post_date": "2026-11-01", "post_kind": "announce_multi", "text":
+              "21 ноября — «Осенний маршрут». Посетим городище Варген и кирху Куменена.\n"
+              "28 ноября — «Другая прогулка». Отправимся на берег Балтики."}]
+    row = {"canonical_title": "Осенний маршрут", "date": "2026-11-21", "city": "Область",
+           "route_summary": "Куменен → Варген → берег Балтики", "linked_posts": posts}
+    assert vd._place_line(row) == "Варген · Куменен"
+    assert vd._place_line(dict(row, date="2026-11-28")) == "Область"
+    assert vd._place_line(dict(row, linked_posts=[])) == "Область"
+    assert vd._place_line(dict(row, meeting_point="от ворот музея")) == "ворот музея"
+    labelled = dict(row, audience_fit=["архитектура", "городище Варген", "берег Балтики"])
+    assert vd._focus_line(labelled) == "городище Варген"
+    assert vd._focus_line(dict(labelled, fact_pack={"main_hook": "История кирхи"})) == ""
+
+
+def test_card_draws_source_hook_without_inventing_audience_or_hiding_unpictured_guide(monkeypatch):
+    from PIL import ImageDraw
+
+    rendered = []
+    original = ImageDraw.ImageDraw.text
+
+    def record(draw, xy, text, *args, **kwargs):
+        rendered.append(text)
+        return original(draw, xy, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", record)
+    row = {"canonical_title": "Два города", "date": "2026-11-21", "route_summary": "Анграпа",
+           "audience_fit": ["активные путешественники"], "transport": {"modes": ["bus"]},
+           "fact_pack": {"main_hook": "История первых переселенцев"},
+           "participant_medallions": [{"name": "Анна Петрова", "roles": ["Гид"]},
+                                      {"name": "Новый клуб", "roles": ["Организатор"]}]}
+    vd.render_visual_digest_card([row], issue_id=1)
+    assert "История первых переселенцев" in rendered
+    assert "Анна Петрова" in " ".join(rendered)
+    assert rendered.count("АП") == 1 and "НК" not in rendered
+    assert "активн" not in " ".join(rendered)
+
+
+def test_card_wording_update_cannot_requeue_old_issue():
+    row = {"id": 1, "canonical_title": "Самбийское кольцо", "date": "2026-11-28",
+           "route_summary": "Городище Варген", "city": "Область", "published_visual_digest_issue_id": 348}
+    old = dict(vd._visual_item_state(row), place="Варген → Куменен → берег Балтики")
+    old.pop("city")
+    assert vd._visual_selection_reason(dict(row, published_visual_digest_state=old)) == ""
+    assert vd._visual_selection_reason(dict(row, published_visual_digest_state=old,
+                                           route_summary="Музей")) == "changed_place"

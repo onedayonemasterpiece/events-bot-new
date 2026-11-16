@@ -10,7 +10,7 @@ from guide_excursions import sol_writer
 
 PAYLOAD = {"excursions": [{"occurrence_id": 1, "title": "Прогулка", "guides": ["Гид"]}]}
 STORY = {"lead": "У ручья.", "lead_occurrence_id": 1, "outro": "",
-         "paragraphs": [{"details": ["ручей"], "occurrence_ids": [1], "text": "У ручья растёт дуб."}]}
+         "paragraphs": [{"details": ["ручей"], "lead_anchor": "ручья", "occurrence_ids": [1], "text": "У ручья растёт дуб."}]}
 
 
 @pytest.mark.asyncio
@@ -70,3 +70,44 @@ async def test_native_cli_accepts_only_completed_text_turn(monkeypatch, tmp_path
                     """'{"type":"turn.failed"}'\n""")
     with pytest.raises(sol_writer.SolWriterError):
         await sol_writer.generate_sol_narrative("тест", {})
+
+
+def test_lead_covers_each_distinct_tour_and_repeats_its_first_subject():
+    rows = {
+        1: {"title": "Городской парк", "guides": ["Анна"]},
+        2: {"title": "Прогулка с ботаником", "guides": ["Ольга"]},
+        3: {"title": "Третий маршрут", "guides": ["Юлия"]},
+        4: {"title": "Городской парк", "guides": ["Анна"]},
+    }
+    story = {"lead_occurrence_id": 1, "lead": "Где растёт дуб? Другие прогулки ведут в сад и на маяк.",
+             "outro": "", "paragraphs": [
+                 {"occurrence_ids": [1, 4], "lead_anchor": "дуб", "details": ["дуб"], "text": "Дуб растёт у воды."},
+                 {"occurrence_ids": [2], "lead_anchor": "сад", "details": ["сад"], "text": "Посетим сад у озера."},
+                 {"occurrence_ids": [3], "lead_anchor": "маяк", "details": ["маяк"], "text": "Маяк открыт."},
+             ]}
+    def validate():
+        return writer._validate_vk_narrative(story, rows, issue_id=17)
+
+    assert validate()
+    story["lead"] = "Где растёт дуб? В другом маршруте — сад."
+    assert validate() is None
+    story["lead"] += " Маяк."
+    story["paragraphs"][2]["text"] = "Маяковский писал стихи."
+    assert validate() is None
+    story["paragraphs"][2]["text"] = "Маяк открыт."
+    story["paragraphs"][2]["lead_anchor"] = "сад"
+    assert validate() is None
+    story["paragraphs"][2]["lead_anchor"] = "маяк"
+    story["paragraphs"][0]["text"] = "Пройдём по дорожке. Дуб растёт у воды."
+    assert validate() is None
+
+
+def test_sparse_tour_can_use_its_confirmed_title_in_the_lead():
+    rows = {1: {"title": "У реки", "guides": []},
+            2: {"title": "«История одной поездки от города до моря»", "guides": ["Анна"]}}
+    data = {"lead": "Где растёт клён? Ещё в выпуске «История одной поездки от города до моря».",
+            "lead_occurrence_id": 1, "outro": "", "paragraphs": [
+                {"occurrence_ids": [1], "lead_anchor": "клен", "details": ["клён"], "text": "Клён растёт у воды."},
+                {"occurrence_ids": [2], "lead_anchor": "История одной поездки от города до моря",
+                 "details": ["Анна"], "text": "Эту экскурсию ведёт Анна."}]}
+    assert writer._validate_vk_narrative(data, rows, issue_id=18)

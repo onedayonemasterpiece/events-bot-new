@@ -162,7 +162,8 @@ def test_old_card_features_and_full_size_horizontal_participants_are_preserved(m
     monkeypatch.setattr(visual, '_draw_chip', chip)
     monkeypatch.setattr(ImageDraw.ImageDraw, 'text', text)
     row = {'canonical_title': 'Амалиенау', 'date': '2026-11-20', 'seats_text':'10 мест',
-        'fact_pack': {'group_format':'walking_tour', 'route_summary':'Амалиенау'},
+        'fact_pack': {'group_format':'walking_tour', 'route_summary':'Амалиенау',
+                      'main_hook':'архитектура · виллы · детали'},
         'participant_medallions': [ {'name':'Гид Один','roles':['Гид'],'path':str(tmp_path/'a.webp')},
             {'name':'Проект','roles':['Организатор'],'path':str(tmp_path/'b.webp')} ]}
     for name in ('a.webp', 'b.webp'):

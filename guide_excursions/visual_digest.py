@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Mapping, Sequence
+from typing import Any, Awaitable, Callable, Iterator, Mapping, Sequence
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import aiosqlite
@@ -34,7 +34,7 @@ from telegram_sources import canonicalize_tg_url, parse_tg_post_url
 from .dedup import deduplicate_occurrence_rows
 from .digest import RU_MONTH_GEN, format_date_time
 from .digest_writer import VK_NAME_MARK_RE, ask_vk_narrative
-from .parser import collapse_ws, normalize_title_key, occurrence_fare, price_for_publication
+from .parser import collapse_ws, extract_date_iso, normalize_title_key, occurrence_fare, price_for_publication, split_occurrence_blocks
 from .tic_catalog import load_tic_background
 
 logger = logging.getLogger(__name__)
@@ -592,48 +592,70 @@ def _short_meeting_point(value: Any) -> str:
     return _fit(text, 42)
 
 
-def _place_line(row: Mapping[str, Any]) -> str:
+_PLACE_CASE_ENDINGS = (
+    r"(?:а|я|у|ю|е|и|ы|о|ой|ей|ом|ем|ам|ям|ах|ях|ов|ев|ый|ий|ая|яя|ое|ее|"
+    r"ую|юю|ые|ие|ого|его|ому|ему|ым|им|ых|их)?"
+)
+
+
+def _place_phrase(value: str) -> re.Pattern[str]:
+    """Match the same consecutive words with ordinary Russian case endings."""
+    words = []
+    for word in re.findall(r"[а-яa-z0-9]+", value.casefold().replace("ё", "е")):
+        stem = re.sub(r"(?:ый|ий|ая|яя|ое|ее|а|я|о|е|ы|и)$", "", word)
+        if len(stem) >= 4 and re.fullmatch("[а-я]+", word):
+            words.append(re.escape(stem) + _PLACE_CASE_ENDINGS)
+        else:
+            words.append(re.escape(word))
+    return re.compile(r"(?<!\w)" + r"""[\s«»„“”’'":,–—-]+""".join(words) + r"(?!\w)")
+
+
+def _card_source_blocks(row: Mapping[str, Any], title: str) -> Iterator[str]:
+    day = _plain(row.get("date"))
+    posts = row.get("linked_posts")
+    if posts is None:
+        posts = [{"text": row.get("dedup_source_text"), "post_date": day}]
+    title_match = _place_phrase(title)
+    for post in posts:
+        text = str(post.get("text") or "").casefold().replace("ё", "е")
+        if not text:
+            continue
+        try:
+            published = datetime.fromisoformat(str(post.get("post_date") or day))
+        except ValueError:
+            continue
+        blocks = split_occurrence_blocks(text, post_date=published, keep_lines=True)
+        for block in blocks:
+            block_day = extract_date_iso(block, post_date=published)
+            linked_single = not block_day and len(blocks) == 1 and post.get("post_kind") == "announce_single"
+            if (block_day == day or linked_single) and title_match.search(block):
+                yield block
+
+
+def _confirmed_card_labels(row: Mapping[str, Any], labels: Sequence[str]) -> list[str]:
+    """Choose labels from a single source block in the order they appear there."""
+    patterns = [(label, _place_phrase(label)) for label in dict.fromkeys(labels) if re.search(r"\w", label)]
     title = _plain(row.get("canonical_title"))
-    low = title.lower().replace("ё", "е")
+    if not title or not patterns:
+        return []
+    best = []
+    for block in _card_source_blocks(row, title):
+        matches = [(m.start(), label) for label, pattern in patterns if (m := pattern.search(block))]
+        if len(matches) > len(best):
+            best = sorted(matches)
+    return [label for _, label in best[:3]]
+
+
+def _place_line(row: Mapping[str, Any]) -> str:
     meeting = _short_meeting_point(_fact(row, "meeting_point") or row.get("meeting_point"))
-    route = _route_raw(row)
     if meeting:
-        point = re.sub(r"(?iu)^от\s+", "", meeting)
-        if "железнодорожн" in low and "ворот" in low:
-            return "Железнодорожные ворота" if re.search("Железнодорожные ворота", point, re.I) else f"{point} → Железнодорожные ворота"
-        if "трамва" in low or "зеленоградск" in low:
-            return point
-        if "культурная революция: туда" in low:
-            return f"{point} → Хуфен"
-        if re.search(r"(?iu)^(Гвардейский|Железнодорожный$|Железнодорожные ворота$)", point):
-            return point
-        return point
-    if re.search(r"(?iu)балтийск|балткос", low):
-        return "Балтийск → Балтийская коса"
-    if re.search(r"(?iu)куршск|дюн", low):
-        return "Куршская коса"
-    if re.search(r"(?iu)коса, коты|сыр", low):
-        return "побережье области"
-    if "амалиенау" in low:
-        return "Калининград · Амалиенау"
-    if "понарт" in low:
-        return "Калининград · Понарт"
-    if "проспект мира" in low:
-        return "Калининград · проспект Мира"
-    if "фрунзе" in low:
-        return "Калининград · улица Фрунзе"
-    if "вармийск" in low:
-        return "Ушаково → Ладушкин → Багратионовск"
-    if "самб" in low:
-        return "Варген → Куменен → берег Балтики"
-    if "река города к" in low:
-        return "Кнайпхоф → мосты → порт → гавани"
-    if "трамва" in low:
-        return "Калининград · трамвайная история"
-    if "обзорная прогулка" in low:
-        return "Калининград · обзорный маршрут"
-    if route and len(route) < 58 and route.casefold() != _plain(row.get("canonical_title")).casefold():
-        return route
+        return re.sub(r"(?iu)^от\s+", "", meeting)
+    title = _plain(row.get("canonical_title"))
+    route = _route_raw(row)
+    if title and route and normalize_title_key(route) != normalize_title_key(title):
+        parts = [p.strip() for p in re.split(r"\s*(?:[,;→·]|\s[–—]\s)\s*", route) if p.strip()]
+        if confirmed := _confirmed_card_labels(row, parts):
+            return " · ".join(confirmed)
     return _plain(_fact(row, "city") or row.get("city")) or "детали в тексте"
 
 
@@ -710,34 +732,13 @@ def _card_description(row: Mapping[str, Any]) -> str:
 
 
 def _focus_line(row: Mapping[str, Any]) -> str:
-    text = (_plain(row.get("canonical_title")) + " " + _route_raw(row)).lower().replace("ё", "е")
-    if re.search(r"амалиенау|вилл", text):
-        return "архитектура · виллы · детали"
-    if "вармийск" in text:
-        return "руины · кирхи · юго-запад области"
-    if re.search(r"куршск|дюн", text):
-        return "дюны · природа · море"
-    if re.search(r"балтийск|балткос|порт", text):
-        return "форты · порт · море"
-    if re.search(r"коты|сыр", text):
-        return "море · коты · сыр"
-    if re.search(r"река|сплав|анграп", text):
-        return "река · природа · активный формат"
-    if "трамва" in text:
-        return "городской транспорт · история"
-    if re.search(r"понарт|фрунзе|проспект мира|железнодорожн", text):
-        return "городская история · архитектура"
-    if "культурная революция" in text:
-        return "городская история · культура"
-    audience = row.get("audience_fit") if isinstance(row.get("audience_fit"), list) else []
-    ru_audience = [
-        _plain(x)
-        for x in audience[:3]
-        if _plain(x) and re.search(r"[А-Яа-яЁё]", _plain(x))
-    ]
-    if ru_audience:
-        return " · ".join(ru_audience)[:48]
-    return ""
+    if _card_description(row):
+        return ""
+    audience = (row.get("fact_pack") or {}).get("audience_fit", row.get("audience_fit"))
+    if not isinstance(audience, list):
+        return ""
+    labels = [_plain(label) for label in audience if isinstance(label, str) and re.search("[а-яё]", label, re.I)]
+    return " · ".join(_confirmed_card_labels(row, labels))
 
 
 def _modes_for(row: Mapping[str, Any]) -> list[str]:
@@ -799,7 +800,7 @@ def _visual_item_state(row: Mapping[str, Any]) -> dict[str, Any]:
         "date": _plain(row.get("date")),
         "time": _plain(row.get("time")),
         "status": _plain(row.get("status")),
-        "place": _place_line(row),
+        "city": _plain(_fact(row, "city") or row.get("city")),
         "meeting_point": _plain(_fact(row, "meeting_point") or row.get("meeting_point")),
         "route": _route_raw(row),
         "booking_url": _visual_booking_url(row),
@@ -870,7 +871,13 @@ def _visual_selection_reason(row: Mapping[str, Any]) -> str:
             return "low_seats"
         return ""
 
-    for key in ("date", "time", "status", "title", "place", "meeting_point", "booking_url", "price_text"):
+    # Old snapshots saved the rendered place line as well as the underlying route
+    # and meeting point. Compare source fields so a renderer update cannot replay them.
+    if "place" not in previous and current.get("city") != previous.get("city"):
+        return "changed_place"
+    if current.get("route") != previous.get("route"):
+        return "changed_place"
+    for key in ("date", "time", "status", "title", "meeting_point", "booking_url", "price_text"):
         if current.get(key) != previous.get(key):
             return f"changed_{key}"
     if current.get("is_last_call") and not previous.get("is_last_call"):
@@ -1099,7 +1106,6 @@ def render_visual_digest_card(
     title_font = _font(_MAIN_FONT, 36 if expanded else 32)
     guide_font = _font(_MAIN_FONT, 24 if expanded else 21)
     route_font = _font(_MAIN_FONT, 23 if expanded else 20)
-    focus_font = _font(_BOLD_FONT, 20 if expanded else 18)
 
     for i, row in enumerate(page_rows):
         y = y0 + i * (row_h + gap)
@@ -1135,13 +1141,13 @@ def render_visual_digest_card(
                 ty += 23 if len(participants) >= 3 else (28 if len(participants) > 1 else (34 if expanded else 27))
         place = _place_line(row)
         if place and place.casefold() not in _plain(row.get("canonical_title")).casefold():
-            rd.text((tx, ty + 2), "".join(_wrap_by_width(rd, place, route_font, text_width, 1)), font=route_font, fill=_hex(palette.route))
+            labels = place.split(" · ")
+            while len(labels) > 1 and rd.textlength(" · ".join(labels), font=route_font) > text_width:
+                labels.pop()
+            rd.text((tx, ty + 2), "".join(_wrap_by_width(rd, " · ".join(labels), route_font, text_width, 1)),
+                    font=route_font, fill=_hex(palette.route))
             ty += 34 if expanded else 26
-        focus = _focus_line(row)
-        if focus and ty + (23 if expanded else 21) <= row_h - 12:
-            rd.text((tx, ty + 2), "".join(_wrap_by_width(rd, focus, focus_font, text_width, 1)), font=focus_font, fill=_hex(palette.focus))
-            ty += 27 if expanded else 23
-        description = _card_description(row)
+        description = _card_description(row) or _focus_line(row)
         description_font = _font(_MAIN_FONT, 21 if expanded else 18)
         line_h = 25 if expanded else 22
         available_lines = max(0, min(2, (row_h - ty - (54 if _seats_text(row) else 12)) // line_h))

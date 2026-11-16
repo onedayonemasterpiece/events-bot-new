@@ -798,10 +798,11 @@ _VK_NARRATIVE_SCHEMA = {
                     # Written before the text and never published: the model first lists what
                     # the announcement really says, then writes only from that list.
                     "details": {"type": "array", "items": {"type": "string"}},
+                    "lead_anchor": {"type": "string"},
                     "occurrence_ids": {"type": "array", "items": {"type": "integer"}},
                     "text": {"type": "string"},
                 },
-                "required": ["details", "occurrence_ids", "text"],
+                "required": ["details", "lead_anchor", "occurrence_ids", "text"],
             },
         },
         "outro": {"type": "string"},
@@ -842,20 +843,28 @@ def _vk_narrative_prompt(payload: Mapping[str, Any], *, issue_id: int) -> str:
         "В. Когда абзацы готовы, выбери из всех details одну самую любопытную деталь и сделай из неё lead.\n\n"
         "Что вернуть\n"
         "- lead_occurrence_id: id экскурсии, из details которой взят lead.\n"
-        "- lead: два коротких предложения, вместе до 220 знаков, сразу под заголовком «ЭКСКУРСИИ <период>». "
+        "- lead: два коротких предложения сразу под заголовком «ЭКСКУРСИИ <период>». Для небольшого выпуска "
+        "ориентир — 220 знаков; для четырёх и более разных экскурсий можно дать третье предложение. "
         "Первое — одна зримая деталь одной экскурсии, названная с первых слов, и из него понятно, что это за экскурсия "
         "(«на прогулке по …», «в поездке по …»). Второе открывает остальной выпуск конкретными предметами других "
-        "экскурсий, а не общим словом: читатель должен увидеть, что экскурсий несколько и они разные. Если в выпуске "
+        "экскурсий. В lead должна получить узнаваемое место КАЖДАЯ разная экскурсия; две даты одного маршрута "
+        "в одном абзаце считаются одной. Если о маршруте известны только название и гид, назови гида либо "
+        "приведи название в кавычках. Построй фразы вокруг действий и предметов, без перечня заголовков. Если в выпуске "
         "одна экскурсия, второе предложение продолжает первое. Общую тему для всех экскурсий называй, только если "
         "она есть в их details; не придумывай связь между экскурсиями, которых ничего не объединяет. "
         "Не обещай тайн, секретов и открытий. Первое предложение абзаца экскурсии lead_occurrence_id "
         "подхватывает тот же предмет и сообщает о нём новое: читатель должен узнать продолжение, а не повтор.\n"
-        "- paragraphs: абзацы в порядке списка excursions; в каждом details, occurrence_ids и text.\n"
+        "- paragraphs: абзацы в порядке списка excursions; в каждом details, occurrence_ids, lead_anchor и text. "
+        "Для каждого абзаца lead_anchor — его собственные 1–5 слов из lead: конкретный предмет, место или имя. "
+        "Скопируй этот фрагмент в той же форме в абзац; остальная фраза развивает мысль. Для главного маршрута "
+        "фрагмент стоит в первом предложении и lead, и абзаца. Для скудного источника точное название может "
+        "служить связью с заголовком абзаца, в том числе если в названии больше пяти слов. Каждому абзацу нужен свой фрагмент. "
+        "Поля lead_anchor и details читатель не увидит.\n"
         "- outro: один вопрос к читателю о конкретной детали этого выпуска, на который отвечают своим опытом или "
         "мнением. Вопрос вида «какая из экскурсий вам ближе» не годится: он подходит к любому выпуску. "
         "Если точного вопроса нет — пустая строка.\n"
         "Сборщик сам поставит над каждым абзацем название экскурсии, а под ним — даты, время, цену и запись. "
-        "Поэтому не пиши и не пересказывай название, не пиши числа дат, время, цены, телефоны, ссылки и хештеги.\n\n"
+        "В абзаце не повторяй заголовок. Числа дат, время, цены, телефоны, ссылки и хештеги оставь сборщику.\n\n"
         "Факты\n"
         "1. Название экскурсии — имя, а не описание. Оно может быть метафорой. Не выводи из него ни место, ни пейзаж, "
         "ни время суток, ни тему, ни занятия участников и не выписывай его в details.\n"
@@ -864,7 +873,11 @@ def _vk_narrative_prompt(payload: Mapping[str, Any], *, issue_id: int) -> str:
         "только описанной.\n"
         "3. Поля summary_one_liner, digest_blurb, card_caption, main_hook — машинные пересказы, они бывают обрывочны "
         "и ошибочны. Опирайся на текст источника; при расхождении верь источнику. Если два источника расходятся "
-        "в детали, эту деталь не упоминай.\n"
+        "в детали, эту деталь не упоминай. Проверяй отношения между фактами: кто совершает каждое действие, "
+        "над каким объектом, где именно. Два действия в одном городе или абзаце источника могут относиться "
+        "к разным местам. Если источник не называет одно место частью другого, сохрани два самостоятельных "
+        "предложения. Проверь, к какому существительному относятся «где», «там», «в нём»; у каждого такого "
+        "указания должна быть та же связь в первоисточнике.\n"
         "4. Сказанное о проекте или команде в целом (формат, награды, общая идея, цена сезона) — сведение о проекте. "
         "Его можно один раз на весь пост привести как сведение о проекте, но нельзя превращать в программу отдельной "
         "экскурсии или в заслугу отдельного гида.\n"
@@ -956,7 +969,9 @@ def _vk_narrative_prompt(payload: Mapping[str, Any], *, issue_id: int) -> str:
         "- имя стоит в правильном падеже; роль соответствует guides или organizers;\n"
         "- нет слова «встреча», пустого перехода, штампа и повторённого названия;\n"
         "- абзац экскурсии lead_occurrence_id начинается с того же предмета, что и lead, и добавляет новое;\n"
-        "- второе предложение lead называет предметы других экскурсий, а не «и многое другое».\n\n"
+        "- каждому опубликованному заголовку соответствует отдельный lead_anchor в зачине и в его разделе; "
+        "для выпуска из пяти разных экскурсий нужны пять таких связей. Убери реплики, которые повторяют факты "
+        "абзаца или оценивают их общими словами.\n\n"
         "Верни только JSON по схеме.\n"
         f"JSON schema: {json.dumps(_VK_NARRATIVE_SCHEMA, ensure_ascii=False)}\n\n"
         f"Input:\n{json.dumps(dict(payload), ensure_ascii=False)}"
@@ -970,6 +985,26 @@ def _vk_group_title(value: str) -> str:
     return title
 
 
+def _anchor_words(text: str) -> str:
+    visible = VK_NAME_MARK_RE.sub(lambda mark: mark[2], text)
+    return " ".join(re.findall(r"[^\W_]+", visible.casefold().replace("ё", "е")))
+
+
+def _matches_lead_anchor(anchor: str, lead: str, body: str, title: str, *, primary: bool) -> bool:
+    # Match whole words so «парк» cannot stand for «парковка». Punctuation, case,
+    # hyphens and the model's name markup do not affect what the reader sees.
+    is_title = bool(anchor) and anchor == _anchor_words(title)
+    if not is_title and (not 1 <= len(anchor.split()) <= 5 or not re.search(r"[^\W\d_]{3,}", anchor)):
+        return False
+    if primary:
+        lead = re.split(r"[.!?…](?:\s|$)", lead, maxsplit=1)[0]
+        body = re.split(r"[.!?…](?:\s|$)", body, maxsplit=1)[0]
+    needle = f" {anchor} "
+    in_lead = needle in f" {_anchor_words(lead)} "
+    in_body = needle in f" {_anchor_words(body)} "
+    return in_lead and (in_body or (not primary and is_title))
+
+
 def _validate_vk_narrative(
     data: Any, excursions: Mapping[int, Mapping[str, Any]], *, issue_id: int,
 ) -> dict[str, Any] | None:
@@ -980,6 +1015,8 @@ def _validate_vk_narrative(
     lead_id = data.get("lead_occurrence_id")
     if type(lead_id) is not int or lead_id not in excursions:
         return None
+    lead = collapse_ws(data["lead"])
+    anchors: set[str] = set()
     paragraphs: list[dict[str, Any]] = []
     for raw in data["paragraphs"]:
         if not isinstance(raw, dict) or not isinstance(raw.get("text"), str):
@@ -999,8 +1036,14 @@ def _validate_vk_narrative(
         details = raw.get("details")
         if not isinstance(details, list) or any(not isinstance(detail, str) for detail in details):
             return None
-        paragraphs.append({"occurrence_ids": ids, "text": text, "details": details})
-    lead = collapse_ws(data["lead"])
+        label = raw.get("lead_anchor")
+        anchor = _anchor_words(label) if isinstance(label, str) else ""
+        if anchor in anchors or not _matches_lead_anchor(anchor, lead, text, excursions[ids[0]]["title"],
+                                                         primary=lead_id in ids):
+            logger.warning("guide_vk_narrative issue_id=%s outcome=rejected reason=lead_coverage ids=%s", issue_id, ids)
+            return None
+        anchors.add(anchor)
+        paragraphs.append({"occurrence_ids": ids, "text": text, "details": details, "lead_anchor": label})
     outro = collapse_ws(data.get("outro"))
     expected = sorted(excursions)
     covered = sorted(x for paragraph in paragraphs for x in paragraph["occurrence_ids"])
