@@ -1223,8 +1223,9 @@ async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) ->
         )
         post_row = await post_cur.fetchone()
         item["dedup_source_text"] = collapse_ws(str((post_row["text"] if post_row else "") or ""))
+        item["dedup_source_url"] = post_row["source_url"] if post_row else None
         payload_url = item["fact_pack"].get("source_post_url") if isinstance(item["fact_pack"], dict) else None
-        item["source_post_url"] = _source_post_url(payload_url, (post_row["source_url"] if post_row else None) or item.get("channel_url"))
+        item["source_post_url"] = _source_post_url(payload_url, item["dedup_source_url"] or item.get("channel_url"))
         reason = _visual_selection_reason(item)
         if reason:
             item["visual_selection_reason"] = reason
@@ -1359,8 +1360,9 @@ async def _fetch_rows_by_ids(conn: aiosqlite.Connection, occurrence_ids: Sequenc
         )
         post_row = await post_cur.fetchone()
         item["dedup_source_text"] = collapse_ws(str((post_row["text"] if post_row else "") or ""))
+        item["dedup_source_url"] = post_row["source_url"] if post_row else None
         payload_url = item["fact_pack"].get("source_post_url") if isinstance(item["fact_pack"], dict) else None
-        item["source_post_url"] = _source_post_url(payload_url, (post_row["source_url"] if post_row else None) or item.get("channel_url"))
+        item["source_post_url"] = _source_post_url(payload_url, item["dedup_source_url"] or item.get("channel_url"))
         by_id[int(item["id"])] = item
     return [by_id[i] for i in ids if i in by_id]
 
@@ -1945,7 +1947,7 @@ def _vk_narrative_payload(items: Sequence[Mapping[str, Any]]) -> tuple[dict[str,
     """Writer input for the whole edition plus {person number: (personal VK id, name)} for confirmed guides."""
     people: dict[str, dict[str, Any]] = {}
     mention_ids: dict[int, tuple[int, str]] = {}
-    sources: dict[str, dict[str, Any]] = {}
+    sources: dict[tuple[str, str], dict[str, Any]] = {}
     excursions: list[dict[str, Any]] = []
     for row in items:
         row_id = int(row.get("id") or 0)
@@ -1974,8 +1976,10 @@ def _vk_narrative_payload(items: Sequence[Mapping[str, Any]]) -> tuple[dict[str,
                 mention_ids[entry["n"]] = (owner, name)
         source_text = _plain(row.get("dedup_source_text"))
         if source_text:
-            source = sources.setdefault(source_text, {"url": _plain(row.get("source_post_url")),
-                                                      "text": source_text[:3500], "excursions": []})
+            source_url = _plain(row.get("dedup_source_url", row.get("source_post_url")))
+            source = sources.setdefault((source_url, source_text), {
+                "url": source_url, "text": source_text[:3500], "excursions": [],
+            })
             source["excursions"].append(row_id)
         try:
             weekday = RU_WEEK_FULL[date.fromisoformat(_plain(row.get("date"))).weekday()]

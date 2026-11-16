@@ -479,3 +479,15 @@ async def test_review_marks_test_recipient_when_the_story_has_no_confirmed_name(
                                              vk_api_fn=_fake_shortener)
     assert text.endswith("Проверка уведомления: [id858363572|тестовый получатель]")
     assert text.count("[id") == 1
+
+
+def test_vk_narrative_pairs_source_excerpt_with_selected_post_url():
+    original = EDITION_349[0]
+    selected_url = "https://vk.com/wall-10_12"
+    rows = [dict(original, dedup_source_url=selected_url),
+            dict(original, id=746),
+            dict(original, id=747, dedup_source_url=None)]
+    payload, _ = vd._vk_narrative_payload(rows)
+    assert [(s["url"], s["excursions"]) for s in payload["sources"]] == [
+        (selected_url, [745]), (original["source_post_url"], [746]), ("", [747]),
+    ]
