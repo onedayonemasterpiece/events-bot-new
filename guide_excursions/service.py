@@ -2379,8 +2379,8 @@ async def _insert_occurrence_claims(
                 "organizer_names": list(parsed.organizer_names),
             }
         )
-    # Keep the typed facts when an enrichment supplies its own claim list.
-    claims = [claim for claim in claims if claim["fact_key"] not in {"transport", "group_format", "program"}]
+    claims = [claim for claim in claims if claim["fact_key"] not in {"transport", "program"}
+              and not (claim["fact_key"] == "group_format" and (fact_pack or {}).get("group_format"))]
     if program := (fact_pack or {}).get("program"):
         claims.append({"fact_key": "program", "fact_value": program})
     if group_format := (fact_pack or {}).get("group_format"):

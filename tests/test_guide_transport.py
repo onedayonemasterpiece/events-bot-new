@@ -19,7 +19,7 @@ async def test_grounded_modes_survive_sparse_imports_without_crossing_routes(tmp
     monkeypatch.setattr(service, "apply_occurrence_enrichment", no_enrichment)
     results = tmp_path / "guide.json"
 
-    async def ingest(message_id, day, *, title="Рассвет над Балтикой", modes=(), scope="occurrence", program=None):
+    async def ingest(message_id, day, *, title="Рассвет над Балтикой", modes=(), scope="occurrence", program=None, legacy_claim=None):
         url = f"https://t.me/ruin_keepers/{message_id}"
         quotes = {("walk",): "пешеходный маршрут", ("bus",): "на автобусе",
                   ("bus", "walk"): "автобусно-пешеходная экскурсия"}
@@ -27,6 +27,8 @@ async def test_grounded_modes_survive_sparse_imports_without_crossing_routes(tmp
         occurrence = {"canonical_title": title, "date": day, "time": "14:00",
                       "status": "available", "city": "Калининград", "digest_eligible": True,
                       "fact_claims": [{"fact_key": "city", "fact_value": "Калининград"}]}
+        if legacy_claim:
+            occurrence["fact_claims"].append({"fact_key": "group_format", "fact_value": legacy_claim})
         occurrence["fact_pack"] = {"program": program} if program else {}
         if modes:
             occurrence["group_format"] = "small_group"
@@ -45,10 +47,10 @@ async def test_grounded_modes_survive_sparse_imports_without_crossing_routes(tmp
             return (await _fetch_rows_by_ids(conn, [(await cur.fetchone())["id"]]))[0]
 
     try:
-        assert _modes_for({"canonical_title": "Ферма, улица Школьная", "group_format": "open"}) == []
-        assert _modes_for({"fact_pack": {"group_format": "walking_tour"}}) == ["walk"]
         first = await ingest(1, "2099-11-20", modes=("walk",), scope="route")
         assert _modes_for(first) == ["walk"]
+        assert _modes_for({"canonical_title": "Ферма, улица Школьная", "group_format": "open"}) == []
+        assert _modes_for({"fact_pack": {"group_format": "walking_tour"}}) == ["walk"]
         same = await ingest(2, "2099-11-20")
         assert _modes_for(same) == ["walk"] and same["group_format"] == "small_group"
         later = await ingest(3, "2099-11-28")
@@ -68,5 +70,7 @@ async def test_grounded_modes_survive_sparse_imports_without_crossing_routes(tmp
         assert member["transport"]["program_source_url"] == member["source_post_url"]
         assert _modes_for(await ingest(11, "2099-12-01", title="Новый маршрут", program="club237389053:2099-12")) == []
         assert _modes_for(await ingest(12, "2099-11-22", title="Другой проект", program="club7:2099-11")) == []
+        legacy = await ingest(13, "2099-11-27", title="Старая запись", legacy_claim="walking_tour")
+        assert _modes_for(legacy) == ["walk"]
     finally:
         await db.close()
