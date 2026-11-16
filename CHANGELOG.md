@@ -10,6 +10,8 @@
 
 ### Fixed
 
+- Shared site and VK medallions recognize the observed declined names of the Hermann Brachert museum; a street bearing the surname does not select the museum medallion.
+
 - Tour cards keep separate medallions for co-guides and organizers, resolve existing public profile identities, and label an unassigned source as source. Existing extraction now describes both roles explicitly.
 
 - A single source poster with recommendation cards retains its navigation cue in VK grids as well as carousels; existing layout selection and multi-photo grids stay unchanged.

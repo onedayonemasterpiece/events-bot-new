@@ -76,6 +76,12 @@ test('current mumod, Dramatic Theatre, Kaup and historical Greza aliases resolve
   assert.deepEqual(slugs(event({ venue_name:'Грёза Хутор, пос. Тихомировка, Озёрск' })), ['greza-khutor']);
 });
 
+test('declined Brachert venue names resolve without matching a street surname', () => {
+  assert.deepEqual(slugs(event({ venue_name:'Дома-музея Германа Брахерта' })), ['brachert']);
+  assert.deepEqual(slugs(event({ venue_name:'Доме-музее Германа Брахерта' })), ['brachert']);
+  assert.deepEqual(slugs(event({ venue_name:'Дом культуры', address:'улица Брахерта, 2' })), []);
+});
+
 test('structured organizers resolve Profi-Tour and Ruin Keepers without venue inference', () => {
   assert.deepEqual(slugs(event({
     venue_name:'Судостроительный завод «Янтарь»',
