@@ -905,3 +905,8 @@ def test_reposts_share_booking_phones_landmark_and_day_but_only_one_has_the_tari
 def test_bundled_card_font_distinguishes_numero_from_missing_glyph():
     font = vd._font(vd._NUMERO_FONT, 36)
     assert bytes(font.getmask("№")) != bytes(font.getmask("\u0378"))
+
+    main_font = vd._font(vd._MAIN_FONT, 36)
+    runs = list(vd._card_text_runs("Форт № 11", main_font))
+    assert [(part, face.getname()) for part, face in runs] == [
+        ("Форт ", main_font.getname()), ("№", font.getname()), (" 11", main_font.getname())]

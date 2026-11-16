@@ -369,7 +369,30 @@ def _alpha_circle_layer(size: tuple[int, int], bbox: tuple[int, int, int, int], 
     return layer
 
 
-def _wrap_by_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, max_width: int, max_lines: int) -> list[str]:
+def _card_text_runs(text: str, font: ImageFont.FreeTypeFont):
+    for word in re.split("(№)", text):
+        if word:
+            yield word, _font(_NUMERO_FONT, font.size) if word == "№" else font
+
+
+def _draw_card_line(draw, xy, text, font, fill):
+    if "№" not in text:
+        draw.text(xy, text, font=font, fill=fill)
+        return
+    x, y = xy
+    baseline = y + font.getmetrics()[0]
+    for run, face in _card_text_runs(text, font):
+        draw.text((x, baseline), run, font=face, fill=fill, anchor="ls")
+        x += draw.textlength(run, font=face)
+
+
+def _wrap_by_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, max_width: int,
+                   max_lines: int, *, use_numero: bool = False) -> list[str]:
+    def width(line: str) -> float:
+        if use_numero and "№" in line:
+            return sum(draw.textlength(run, font=face) for run, face in _card_text_runs(line, font))
+        return draw.textlength(line, font=font)
+
     words = _plain(text).split()
     if not words:
         return []
@@ -379,7 +402,7 @@ def _wrap_by_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTyp
     consumed = 0
     for idx, word in enumerate(words):
         candidate = f"{current} {word}".strip()
-        if not current or draw.textlength(candidate, font=font) <= max_width:
+        if not current or width(candidate) <= max_width:
             current = candidate
             consumed = idx + 1
             continue
@@ -394,7 +417,7 @@ def _wrap_by_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTyp
     if len(lines) == max_lines and (truncated or consumed < len(words)):
         # Ensure visibly truncated titles end with ellipsis, not an abrupt word.
         last = lines[-1]
-        while last and draw.textlength(last + "…", font=font) > max_width:
+        while last and width(last + "…") > max_width:
             last = last[:-1].rstrip()
         lines[-1] = (last + "…") if last else "…"
     return lines
@@ -1164,11 +1187,9 @@ def render_visual_digest_card(
         ty = (18 if len(participants) >= 3 else 24) if len(participants) > 1 else (42 if expanded else 28)
         row_title_font = _font(_MAIN_FONT, 30) if len(participants) >= 3 else title_font
         title_text = _plain(row.get("canonical_title")) or "Экскурсия"
-        if "№" in title_text:
-            row_title_font = _font(_NUMERO_FONT, row_title_font.size)
-        title_lines = _wrap_by_width(rd, title_text, row_title_font, text_width, 3 if len(participants) >= 3 else 2)
+        title_lines = _wrap_by_width(rd, title_text, row_title_font, text_width, 3 if len(participants) >= 3 else 2, use_numero=True)
         for line in title_lines:
-            rd.text((tx, ty), line, font=row_title_font, fill=_hex(palette.text))
+            _draw_card_line(rd, (tx, ty), line, row_title_font, _hex(palette.text))
             ty += 34 if len(participants) >= 3 else (40 if expanded else 34)
         guide = _source_name(row)
         if guide:
@@ -1186,12 +1207,10 @@ def render_visual_digest_card(
             ty += 34 if expanded else 26
         description = _card_description(row) or _focus_line(row)
         description_font = _font(_MAIN_FONT, 21 if expanded else 18)
-        if "№" in description:
-            description_font = _font(_NUMERO_FONT, description_font.size)
         line_h = 25 if expanded else 22
         available_lines = max(0, min(2, (row_h - ty - (54 if _seats_text(row) else 12)) // line_h))
-        for line in _wrap_by_width(rd, description, description_font, text_width, available_lines) if description and available_lines else []:
-            rd.text((tx, ty + 2), line, font=description_font, fill=_hex(palette.route))
+        for line in _wrap_by_width(rd, description, description_font, text_width, available_lines, use_numero=True) if description and available_lines else []:
+            _draw_card_line(rd, (tx, ty + 2), line, description_font, _hex(palette.route))
             ty += line_h
         seats = _seats_text(row)
         if seats:
