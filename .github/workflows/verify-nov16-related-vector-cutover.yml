@@ -1,0 +1,15 @@
+name: Verify the November 16 related-vector cutover
+on:
+  push:
+    branches:
+      - verify/related-vector-cutover-20261116
+permissions:
+  contents: read
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply and revert a two-event release in an isolated pgvector database
+        run: python docs/reports/fable-related-search-20261116/cutover/verify_postgres.py
