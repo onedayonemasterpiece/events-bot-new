@@ -362,6 +362,9 @@ async def test_resume_guide_monitor_jobs_uses_output_when_status_lookup_fails(
             import_completed=True,
         )
 
+    async def fake_update_job_meta(*args, **kwargs):
+        return None
+
     async def fake_remove_job(job_type: str, kernel_ref: str) -> None:
         removed.append((job_type, kernel_ref))
 
@@ -374,6 +377,7 @@ async def test_resume_guide_monitor_jobs_uses_output_when_status_lookup_fails(
         fake_run_guide_import_from_results,
     )
     monkeypatch.setattr(guide_service, "remove_job", fake_remove_job)
+    monkeypatch.setattr(guide_service, "update_job_meta", fake_update_job_meta)
 
     recovered = await guide_service.resume_guide_monitor_jobs(object(), None, chat_id=123)
 

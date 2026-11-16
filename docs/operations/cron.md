@@ -433,7 +433,7 @@ worker or concurrency is introduced.
 - `VK_POST_PRUNE_LIMIT` – max candidate posts checked/deleted per run (blast-radius cap, default `300`).
 - `VK_POST_PRUNE_DRY_RUN` – when enabled, log what would be deleted without calling `wall.delete`.
 - `CRITICAL_SCHED_WATCHDOG_GRACE_SECONDS` / `CRITICAL_SCHED_WATCHDOG_INTERVAL_SECONDS` – live watchdog grace and polling interval for critical scheduled jobs (`tg_monitoring`, `guide_excursions_full`, `vk_auto_import`; defaults: `300` / `60` seconds).
-- `ENABLE_KAGGLE_RECOVERY` – enable background Kaggle recovery loop.
+- `ENABLE_KAGGLE_RECOVERY` – enable the broad multi-product Kaggle recovery loop. With `ENABLE_GUIDE_EXCURSIONS_SCHEDULED=1`, the same periodic job resumes guide results even when this broad switch is off; other product recovery stays disabled.
 - `KAGGLE_RECOVERY_INTERVAL_MINUTES` – recovery interval in minutes (default: 5).
 - `KAGGLE_JOBS_PATH` – path to Kaggle recovery registry JSON (default: `/data/kaggle_jobs.json`).
 - `KAGGLE_LAUNCH_INTENT_RECONCILE_GRACE_SECONDS` – propagation grace before an
