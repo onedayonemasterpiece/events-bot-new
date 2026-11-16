@@ -26,7 +26,7 @@ async def test_relation_cards_preserve_source_order_and_existing_gallery_mode(mo
     )
     assert attachments == sources + [card.decode() for card in cards]
     assert mode == expected_mode
-    assert dict(hints)['source-a'] == ('листай' if expected_mode == 'carousel' else None)
+    assert dict(hints)['source-a'] == ('листай' if expected_mode == 'carousel' or len(sources) == 1 else None)
     assert all(hint is None for url, hint in hints if url != 'source-a')
 
 

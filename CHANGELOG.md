@@ -6,6 +6,8 @@
 
 ### Fixed
 
+- A single source poster with recommendation cards retains its navigation cue in VK grids as well as carousels; existing layout selection and multi-photo grids stay unchanged.
+
 - Static builds interrupted while their remote ledger is only `created` return to exact adoption after the existing short window; unavailable handoffs reconcile their original run before replacement.
 
 - Telegram venue inference without an extracted venue, configured default or curated reference reaches the existing semantic location reviewer instead of treating an inferred phrase as venue proof.
