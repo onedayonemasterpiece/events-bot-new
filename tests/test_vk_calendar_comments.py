@@ -9,6 +9,33 @@ from models import Event, Setting
 import vk_calendar_comments as comments
 
 
+@pytest.mark.asyncio
+async def test_calendar_start_reserves_delivery_time_inside_public_window(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+    db = Database(str(tmp_path / 'delivery-headroom.sqlite'))
+    await db.init()
+    enqueue = AsyncMock()
+    monkeypatch.setattr(main, 'enqueue_job', enqueue)
+    monkeypatch.setattr(main, 'VK_AFISHA_GROUP_ID', '231920894')
+    api = AsyncMock()
+    monkeypatch.setattr(main, '_vk_api', api)
+    url = 'https://vk.com/wall-231920894_14732'
+    published_at = int(datetime.now(timezone.utc).timestamp()) + 3600
+    try:
+        async with db.get_session() as session:
+            session.add(event(source_vk_post_url=url))
+            await session.commit()
+        await comments.schedule_calendar_comment(db, 1, url, published_at)
+        due = enqueue.call_args.kwargs['next_run_at']
+        assert 300 <= due.timestamp() - published_at <= 720
+        assert await main.job_vk_calendar_comment(
+            1, db, None, {'post_url': url, 'publish_date': published_at}
+        ) == due
+        api.assert_not_called()
+    finally:
+        await db.close()
+
+
 @pytest.fixture(autouse=True)
 def no_calendar_pacing_wait(monkeypatch):
     monkeypatch.setattr(comments.asyncio, "sleep", AsyncMock())

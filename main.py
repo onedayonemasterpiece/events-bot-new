@@ -16271,7 +16271,7 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
     if not event or event.silent or event.lifecycle_status != "active" or event.identity_status == "merged":
         return False
     postponed_url = payload["post_url"]
-    delay = random.Random(postponed_url).randint(300, 900)
+    delay = random.Random(postponed_url).randint(300, 720)
     planned_due = datetime.fromtimestamp(int(payload["publish_date"]) + delay, timezone.utc)
     if planned_due > datetime.now(timezone.utc):
         return planned_due
