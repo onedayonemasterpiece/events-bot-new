@@ -595,3 +595,21 @@ rows: different routes or guides at the same slot remain distinct unless
 the source evidence establishes the same concrete outing.
 
 Canonical visual dedup variants are chosen against the full outing source, including city and source URL. Narrative biography details and invented booking links do not make a variant preferable. Card row text uses pixel width before portraits; unknown place sentinels are hidden and four rows leave room for the footer.
+
+
+### Source portraits and existing card descriptions (2026-11-16)
+
+Visual guide rendering prepares VK portraits by signed wall identity before
+rendering, through the existing public reader. The shared `source_avatars.py`
+cache is reused by normal VK collection, Telegram event source medallions,
+and the staged static-site source-avatar index. Local square WebP files are
+overwritten on refresh; public thumbnails use existing Yandex CDN uploads.
+A source portrait is not evidence that the source is an event organizer or
+that its owner is the named guide. Event UI labels it as the source.
+Missing photos keep the current fallback and produce a bounded structured log.
+No separate scheduler, model request, source-registration list or DB table is added.
+
+`guide_occurrence.digest_blurb` and `summary_one_liner` already exist in the
+normal analysis/enrichment path. Expanded cards display the existing blurb
+within the free text rectangle, with at most two fitting lines. Five-row
+cards and full rows retain their geometry; no extra LLM step generates text.

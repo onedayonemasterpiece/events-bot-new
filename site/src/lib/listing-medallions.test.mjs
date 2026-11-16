@@ -79,3 +79,14 @@ test('unknown and aggregator publishers do not become organizer identities', () 
     source_url:'https://vk.com/wall-231920894_9991',
   }), []);
 });
+
+test('a new VK wall gets its source portrait without manufacturing an organizer binding', () => {
+  const event = { id:90001, venue_name:'', organizer_names:[], source_medallions:[
+    { owner_id:123, name:'Новый гид', image_url:'https://cdn.example/avatar.webp', source_url:'https://vk.com/id123' },
+  ] };
+  const [source] = getListingIdentityMedallions(event);
+  assert.equal(source.slug, 'vk-source-123');
+  assert.equal(source.avatarUrl, 'https://cdn.example/avatar.webp');
+  assert.equal(source.evidence.field, 'source_url');
+  assert.equal(source.ariaLabel, 'Источник события: Новый гид');
+});

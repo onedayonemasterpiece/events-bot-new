@@ -849,6 +849,10 @@ def tar_site_source(site_dir: Path, archive_path: Path) -> None:
 def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
     staged_site = work_dir / 'site'
     copy_tree(SITE_SRC, staged_site)
+    from source_avatars import AVATAR_ROOT, avatar_metadata
+    shutil.copy2(ROOT / 'source_avatars.py', staged_site / 'source_avatars.py')
+    avatar_index = {path.stem: avatar_metadata(int(path.stem)) for path in AVATAR_ROOT.glob('*.json')}
+    (staged_site / 'src' / 'data' / 'sourceAvatars.json').write_text(json.dumps(avatar_index, ensure_ascii=False), encoding='utf-8')
     # The production related-chain audit must use the shared GoogleAIClient
     # (Supabase limiter + thought filtering), so the Kaggle site payload includes
     # the repo-local google_ai package instead of a direct provider shortcut.

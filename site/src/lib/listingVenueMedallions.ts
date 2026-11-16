@@ -4,7 +4,7 @@ import { matchMedallionAlias } from './eventMedallions';
 import type { EventImageAsset, PreviewEvent } from './types';
 
 export interface ListingMedallionEvidence {
-  field: 'venue_name' | 'festival' | 'organizer_name';
+  field: 'venue_name' | 'festival' | 'organizer_name' | 'source_url';
   value: string;
   match: 'exact' | 'bounded';
 }
@@ -103,7 +103,12 @@ function toListingMedallion({ item, evidence }: ListingCandidate): ListingVenueM
  * is safe for OCR because the rail is rendered outside the media frame.
  */
 export function getListingIdentityMedallions(event: PreviewEvent): ListingVenueMedallion[] {
-  return listingCandidates(event).slice(0, 3).map(toListingMedallion);
+  const sources: ListingVenueMedallion[] = (event.source_medallions || []).map((source): ListingVenueMedallion => ({
+    slug:`vk-source-${source.owner_id}`, name:source.name, shortName:source.name,
+    avatarUrl:source.image_url, ariaLabel:`Источник события: ${source.name}`,
+    evidence:{ field:'source_url', value:source.source_url, match:'exact' },
+  }));
+  return [...listingCandidates(event).map(toListingMedallion), ...sources].slice(0, 3);
 }
 
 /**

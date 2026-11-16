@@ -6834,6 +6834,9 @@ async def publish_tg_event_announcement(
                 f"tg_event_publish_missing_approved_cdn_media:event_id={getattr(event, 'id', None)}"
             )
     chunks = _chunked_tg_media(photo_urls)
+    from source_avatars import ensure_vk_avatar, vk_post_owners
+    for owner in vk_post_owners([getattr(event, "source_vk_post_url", None), getattr(event, "source_post_url", None), *(getattr(event, "source_urls", None) or [])]):
+        await ensure_vk_avatar(owner)
     graphic_medallions = resolve_event_graphic_medallions(event)
     if graphic_medallions:
         desired_mode = "rich_message"

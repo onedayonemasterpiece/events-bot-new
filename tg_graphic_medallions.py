@@ -221,6 +221,13 @@ def resolve_event_graphic_medallions(
         }
         add(pushkin_item, "pushkin_card", semantic_key="program:pushkin-card")
 
+    if not any(item.get("reason") == "source_identity" for item in selected):
+        from source_avatars import avatar_path, vk_post_owners
+        urls = [getattr(event, "source_vk_post_url", None), getattr(event, "source_post_url", None), *(getattr(event, "source_urls", None) or [])]
+        for owner in vk_post_owners(urls):
+            if path := avatar_path(owner):
+                selected.append({"slug": f"vk-source-{owner}", "name": "Источник ВКонтакте", "asset_path": str(path), "reason": "source_avatar", "source_owner": owner})
+
     return selected[:max_items]
 
 
@@ -235,6 +242,12 @@ def graphic_medallion_signature(event: Any) -> str:
 
 def _scaled_asset(item: dict[str, Any]) -> Image.Image:
     image = Image.open(str(item["asset_path"])).convert("RGBA")
+    if item.get("source_owner"):
+        from PIL import ImageOps
+        image = ImageOps.fit(image, (MAX_VISUAL_HEIGHT, MAX_VISUAL_HEIGHT))
+        mask = Image.new("L", image.size, 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, image.width - 1, image.height - 1), fill=255)
+        image.putalpha(mask)
     wide = str(item.get("slug") or "") == "pushkin-card"
     max_width = MAX_WIDE_WIDTH if wide else MAX_REGULAR_WIDTH
     scale = min(max_width / image.width, MAX_VISUAL_HEIGHT / image.height, 1.0)
