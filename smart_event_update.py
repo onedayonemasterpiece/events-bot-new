@@ -4537,12 +4537,18 @@ def _flatten_g4_rich_facts_payload(
                     min_matches=2,
                 )
                 if not verdict.ok:
+                    corpus_verdict = claim_is_grounded(
+                        fact, source_corpus, min_ratio=0.45, min_matches=2,
+                    )
                     logger.warning(
-                        "smart_update.rich_fact_rejected reason=%s matched=%s claim_tokens=%s fact=%r",
+                        "smart_update.rich_fact_rejected reason=%s matched=%s claim_tokens=%s fact=%r "
+                        "quote_present=%s quote_chars=%s corpus_reason=%s corpus_matched=%s corpus_ratio=%.3f",
                         verdict.reason,
                         verdict.matched,
                         verdict.claim_tokens,
                         fact[:180],
+                        bool(quote), len(quote), corpus_verdict.reason,
+                        corpus_verdict.matched, corpus_verdict.ratio,
                     )
                     continue
             out.append(fact)
