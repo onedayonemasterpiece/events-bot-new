@@ -4962,7 +4962,6 @@ def build_related(
     )
     cache_valid = (
         cache_compatible
-        and (anchor_ids is not None or (cache.get("graph_reciprocity") or {}).get("policy") != "scoped_pgvector_candidates")
         and (related_mode != "pgvector" or cache.get("related_corpus_revision") == related_corpus_revision)
         and (
             related_mode != "bge"
@@ -5002,7 +5001,7 @@ def build_related(
     raw_chains_for_cache: dict[str, list[dict[str, Any]]] | None = None
     cached_raw_chains = cache.get("raw_chains") if isinstance(cache.get("raw_chains"), dict) else None
     unfinished_anchor_ids: set[int] = set()
-    if anchor_ids is not None and related_mode == "pgvector":
+    if related_mode == "pgvector":
         graph_meta = {"policy": "scoped_pgvector_candidates"}
         if not cache_compatible:
             cached_verified_event_ids.clear()
@@ -5034,8 +5033,14 @@ def build_related(
         }
         # First publications need their own anchors, not a cold audit of every
         # old page. Keep the complete catalog available to retrieval/verifier.
-        targets = set(anchor_ids) | (changed_event_ids if previous_fingerprints else set())
+        targets = set(anchor_ids if anchor_ids is not None else (current_id_set if not previous_fingerprints or not cache_compatible else ()))
+        targets.update(changed_event_ids if previous_fingerprints else ())
         targets.difference_update(cached_verified_event_ids - changed_event_ids)
+        targets.update(
+            int(anchor) for anchor, chain in (cached_raw_chains or {}).items()
+            if int(anchor) not in cached_verified_event_ids
+            and any(int(item["event_id"]) in changed_event_ids & current_id_set for item in chain)
+        )
         targets.intersection_update(current_id_set)
         chains = copy.deepcopy(cache.get("chains") or {}) if cache_compatible else {}
         raw_chains_for_cache = copy.deepcopy(cached_raw_chains or chains)
@@ -5063,7 +5068,13 @@ def build_related(
         if gemma_verify:
             gemma_meta["status"] = "ok" if current_id_set.issubset(set(gemma_meta["verified_event_ids"])) and not gemma_meta["errors"] else ("partial" if gemma_meta["verified_event_ids"] else "failed")
         unfinished_anchor_ids = targets - set(gemma_meta["verified_event_ids"]) if gemma_verify else set()
-        cache_state = "incremental"
+        unfinished_anchor_ids.update(
+            int(item["event_id"]) for anchor in list(unfinished_anchor_ids)
+            for item in (cached_raw_chains or {}).get(str(anchor), [])
+            if int(item["event_id"]) in changed_event_ids & current_id_set
+        )
+        retrieval_receipt["source"] = "compact_rpc" if targets else "cache"
+        cache_state = "incremental" if targets else "hit"
     elif cache_valid and (not gemma_verify or gemma_cache_ready):
         chains = cache["chains"]
         raw_chains_for_cache = copy.deepcopy(cached_raw_chains or chains)
@@ -5104,21 +5115,7 @@ def build_related(
     else:
         salt = hashlib.sha1(json.dumps({"ids": event_ids, "fp": fingerprints}, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:12]
         log_stage(f"{related_mode}_rebuild_start", event_count=len(events), cache_salt=salt, changed_event_count=len(changed_event_ids), embedding_model=embedding_model)
-        if related_mode == "pgvector":
-            graph_meta = {}
-            chains = build_pgvector_related_chain(
-                events,
-                current_date=current_date,
-                embedding_model=embedding_model,
-                embedding_doc_kind=os.getenv("STATIC_SITE_PGVECTOR_RELATED_DOC_KIND", "related_v1") or "related_v1",
-                graph_meta_out=graph_meta,
-                retrieval_receipt_out=retrieval_receipt,
-                response_max_bytes=related_response_max_bytes,
-                total_response_max_bytes=related_total_response_max_bytes,
-                programme_members=programme_members,
-            )
-            retrieval_receipt["source"] = "compact_rpc"
-        elif related_mode == "bge":
+        if related_mode == "bge":
             if not shared_bge_artifact:
                 raise RuntimeError("BGE related mode requires the shared in-memory vector artifact")
             graph_meta = {

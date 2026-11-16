@@ -171,7 +171,7 @@ def test_pgvector_graph_reciprocity_restores_only_strong_reverse_edges() -> None
     assert weak_reverse is None or weak_reverse["slot_type"] == "adjacent_discovery"
 
 
-def test_pgvector_cache_is_invalidated_by_related_corpus_revision() -> None:
+def test_pgvector_revision_only_change_does_not_rebuild_unchanged_anchors() -> None:
     exporter = _load_exporter_module()
     events = [
         _related_event(1, "Первое", day=1),
@@ -222,11 +222,11 @@ def test_pgvector_cache_is_invalidated_by_related_corpus_revision() -> None:
             related_corpus_revision="b" * 64,
         )
 
-    assert first["cache"]["state"] == "miss_rebuilt"
+    assert first["cache"]["state"] == "incremental"
     assert second["cache"]["state"] == "hit"
-    assert third["cache"]["state"] == "miss_rebuilt"
+    assert third["cache"]["state"] == "hit"
     assert third["related_corpus_revision"] == "b" * 64
-    assert calls == ["gemini-embedding-2", "gemini-embedding-2"]
+    assert calls == ["gemini-embedding-2"]
 
 
 def test_pgvector_release_gate_rejects_dark_or_underfilled_graph() -> None:
@@ -516,8 +516,9 @@ def test_legacy_programme_order_migrates_requested_anchors_lazily(tmp_path, monk
     run({6})
     assert replies == [1, 6]
     full = run(None)
-    assert set(replies[2:]) == set(range(1, 7))
-    assert full["graph_reciprocity"]["policy"] == "pgvector_selective_reciprocity_v1"
+    assert replies == [1, 6]
+    assert full["related"]["1"]["strict_verified"]
+    assert full["related"]["6"]["strict_verified"]
 
 
 def test_pgvector_rejects_duplicate_anchor_fetch_before_rpc(monkeypatch) -> None:
@@ -855,7 +856,7 @@ def test_shrinking_catalog_persists_bounded_audit_progress(tmp_path, monkeypatch
     for expected_ready in (1, 2, 3, 3):
         result = exporter.build_related(events, current_date='2026-11-15',
             related_mode='pgvector', cache_path=cache_path, gemma_verify=True,
-            gemma_max_anchors=1)
+            gemma_max_anchors=1, anchor_ids={1, 2, 3})
         assert result['cache']['written']
         assert len(result['gemma_verification']['verified_event_ids']) == expected_ready
         current_keys = set(json.loads(cache_path.read_text())['gemma_audit_cache'])
@@ -863,7 +864,7 @@ def test_shrinking_catalog_persists_bounded_audit_progress(tmp_path, monkeypatch
         retained_keys = current_keys
     assert calls == [3, 2, 1]
     assert result['strict_verified_related']
-    assert result['gemma_verification']['cache_hits'] == 3
+    assert result['gemma_verification']['provider_calls'] == 0
     saved = json.loads(cache_path.read_text())
     assert saved['event_ids'] == [1, 2, 3]
     assert 'previous-verdict' not in saved['gemma_audit_cache']
@@ -913,3 +914,72 @@ def test_partial_related_batches_survive_save_and_resume(tmp_path, monkeypatch, 
     assert third['related']['1']['strict_verified']
     assert calls[-1] == list(range(2, 8))
     assert len(calls) == 4, 'changed peer invalidates its batch, while the other stays reusable'
+
+
+@pytest.mark.parametrize("change_programme, cap, failure", [
+    (False, 0, False), (False, 1, False), (True, 0, False), (True, 1, False), (True, 1, True)])
+def test_warm_pgvector_targets_keep_partial_cache_and_rebuild_dependents(tmp_path, monkeypatch, change_programme, cap, failure):
+    exporter = _load_exporter_module()
+    events = [_related_event(i, f"Programme {i}", day=i) for i in range(1, 7)]
+    rows = {1: [2, 3, 4], 2: [1], 3: [1], 4: [2, 3, 1], 5: [6], 6: [5]}
+    fetched, audited, failures = [], [], set()
+
+    def rpc(_name, payload, **_kwargs):
+        anchor = payload["p_anchor_event_id"]
+        fetched.append(anchor)
+        return [{"event_id": peer, "vector_similarity": .85 - rank / 100}
+                for rank, peer in enumerate(rows[anchor])]
+
+    def audit(**kwargs):
+        audited.append(kwargs["anchor"]["id"])
+        if kwargs["anchor"]["id"] in failures:
+            raise RuntimeError("offline provider failure")
+        return {e["id"]: {"llm_semantic_score": .9, "confidence": .9, "reject": False}
+                for e in kwargs["candidates"]}
+
+    monkeypatch.setattr(exporter, "personalization_supabase_request", rpc)
+    monkeypatch.setattr(exporter, "call_gemma_related_audit", audit)
+    monkeypatch.setenv("GOOGLE_API_KEY4", "test-only")
+    monkeypatch.setenv("STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS", "1")
+    monkeypatch.setenv("STATIC_SITE_GEMMA_RELATED_RETRY_BACKOFF_SEC", "0")
+    cache_path = tmp_path / "cache.json"
+
+    def run(anchors, limit=0):
+        return exporter.build_related(events, current_date="2026-07-20", related_mode="pgvector",
+                                      cache_path=cache_path, gemma_verify=True, anchor_ids=anchors, gemma_max_anchors=limit)
+
+    initial = run(None if change_programme else {1})
+    before = json.loads(cache_path.read_text())
+    assert initial["related"]["1"]["strict_verified"]
+    fetched.clear()
+    audited.clear()
+    if change_programme:
+        events[1]["other_date_ids"], events[2]["other_date_ids"] = [3], [2]
+        failures.update({2} if failure else ())
+        result = run({6}, cap)
+        for _ in range(4):
+            result = run(None, cap)
+        assert 1 in fetched, "unrequested dependent must be rebuilt after candidate programme changes"
+        assert 1 in audited
+        assert set(fetched) == {1, 2, 3, 4}
+        assert result["related"]["1"]["strict_verified"]
+        assert result["related"]["4"]["strict_verified"]
+        assert 4 in audited
+        completed_calls = len(fetched), len(audited)
+        run(None, cap)
+        if failure:
+            assert not result["related"]["2"]["strict_verified"]
+            assert audited[completed_calls[1]:] == [2]
+            assert fetched[completed_calls[0]:] == [2]
+        else:
+            assert (len(fetched), len(audited)) == completed_calls
+        after = json.loads(cache_path.read_text())
+        assert [item["event_id"] for item in after["raw_chains"]["1"]] == [2, 4, 3]
+        assert after["chains"]["5"] == before["chains"]["5"]
+        assert 5 not in audited and 6 not in audited
+    else:
+        assert set(before["gemma_verified_event_ids"]) == {1}, "seed must be genuinely partial"
+        result = run(None)
+        assert fetched == [], "unchanged warm full export must not fetch an old unverified tail"
+        assert audited == []
+        assert result["related"]["1"]["strict_verified"]

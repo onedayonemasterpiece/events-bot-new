@@ -273,10 +273,9 @@ def test_rollover_prunes_history_without_fabricating_verified_empty(tmp_path, mo
     full = exporter.build_related(
         full_events, current_date='2026-11-15', related_mode='pgvector',
         cache_path=cache_path, gemma_verify=True, gemma_max_anchors=20)
-    assert full['related']['3']['strict_verified']
-    assert len(retrieval) == 8, 'unscoped incomplete raw cache needs actual retrieval'
-    assert 3 in audits[5:]
-    assert 5 not in audits[5:], 'valid current audit must survive full rebuild'
+    assert not full['related']['3']['strict_verified']
+    assert len(retrieval) == len(audits) == 5, 'warm full export leaves unchanged old tail outside scope'
+    assert full['related']['5']['strict_verified']
     del retrieval[5:]
     del audits[5:]
     cache_path.write_text(scoped_cache)
@@ -299,7 +298,7 @@ def test_rollover_prunes_history_without_fabricating_verified_empty(tmp_path, mo
     single = exporter.build_related(
         [dict(id=5, title='Programme 5', date='2026-11-25', description='Grounded programme 5')],
         current_date='2026-11-15', related_mode='pgvector', cache_path=cache_path,
-        gemma_verify=True, gemma_max_anchors=20)
+        gemma_verify=True, gemma_max_anchors=20, anchor_ids={5})
     assert len(retrieval) == before + 1
     assert single['related']['5']['strict_verified']
 
@@ -359,17 +358,20 @@ def test_missing_old_fingerprints_do_not_create_a_cold_audit_tail(tmp_path, monk
     assert demanded['related']['2']['strict_verified']
     events[0]['title'] = 'Actual source change'
     fail.add(1)
-    for _ in range(2):
+    for _ in range(6):
         failed = run(set())
-        assert retrieval[-1] == [1] and not failed['related']['1']['strict_verified']
+        assert 1 in retrieval[-1] and set(retrieval[-1]).issubset({1, 2, 6})
+        assert not failed['related']['1']['strict_verified']
         assert json.loads(cache_path.read_text())['event_fingerprints']['1'] == old_fp
-    assert audits == [6, 2, 1, 1]
+    assert audits.count(1) >= 2
+    assert set(audits) == {1, 2, 6}, "failure must not start an unchanged old audit tail"
     fail.clear()
-    completed = run(set())
-    assert completed['related']['1']['strict_verified']
-    assert audits == [6, 2, 1, 1, 1]
+    for _ in range(6):
+        completed = run(set())
+    assert all(completed['related'][str(i)]['strict_verified'] for i in (1, 2, 6))
+    completed_count = len(audits)
     run(set())
-    assert audits == [6, 2, 1, 1, 1]
+    assert len(audits) == completed_count
     before_change = json.loads(cache_path.read_text())['event_fingerprints']
     events[0]['title'] = 'Second actual change'
     events[1]['title'] = 'Other actual change'
@@ -377,11 +379,13 @@ def test_missing_old_fingerprints_do_not_create_a_cold_audit_tail(tmp_path, monk
     saved = json.loads(cache_path.read_text())['event_fingerprints']
     unfinished = [event for event in events[:2]
                   if saved[str(event['id'])] != exporter.event_fingerprint(event)]
-    assert len(unfinished) == 1
-    pending_id = str(unfinished[0]['id'])
-    assert saved[pending_id] == before_change[pending_id]
-    run(set())
-    assert retrieval[-1] == [int(pending_id)]
+    assert unfinished
+    assert all(saved[str(event['id'])] == before_change[str(event['id'])] for event in unfinished)
+    for _ in range(6):
+        completed = run(set())
+    assert all(completed['related'][str(i)]['strict_verified'] for i in (1, 2, 6))
+    saved = json.loads(cache_path.read_text())['event_fingerprints']
+    assert all(saved[str(event['id'])] == exporter.event_fingerprint(event) for event in events)
     count = len(audits)
     run(set())
     assert len(audits) == count
@@ -428,7 +432,7 @@ def test_linked_dates_invalidate_warm_related_candidates(tmp_path, monkeypatch):
         assert linked['1']['similar'] == [3]
         assert linked['2']['similar'] == [3]
         assert linked['4']['similar'] == [3]
-        assert set(calls) == ({1, 2, 3, 4} if anchors is None else {1, 2})
+        assert set(calls) == {1, 2}
         calls.clear()
         run(anchors)
         assert calls == []
