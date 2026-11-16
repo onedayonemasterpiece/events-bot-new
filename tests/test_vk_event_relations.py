@@ -130,7 +130,7 @@ async def test_shared_graph_keeps_original_gallery_and_semantic_only(tmp_path, m
         avatar = tmp_path / 'source-avatar.png'
         Image.new('RGBA', (100, 100), 'green').save(avatar)
         monkeypatch.setattr('tg_graphic_medallions.resolve_event_graphic_medallions',
-                            lambda *args, **kwargs: [{'asset_path': str(avatar)}])
+                            lambda *args, **kwargs: [{'asset_path': str(avatar), 'source_owner': -123}])
     db = main.Database(str(tmp_path / 'db.sqlite'))
     await db.init()
     try:
@@ -156,7 +156,7 @@ async def test_shared_graph_keeps_original_gallery_and_semantic_only(tmp_path, m
         data = await relations.presentation(db, event)
         assert [r['id'] for r in data['related']] == [2]
         assert [r['id'] for r in data['dates']] == [3]
-        assert data['related'][0]['medallions'][0].endswith('source-avatar.png' if external_avatar else 'kant-island.png')
+        assert data['related'][0]['medallions'][0]['asset_path'].endswith('source-avatar.png' if external_avatar else 'kant-island.png')
         assert data['related'][0]['is_free']
         assert data['related'][0]['event_type'] == 'концерт'
         assert data['related'][0]['description'] == 'Готовое описание ежедневного анонса'

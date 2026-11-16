@@ -192,7 +192,7 @@ def canonical_guide_sources() -> tuple[GuideSourceSpec, ...]:
             marketing_name="Калининградская областная научная библиотека",
             source_kind="organization_with_tours",
             trust_level="medium",
-            flags={"organization": True, "mixed_topic": True, "library": True, "vk_public": True},
+            flags={"vk_id": 30777579, "organization": True, "mixed_topic": True, "library": True, "vk_public": True},
             notes=(
                 "Added from operator request on 2026-05-18; VK public for the regional library, "
                 "monitored for guided tours and excursion-like walks alongside Telegram."
@@ -209,7 +209,7 @@ def canonical_guide_sources() -> tuple[GuideSourceSpec, ...]:
             source_kind="organization_with_tours",
             trust_level="medium",
             priority_weight=1.05,
-            flags={"organization": True, "vk_public": True},
+            flags={"vk_id": 190663987, "organization": True, "vk_public": True},
             notes=(
                 "Added from operator request on 2026-05-19; VK public mirrors/extends "
                 "the Ruin Keepers guide source and must dedup against Telegram ruin_keepers."
@@ -225,7 +225,7 @@ def canonical_guide_sources() -> tuple[GuideSourceSpec, ...]:
             marketing_name="Народный экскурсовод",
             source_kind="organization_with_tours",
             trust_level="medium",
-            flags={"organization": True, "vk_public": True, "mixed_topic": True},
+            flags={"vk_id": 62241358, "organization": True, "vk_public": True, "mixed_topic": True},
             notes=(
                 "Added from operator request on 2026-05-19; VK public monitored for "
                 "Kaliningrad-region guided walks and excursion announcements."
@@ -241,7 +241,7 @@ def canonical_guide_sources() -> tuple[GuideSourceSpec, ...]:
             marketing_name="Baltic Syndicate",
             source_kind="guide_project",
             trust_level="medium",
-            flags={"vk_public": True, "mixed_topic": True},
+            flags={"vk_id": 99453147, "vk_public": True, "mixed_topic": True},
             notes="Added from operator request on 2026-05-18; VK public monitored for excursion announcements.",
             platform="vk",
             source_url="https://vk.ru/balticsyndicate",
@@ -255,6 +255,7 @@ def canonical_guide_sources() -> tuple[GuideSourceSpec, ...]:
             source_kind="guide_personal",
             trust_level="medium",
             flags={
+                "vk_id": 61694047,
                 "vk_personal_page": True,
                 "mixed_topic": True,
                 "guide": True,
@@ -276,6 +277,7 @@ def canonical_guide_sources() -> tuple[GuideSourceSpec, ...]:
             source_kind="guide_personal",
             trust_level="medium",
             flags={
+                "vk_id": 290624941,
                 "vk_personal_page": True,
                 "mixed_topic": True,
                 "guide": True,

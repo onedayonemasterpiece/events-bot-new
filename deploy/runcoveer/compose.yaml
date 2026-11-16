@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:guide-recovery-20261116
+    image: runcoveer/events:guide-result-push-20261116
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

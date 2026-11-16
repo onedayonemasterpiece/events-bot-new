@@ -569,7 +569,7 @@ def stage_repo_bundle(output_root: Path) -> Path:
 def _build_notebook_payload_from_script(script_path: Path) -> dict[str, Any]:
     script_source = script_path.read_text(encoding="utf-8")
     script_source = re.sub(
-        r"\nif __name__ == [\"']__main__[\"']:\n\s+asyncio\.run\(main\(\)\)\s*$",
+        r"\nif __name__ == [\"']__main__[\"']:\n\s+asyncio\.run\((?:main|run_with_delivery)\(\)\)\s*$",
         "\n",
         script_source,
         flags=re.MULTILINE,
@@ -652,7 +652,7 @@ def _build_notebook_payload_from_script(script_path: Path) -> dict[str, Any]:
                     "        asyncio.set_event_loop(loop)\n",
                     "    if loop.is_running():\n",
                     "        nest_asyncio.apply(loop)\n",
-                    "    loop.run_until_complete(main())\n",
+                    "    loop.run_until_complete(run_with_delivery())\n",
                     "\n",
                     "_guide_run_main_sync()\n",
                 ],
@@ -1036,7 +1036,9 @@ def _result_store_entries(root: Path, *, exclude: set[Path]) -> list[dict[str, A
     for path in root.iterdir():
         try:
             resolved = path.resolve()
-            if resolved in exclude or not path.is_dir() or not path.name.startswith("guide-excursions-"):
+            if (resolved in exclude or not path.is_dir()
+                    or not path.name.startswith("guide-excursions-")
+                    or (path / ".delivery_pending").exists()):
                 continue
             stat = path.stat()
         except OSError:

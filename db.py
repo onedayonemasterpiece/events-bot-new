@@ -1741,6 +1741,13 @@ class Database:
             )
             await _add_column(conn, "guide_source", "about_text TEXT")
             await _add_column(conn, "guide_source", "about_links_json JSON")
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_guide_source_vk_owner ON guide_source("
+                "CASE WHEN json_extract(flags_json, '$.vk_personal_page')=1 THEN 'user' ELSE 'group' END, "
+                "abs(CAST(json_extract(flags_json, '$.vk_id') AS INTEGER))) "
+                "WHERE platform='vk' AND json_valid(flags_json) "
+                "AND CAST(json_extract(flags_json, '$.vk_id') AS INTEGER)!=0"
+            )
 
             dbg("guide_monitor_post")
             await conn.execute(
@@ -2606,6 +2613,9 @@ class Database:
             # form owner_id in wall.get and post URLs.
             await _add_column(
                 conn, "vk_source", "owner_type TEXT NOT NULL DEFAULT 'group'"
+            )
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_vk_source_owner ON vk_source(owner_type, abs(group_id))"
             )
 
             # Seed well-known VK sources with stable defaults so live E2E / fresh prod
