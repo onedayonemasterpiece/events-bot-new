@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- VK accepts managed CDN originals up to the existing event-media source ceiling before resizing; upload bytes and unrelated URL limits remain unchanged. Static WebP uses native scaled decoding whenever reduction is needed.
+
 - Wide VK carousel covers retain the full source photo, label and arrow inside the landscape 16:9 frame.
 
 - Fresh Docker builds install libatomic1 before the Playwright Node driver starts Chromium dependency installation.

@@ -107,3 +107,21 @@ def test_animated_webp_retains_existing_first_frame_behavior():
     with Image.open(BytesIO(prepare_consumer_jpeg(source.getvalue(), max_side=40))) as image:
         assert image.size == (40, 20)
         assert image.getpixel((0, 0))[0] > 240
+
+
+def test_static_23mp_webp_uses_existing_scaled_decoder(monkeypatch):
+    import subprocess
+    import media_dedup
+
+    source = BytesIO()
+    with Image.new("RGB", (5865, 3910), "#204060") as image:
+        image.save(source, "WEBP")
+    calls = []
+    run = subprocess.run
+    def native(*args, **kwargs):
+        calls.append(args[0])
+        return run(*args, **kwargs)
+    monkeypatch.setattr(media_dedup.subprocess, "run", native)
+    with Image.open(BytesIO(prepare_consumer_jpeg(source.getvalue()))) as image:
+        assert image.size == (1600, 1066) and image.format == "JPEG"
+    assert len(calls) == 1 and calls[0][:2] == ["dwebp", "-resize"]

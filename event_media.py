@@ -34,6 +34,7 @@ from models import (
 )
 
 logger = logging.getLogger(__name__)
+EVENT_MEDIA_SOURCE_MAX_BYTES = 36_700_160
 
 APPROVED = "approved"
 PENDING_REVIEW = "pending_review"
@@ -853,7 +854,7 @@ async def materialize_event_media_candidate_to_cdn(
     if not urls:
         return False
     max_bytes = _env_int(
-        "EVENT_MEDIA_REVIEW_MAX_IMAGE_BYTES", 8_000_000, lo=100_000, hi=36_700_160
+        "EVENT_MEDIA_REVIEW_MAX_IMAGE_BYTES", 8_000_000, lo=100_000, hi=EVENT_MEDIA_SOURCE_MAX_BYTES
     )
     timeout = float(
         _env_int("EVENT_MEDIA_REVIEW_DOWNLOAD_TIMEOUT_SEC", 25, lo=3, hi=120)
@@ -1031,7 +1032,7 @@ async def _download_poster(poster: EventPoster) -> DownloadedPoster:
     url = str(preferred or "").strip()
     if not url:
         raise RuntimeError("event_media_download_failed:no_current_display_url")
-    max_bytes = _env_int("EVENT_MEDIA_REVIEW_MAX_IMAGE_BYTES", 8_000_000, lo=100_000, hi=36_700_160)
+    max_bytes = _env_int("EVENT_MEDIA_REVIEW_MAX_IMAGE_BYTES", 8_000_000, lo=100_000, hi=EVENT_MEDIA_SOURCE_MAX_BYTES)
     timeout = float(_env_int("EVENT_MEDIA_REVIEW_DOWNLOAD_TIMEOUT_SEC", 25, lo=3, hi=120))
     try:
         return await asyncio.to_thread(

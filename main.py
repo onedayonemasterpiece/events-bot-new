@@ -4277,6 +4277,8 @@ async def upload_vk_photo(
     """Upload an image to VK and return attachment id."""
     if not url:
         return None
+    from event_media import EVENT_MEDIA_SOURCE_MAX_BYTES, is_event_media_cdn_url
+    max_source_bytes = EVENT_MEDIA_SOURCE_MAX_BYTES if is_event_media_cdn_url(url) else MAX_DOWNLOAD_SIZE
     try:
         owner_id = -int(group_id.lstrip("-"))
         if token:
@@ -4314,12 +4316,12 @@ async def upload_vk_photo(
                             async with session.get(url) as resp:
                                 resp.raise_for_status()
                                 header_length = resp.headers.get("Content-Length")
-                                if resp.content_length and resp.content_length > MAX_DOWNLOAD_SIZE:
+                                if resp.content_length and resp.content_length > max_source_bytes:
                                     raise ValueError("file too large")
                                 buf = bytearray()
                                 async for chunk in resp.content.iter_chunked(64 * 1024):
                                     buf.extend(chunk)
-                                    if len(buf) > MAX_DOWNLOAD_SIZE:
+                                    if len(buf) > max_source_bytes:
                                         raise ValueError("file too large")
                                 data = bytes(buf)
                                 if header_length:
@@ -4349,6 +4351,8 @@ async def upload_vk_photo(
                     return None
                 if detect_image_type(img_bytes) == "jpeg":
                     validate_jpeg_markers(img_bytes)
+                if len(img_bytes) > MAX_DOWNLOAD_SIZE:
+                    raise ValueError("file too large")
                 upload_bytes = img_bytes
                 fallback_variants: list[bytes] | None = None
                 for upload_attempt in range(1, 5):
