@@ -88,16 +88,27 @@ def test_latest_roles_clear_stale_organizer_and_same_person_keeps_both_roles():
     assert len(people) == 1 and people[0]['roles'] == ['Гид', 'Организатор']
 
 
-def test_card_renders_every_participant_without_using_source_photo(monkeypatch):
+def test_card_renders_pictured_participants_without_using_source_photo(monkeypatch, tmp_path):
+    # Owner rule 2026-11-16: a row shows only people with a picture; initials appear once and
+    # only when nobody in the row has one.
     from guide_excursions import visual_digest as visual
     drawn = []
     monkeypatch.setattr(visual, '_draw_avatar', lambda img, row, *args: drawn.append(row))
-    people = [{'name': 'Ноза Усманова', 'roles': ['Гид'], 'path': '/nosa.webp'},
+    nosa, project = str(tmp_path / 'nosa.webp'), str(tmp_path / 'project.webp')
+    for path in (nosa, project):
+        Image.new('RGB', (10, 10)).save(path, 'WEBP')
+    people = [{'name': 'Ноза Усманова', 'roles': ['Гид'], 'path': nosa},
         {'name': 'Другой гид', 'roles': ['Гид'], 'path': None},
-        {'name': 'Проект', 'roles': ['Организатор'], 'path': '/project.webp'}]
-    visual.render_visual_digest_card([{'canonical_title': 'Прогулка', 'date': '2026-11-29',
-        'source_avatar_path': '/source.webp', 'participant_medallions': people}], issue_id=1)
-    assert [r['source_avatar_path'] for r in drawn] == ['/nosa.webp', '', '/project.webp']
+        {'name': 'Проект', 'roles': ['Организатор'], 'path': project}]
+    row = {'canonical_title': 'Прогулка', 'date': '2026-11-29', 'source_avatar_path': '/source.webp',
+        'participant_medallions': people}
+    visual.render_visual_digest_card([row], issue_id=1)
+    assert [r['source_avatar_path'] for r in drawn] == [nosa, project]
+    drawn.clear()
+    visual.render_visual_digest_card([dict(row, participant_medallions=[
+        {'name': 'Проект', 'roles': ['Организатор'], 'path': None},
+        {'name': 'Другой гид', 'roles': ['Гид'], 'path': None}])], issue_id=1)
+    assert [r['guide_names'] for r in drawn] == [['Другой гид']]
 
 
 @pytest.mark.asyncio
@@ -139,7 +150,7 @@ async def test_two_source_aliases_merge_after_vk_resolution_and_keep_other_peopl
     ]
 
 
-def test_old_card_features_and_full_size_horizontal_participants_are_preserved(monkeypatch):
+def test_old_card_features_and_full_size_horizontal_participants_are_preserved(monkeypatch, tmp_path):
     from guide_excursions import visual_digest as visual
     avatars_drawn, badges, chips, texts = [], [], [], []
     monkeypatch.setattr(visual, '_draw_avatar', lambda img, row, x, y, size, *args: avatars_drawn.append((x,y,size)))
@@ -152,7 +163,10 @@ def test_old_card_features_and_full_size_horizontal_participants_are_preserved(m
     monkeypatch.setattr(ImageDraw.ImageDraw, 'text', text)
     row = {'canonical_title': 'Амалиенау', 'date': '2026-11-20', 'seats_text':'10 мест',
         'fact_pack': {'group_format':'walking_tour', 'route_summary':'Амалиенау'},
-        'participant_medallions': [ {'name':'Гид Один','roles':['Гид']}, {'name':'Проект','roles':['Организатор']} ]}
+        'participant_medallions': [ {'name':'Гид Один','roles':['Гид'],'path':str(tmp_path/'a.webp')},
+            {'name':'Проект','roles':['Организатор'],'path':str(tmp_path/'b.webp')} ]}
+    for name in ('a.webp', 'b.webp'):
+        Image.new('RGB', (10, 10)).save(tmp_path / name, 'WEBP')
     visual.render_visual_digest_card([row], issue_id=309)
     assert [a[2] for a in avatars_drawn] == [140,140]
     assert avatars_drawn[0][1] == avatars_drawn[1][1]

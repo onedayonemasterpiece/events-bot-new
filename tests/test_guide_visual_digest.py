@@ -355,7 +355,7 @@ async def test_vk_text_wraps_written_story_with_exact_dates_contacts_and_plain_n
     # Unknown time and price stay absent; the phone is the booking contact.
     assert ("с Марией Морозовой.\n22 ноября (вс)\n☎ Запись по телефону: +7 (911) 858-58-49") in text
     assert "[" not in text and "docs.google.com" not in text
-    assert text.rstrip().endswith("#экскурсии #Калининград #УхтыКалининград")
+    assert text.rstrip().endswith("#экскурсия #Калининград #УхтыКалининград")
 
 
 @pytest.mark.asyncio
@@ -369,11 +369,11 @@ async def test_vk_text_mentions_only_guides_with_personal_vk_id_when_enabled(mon
     text = await build_visual_digest_vk_text(EDITION_349, issue_id=349, vk_api_fn=_fake_shortener)
 
     assert "[id41501067|Ольга Рубцова] ведёт" in text
-    assert "с Ольгой Рубцовой." in text
-    assert "У Нозы Усмановой другая" in text
+    assert "с [id41501067|Ольгой Рубцовой]." in text  # an inflected name still reaches its guide
+    assert "У [id408521495|Нозы Усмановой] другая" in text
     assert "с Марией Морозовой." in text  # no confirmed personal id: plain name
-    assert "Ольга Рубина тоже здесь?" in text
-    assert text.count("[id") == 1
+    assert "Ольга Рубина тоже здесь?" in text  # another surname under the same number: plain name
+    assert text.count("[id") == 3
 
 
 @pytest.mark.asyncio
@@ -455,8 +455,10 @@ async def test_test_publication_uses_real_writer_and_card_but_only_notifies_test
     async def post(group, text, *args, **kwargs):
         assert group == "243343951"
         assert "[id1134828279|Ольга Рубцова] ведёт прогулку" in text
-        assert "Ноза Усманова тоже проводит экскурсию." in text
-        assert re.findall(r"\[id(\d+)\|", text) == ["1134828279"]
+        # Every identified guide, in any case, goes to the approved test recipient and nobody else.
+        assert "[id1134828279|Ноза Усманова] тоже проводит экскурсию." in text
+        assert "[id1134828279|Ольгой Рубцовой]" in text and "[id1134828279|Нозы Усмановой]" in text
+        assert set(re.findall(r"\[id(\d+)\|", text)) == {"1134828279"}
         assert kwargs["attachments"] == ["photo-243343951_1"]
         return "https://vk.ru/wall-243343951_123"
 
@@ -473,7 +475,10 @@ async def test_test_publication_uses_real_writer_and_card_but_only_notifies_test
 @pytest.mark.asyncio
 async def test_review_marks_test_recipient_when_the_story_has_no_confirmed_name(monkeypatch):
     async def writer(*args, **kwargs):
-        return NARRATIVE_349
+        return dict(NARRATIVE_349, paragraphs=[
+            {"occurrence_ids": [745, 747], "text": "Вдоль ручья можно пройтись пешком."},
+            {"occurrence_ids": [746], "text": "В пятницу другой маршрут."},
+            {"occurrence_ids": [763], "text": "А в воскресенье можно побывать на осетровой ферме."}])
 
     monkeypatch.setattr(vd, "ask_vk_narrative", writer)
     text = await build_visual_digest_vk_text(EDITION_349, issue_id=349, test_mention=858363572,
@@ -667,3 +672,64 @@ async def test_vk_writer_groups_745_and_747_with_paired_title_quotes(monkeypatch
     first["title"], repeat["title"] = "Зелёные истории", "«Зелёные истории»"
     repeat["guides"] = ["Ноза Усманова"]
     assert await dw.ask_vk_narrative(payload, issue_id=349) is None
+
+
+def test_mention_label_matches_the_stored_name_in_any_case_only():
+    assert vd._same_person("Нозы Усмановой", "Ноза Усманова")
+    assert vd._same_person("Владимиром Власовым", "Владимир Власов")
+    assert vd._same_person("Петра Ильина", "Пётр Ильин")
+    assert not vd._same_person("Ольга Рубина", "Ольга Рубцова")
+    assert not vd._same_person("Нозы", "Ноза Усманова")
+    assert not vd._same_person("Нозы Усмановой", "")
+
+
+def test_card_row_shows_pictured_people_or_one_initials_badge(tmp_path):
+    photo = tmp_path / "a.jpg"
+    photo.write_bytes(b"x")
+    guide = {"name": "Юлия Гришанова", "roles": ["Гид"], "path": str(photo)}
+    second = {"name": "Владимир Власов", "roles": ["Гид"], "path": ""}
+    organizer = {"name": "Проект без картинки", "roles": ["Организатор"], "path": str(tmp_path / "missing.jpg")}
+    assert vd._shown_medallions([second, guide, organizer]) == [guide]
+    assert vd._shown_medallions([organizer, second]) == [second]  # nobody pictured: one badge, the guide
+    assert vd._shown_medallions([organizer]) == [organizer]
+    assert vd._shown_medallions([]) == []
+
+
+def test_vk_writer_receives_dated_sources_and_earlier_route_announcements():
+    row = dict(EDITION_349[1], linked_posts=[
+        {"url": "https://vk.com/wall-1_2", "post_date": "2026-11-12 19:06:29", "text": "20.11 — «Рассвет», гид Ноза Усманова"}],
+        earlier_route_posts=[
+            {"url": "https://vk.com/wall-1_1", "post_date": "2026-09-05 10:00:00", "text": "Маршрут идёт по проспекту."},
+            {"url": "https://vk.com/wall-1_2", "post_date": "2026-11-12 19:06:29", "text": "20.11 — «Рассвет», гид Ноза Усманова"}])
+    payload, _ = vd._vk_narrative_payload([row])
+    assert payload["sources"][0]["post_date"] == "2026-11-12"
+    assert payload["earlier_announcements"] == [{"url": "https://vk.com/wall-1_1", "post_date": "2026-09-05",
+                                                 "text": "Маршрут идёт по проспекту.", "excursions": [746]}]
+    assert "earlier_announcements" not in vd._vk_narrative_payload([EDITION_349[0]])[0]
+
+
+@pytest.mark.asyncio
+async def test_loader_adds_earlier_posts_of_the_same_route_and_guide_only(tmp_path):
+    import aiosqlite
+
+    async with aiosqlite.connect(tmp_path / "g.sqlite") as conn:
+        conn.row_factory = aiosqlite.Row
+        await conn.executescript("""
+            CREATE TABLE guide_occurrence(id INTEGER PRIMARY KEY, title_normalized TEXT, date TEXT, guide_names_json TEXT);
+            CREATE TABLE guide_monitor_post(id INTEGER PRIMARY KEY, text TEXT, post_date TEXT, source_url TEXT,
+                                            post_kind TEXT, raw_facts_json TEXT);
+            CREATE TABLE guide_occurrence_source(occurrence_id INTEGER, post_id INTEGER, role TEXT);
+            INSERT INTO guide_occurrence VALUES
+                (1, 'рассвет', '2026-09-05', '["Ноза Усманова"]'),
+                (2, 'рассвет', '2026-09-06', '["Другой Гид"]'),
+                (3, 'рассвет', '2026-11-20', '["Ноза Усманова"]'),
+                (4, 'рассвет', '2026-11-28', '["Ноза Усманова"]');
+            INSERT INTO guide_monitor_post VALUES
+                (10, 'Маршрут идёт по проспекту.', '2026-09-01', 'u10', 'announce', '[]'),
+                (11, 'Чужая экскурсия с тем же названием.', '2026-09-02', 'u11', 'announce', '[]'),
+                (12, 'Расписание ноября.', '2026-11-12', 'u12', 'announce_multi', '[]');
+            INSERT INTO guide_occurrence_source VALUES (1, 10, 'primary'), (2, 11, 'primary'),
+                (3, 12, 'primary'), (4, 12, 'primary');
+        """)
+        earlier = await vd._load_earlier_route_posts(conn, [3], {3: [{"text": "Расписание ноября."}]})
+    assert [p["text"] for p in earlier[3]] == ["Маршрут идёт по проспекту."]

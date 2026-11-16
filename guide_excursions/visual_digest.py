@@ -916,6 +916,24 @@ def _crop_circle(img: Image.Image, size: int) -> Image.Image:
     return out
 
 
+def _medallion_row(person: Mapping[str, Any]) -> dict[str, Any]:
+    return {"guide_names": [person["name"]], "source_title": person["name"],
+            "source_avatar_path": person.get("path") or ""}
+
+
+def _shown_medallions(people: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """People with a picture; when nobody has one, a single initials badge (the guide first)."""
+    def pictured(person: Mapping[str, Any]) -> bool:
+        row = _medallion_row(person)
+        bundled = _AVATAR_FILES.get(_avatar_key(row), "")
+        return Path(str(row["source_avatar_path"])).is_file() or bool(bundled and (_AVATAR_DIR / bundled).is_file())
+
+    shown = [person for person in people if pictured(person)]
+    if shown or not people:
+        return shown
+    return [next((p for p in people if "Гид" in (p.get("roles") or [])), people[0])]
+
+
 def _draw_avatar(draw_img: Image.Image, row: Mapping[str, Any], x: int, y: int, size: int, pal: VisualPalette, accent: str) -> None:
     layer = Image.new("RGBA", draw_img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
@@ -1097,7 +1115,7 @@ def render_visual_digest_card(
         rd = ImageDraw.Draw(row_layer)
         _draw_date_tile(rd, row, row_h, accent, palette)
         tx = 238
-        participants = row.get("participant_medallions") or []
+        participants = _shown_medallions(row.get("participant_medallions") or [])
         av_size = 140
         avatar_step = round(av_size * 0.8)
         av_x = 820 - max(0, len(participants) - 1) * avatar_step
@@ -1139,9 +1157,7 @@ def render_visual_digest_card(
         if participants:
             for idx, person in enumerate(participants):
                 px = av_x + idx * avatar_step
-                portrait = {"guide_names": [person["name"]], "source_title": person["name"],
-                    "source_avatar_path": person.get("path") or ""}
-                _draw_avatar(img, portrait, px, av_y, av_size, palette, accent)
+                _draw_avatar(img, _medallion_row(person), px, av_y, av_size, palette, accent)
         elif not row.get("source_roles_checked"):
             _draw_avatar(img, row, av_x, av_y, av_size, palette, accent)
         modes = _modes_for(row)
@@ -1323,6 +1339,36 @@ def _select_documented_departures(requested: Sequence[dict[str, Any]], peers: Se
     return selected
 
 
+async def _load_earlier_route_posts(
+    conn: aiosqlite.Connection, ids: Sequence[int], linked: Mapping[int, Sequence[Mapping[str, Any]]],
+) -> dict[int, list[dict[str, Any]]]:
+    """Up to two earlier announcements of the same title led by the same guide, per occurrence."""
+    params = ",".join("?" for _ in ids)
+    # A timetable line often names a route that the same guide described in an earlier
+    # announcement. Those posts supply the theme only; dates and prices stay with the row.
+    cur = await conn.execute(f"""
+        SELECT cur.id AS occurrence_id, cur.guide_names_json AS guides, old.guide_names_json AS old_guides,
+               gmp.text, gmp.post_date, gmp.source_url AS url
+        FROM guide_occurrence cur
+        JOIN guide_occurrence old ON old.title_normalized = cur.title_normalized
+             AND old.id != cur.id AND old.date < cur.date
+        JOIN guide_occurrence_source gos ON gos.occurrence_id = old.id
+        JOIN guide_monitor_post gmp ON gmp.id = gos.post_id
+        WHERE cur.id IN ({params})
+        ORDER BY cur.id, gmp.post_date DESC, gmp.id DESC
+    """, tuple(ids))
+    earlier: dict[int, list[dict[str, Any]]] = {}
+    for post in await cur.fetchall():
+        names = {n.casefold() for n in _parse_json_array(post["guides"])}
+        if not names & {n.casefold() for n in _parse_json_array(post["old_guides"])}:
+            continue  # the same title led by somebody else is another excursion
+        bucket = earlier.setdefault(post["occurrence_id"], [])
+        known = {p["text"] for p in (*bucket, *linked.get(post["occurrence_id"], []))}
+        if len(bucket) < 2 and post["text"] not in known:
+            bucket.append({"text": post["text"], "post_date": post["post_date"], "url": post["url"]})
+    return earlier
+
+
 async def _load_visual_rows(conn: aiosqlite.Connection, records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     if not records:
         return []
@@ -1340,6 +1386,7 @@ async def _load_visual_rows(conn: aiosqlite.Connection, records: Sequence[Mappin
     linked: dict[int, list[dict[str, Any]]] = {}
     for post in await cur.fetchall():
         linked.setdefault(post["occurrence_id"], []).append(dict(post))
+    earlier = await _load_earlier_route_posts(conn, ids, linked)
     out = []
     for row in records:
         item = dict(row)
@@ -1374,6 +1421,7 @@ async def _load_visual_rows(conn: aiosqlite.Connection, records: Sequence[Mappin
         item["published_visual_digest_state"] = state_map.get(str(item.get("id") or ""))
         posts = linked.get(item["id"], [])
         item["linked_posts"] = posts
+        item["earlier_route_posts"] = earlier.get(item["id"], [])
         primary = posts[0] if posts else {}
         item["dedup_source_text"] = collapse_ws(primary.get("text") or "")
         item["dedup_source_url"] = primary.get("url")
@@ -1965,7 +2013,7 @@ def _hashtag_token(label: str) -> str:
 
 
 def _digest_hashtags(rows: Sequence[Mapping[str, Any]]) -> list[str]:
-    tags: list[str] = ["#экскурсии", "#Калининград", "#УхтыКалининград"]
+    tags: list[str] = ["#экскурсия", "#Калининград", "#УхтыКалининград"]
     blob_parts: list[str] = []
     for row in rows:
         blob_parts.extend(
@@ -2106,6 +2154,7 @@ def _vk_narrative_payload(items: Sequence[Mapping[str, Any]]) -> tuple[dict[str,
     people: dict[str, dict[str, Any]] = {}
     mention_ids: dict[int, tuple[int, str]] = {}
     sources: dict[tuple[str, str], dict[str, Any]] = {}
+    earlier_posts: dict[str, dict[str, Any]] = {}
     excursions: list[dict[str, Any]] = []
     for row in items:
         row_id = int(row.get("id") or 0)
@@ -2144,8 +2193,21 @@ def _vk_narrative_payload(items: Sequence[Mapping[str, Any]]) -> tuple[dict[str,
             source = sources.setdefault((source_url, source_text), {
                 "url": source_url, "text": source_text, "excursions": [],
             })
+            if post.get("post_date"):
+                source["post_date"] = _plain(post["post_date"])[:10]
             if row_id not in source["excursions"]:
                 source["excursions"].append(row_id)
+        own_texts = {(post.get("text") or "").strip() for post in posts}
+        for post in row.get("earlier_route_posts") or []:
+            text = (post.get("text") or "").strip()
+            if not text or text in own_texts:
+                continue
+            earlier = earlier_posts.setdefault(text, {
+                "url": _plain(post.get("url")), "post_date": _plain(post.get("post_date"))[:10],
+                "text": text, "excursions": [],
+            })
+            if row_id not in earlier["excursions"]:
+                earlier["excursions"].append(row_id)
         try:
             weekday = RU_WEEK_FULL[date.fromisoformat(_plain(row.get("date"))).weekday()]
         except ValueError:
@@ -2176,7 +2238,10 @@ def _vk_narrative_payload(items: Sequence[Mapping[str, Any]]) -> tuple[dict[str,
             "guides": guides, "organizers": organizers,
             "facts": facts, "source_profile": {key: value for key, value in profile.items() if value},
         })
-    return {"excursions": excursions, "people": list(people.values()), "sources": list(sources.values())}, mention_ids
+    payload = {"excursions": excursions, "people": list(people.values()), "sources": list(sources.values())}
+    if earlier_posts:
+        payload["earlier_announcements"] = list(earlier_posts.values())
+    return payload, mention_ids
 
 
 def _vk_schedule_lines(details: Sequence[tuple[str, str, str, str]]) -> list[str]:
@@ -2206,6 +2271,14 @@ def _vk_schedule_lines(details: Sequence[tuple[str, str, str, str]]) -> list[str
     return [" · ".join(x for x in (w, f"💳 {p}" if p else "", c) if x) for w, p, c, _ in slots]
 
 
+def _same_person(label: str, name: str) -> bool:
+    """True when the label is the stored name in any grammatical case ("Нозы Усмановой" for "Ноза Усманова")."""
+    words = collapse_ws(label).casefold().replace("ё", "е").split()
+    parts = collapse_ws(name).casefold().replace("ё", "е").split()
+    return bool(parts) and len(words) == len(parts) and all(
+        word[:max(3, len(part) - 2)] == part[:max(3, len(part) - 2)] for word, part in zip(words, parts))
+
+
 async def _assemble_vk_narrative(
     items: Sequence[Mapping[str, Any]],
     narrative: Mapping[str, Any],
@@ -2221,20 +2294,19 @@ async def _assemble_vk_narrative(
     if any(re.search(r"[\[\]]", _VK_NAME_MARK_RE.sub(lambda m: m[2], text)) for text in texts):
         return None
 
-    test_tag = ""
+    test_tags: set[str] = set()
     wall_links: set[str] = set()
 
     def mention(m: re.Match[str]) -> str:
-        nonlocal test_tag
         label = m[2]
         owner, name = mention_ids.get(int(m[1]), (0, ""))
-        if not owner or collapse_ws(label).casefold() != name.casefold():
+        if not owner or not _same_person(label, name):
             return label
         if test_mention is not None:
-            if test_tag:
-                return label
-            test_tag = f"[id{test_mention}|{label}]"
-            return test_tag
+            # Every identified guide is rewritten to the approved test recipient, so a review
+            # post shows exactly the names that production would turn into mentions.
+            test_tags.add(f"[id{test_mention}|{label}]")
+            return f"[id{test_mention}|{label}]"
         return f"[id{owner}|{label}]" if mentions_enabled else label
 
     def names(text: str) -> str:
@@ -2292,12 +2364,12 @@ async def _assemble_vk_narrative(
     blocks.append(" ".join(tags))
     text = "\n\n".join(blocks)
     if test_mention is not None:
-        remaining = text.replace(test_tag, "", 1) if test_tag else text
-        for link_markup in wall_links:
+        remaining = text
+        for link_markup in (*test_tags, *wall_links):
             remaining = remaining.replace(link_markup, "")
         if re.search(r"[\[\]@]|\*[\w.-]+", remaining):
             raise ValueError("Unexpected VK mention markup in test digest")
-        if not test_tag:
+        if not test_tags:
             text += f"\n\nПроверка уведомления: [id{test_mention}|тестовый получатель]"
     return text
 
