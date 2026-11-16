@@ -17356,37 +17356,6 @@ def _drop_redundant_poster_facts(facts: Sequence[str]) -> list[str]:
     return out
 
 
-def _fallback_merge_description(
-    before: str | None,
-    candidate: EventCandidate,
-    *,
-    max_sentences: int = 2,
-) -> str | None:
-    """Best-effort deterministic merge when LLM merge is unavailable.
-
-    We keep the existing description as-is and append a couple of truly new sentences
-    extracted from the candidate (source_text preferred, then raw_excerpt).
-    """
-    before_text = (before or "").strip()
-    before_norm = re.sub(r"\s+", " ", before_text).strip().lower()
-
-    new_sentences = _collect_new_candidate_sentences(candidate, before_norm=before_norm)
-
-    if not new_sentences:
-        return _dedupe_description(before_text) or before_text or None
-
-    ranked = sorted(
-        range(len(new_sentences)),
-        key=lambda idx: (_sentence_quality_score(new_sentences[idx]), -idx),
-        reverse=True,
-    )
-    picked_idx = sorted(ranked[: max(1, int(max_sentences))])
-    picked = [new_sentences[idx] for idx in picked_idx]
-
-    merged = (before_text + "\n" + " ".join(picked)).strip() if before_text else " ".join(picked)
-    return _dedupe_description(merged) or merged or None
-
-
 def _should_prefer_source_text_for_description(
     clean_source_text: str | None,
     clean_raw_excerpt: str | None,
@@ -22431,89 +22400,43 @@ async def _smart_event_update_impl(
                         updated_keys.extend(ticket_updates)
 
                 elif has_new_text or needs_schedule_cleanup:
-                    # LLM merge can be unavailable (offline runs, local env, transient outages).
-                    # In production, avoid publishing non-LLM text to Telegraph; for offline/regression
-                    # runs (schedule_tasks=False) do a deterministic merge to keep facts visible.
                     if not schedule_tasks:
-                        base = before_description
-                        if needs_schedule_cleanup:
-                            cleaned = _strip_foreign_schedule_noise(
-                                base,
-                                event_date=event_db.date,
-                                end_date=event_db.end_date,
-                                event_title=event_db.title,
-                            )
-                            if cleaned:
-                                base = cleaned
-                                note = "Текст очищен: убраны строки расписания других дат"
-                                if note not in text_filter_facts:
-                                    text_filter_facts.append(note)
-                        merged = base
-                        if has_new_text:
-                            merged = _fallback_merge_description(base, candidate, max_sentences=2) or base
-                        merged = _normalize_plaintext_paragraphs(merged) or merged
-                        merged = _promote_first_person_quotes_to_blockquotes(merged) or merged
-                        merged = _promote_inline_quoted_direct_speech_to_blockquotes(merged) or merged
-                        merged = _drop_reported_speech_duplicates(merged) or merged
-                        merged = _normalize_blockquote_markers(merged) or merged
-                        merged = _append_missing_scene_hint(
-                            description=merged, source_text=candidate.source_text
-                        ) or merged
-                        merged = (
-                            _sanitize_description_output(
-                                merged,
-                                source_text=candidate.source_text,
-                            )
-                            or merged
-                        )
-                        current = (event_db.description or "").strip()
-                        merged = (merged or "").strip()
-                        if merged and merged != current:
-                            merged = _ensure_minimal_description_headings(merged) or merged
-                            event_db.description = _clip(merged, SMART_UPDATE_DESCRIPTION_MAX_CHARS)
-                            updated_fields = True
-                            if "description" not in updated_keys:
-                                updated_keys.append("description")
-                        note = "LLM недоступна: описание обновлено детерминированно"
-                        if note not in text_filter_facts:
-                            text_filter_facts.append(note)
                         skip_topic_reclassify = True
-                    else:
-                        # Production-safe: keep description unchanged and record a service note in the source log.
-                        note = "LLM недоступна: описание не обновлено"
-                        if note not in text_filter_facts:
-                            text_filter_facts.append(note)
-                        if needs_schedule_cleanup:
-                            cleaned = _strip_foreign_schedule_noise(
-                                before_description,
-                                event_date=event_db.date,
-                                end_date=event_db.end_date,
-                                event_title=event_db.title,
-                            )
-                            if cleaned and cleaned != before_description:
-                                cleaned = _normalize_plaintext_paragraphs(cleaned) or cleaned
-                                cleaned = _promote_first_person_quotes_to_blockquotes(cleaned) or cleaned
-                                cleaned = _promote_inline_quoted_direct_speech_to_blockquotes(cleaned) or cleaned
-                                cleaned = _drop_reported_speech_duplicates(cleaned) or cleaned
-                                cleaned = _normalize_blockquote_markers(cleaned) or cleaned
-                                cleaned = _append_missing_scene_hint(
-                                    description=cleaned, source_text=candidate.source_text
-                                ) or cleaned
-                                cleaned = (
-                                    _sanitize_description_output(
-                                        cleaned,
-                                        source_text=candidate.source_text,
-                                    )
-                                    or cleaned
+                    # Production-safe: keep description unchanged and record a service note in the source log.
+                    note = "LLM недоступна: описание не обновлено"
+                    if note not in text_filter_facts:
+                        text_filter_facts.append(note)
+                    if needs_schedule_cleanup:
+                        cleaned = _strip_foreign_schedule_noise(
+                            before_description,
+                            event_date=event_db.date,
+                            end_date=event_db.end_date,
+                            event_title=event_db.title,
+                        )
+                        if cleaned and cleaned != before_description:
+                            cleaned = _normalize_plaintext_paragraphs(cleaned) or cleaned
+                            cleaned = _promote_first_person_quotes_to_blockquotes(cleaned) or cleaned
+                            cleaned = _promote_inline_quoted_direct_speech_to_blockquotes(cleaned) or cleaned
+                            cleaned = _drop_reported_speech_duplicates(cleaned) or cleaned
+                            cleaned = _normalize_blockquote_markers(cleaned) or cleaned
+                            cleaned = _append_missing_scene_hint(
+                                description=cleaned, source_text=candidate.source_text
+                            ) or cleaned
+                            cleaned = (
+                                _sanitize_description_output(
+                                    cleaned,
+                                    source_text=candidate.source_text,
                                 )
-                                cleaned = _ensure_minimal_description_headings(cleaned) or cleaned
-                                event_db.description = _clip(cleaned, SMART_UPDATE_DESCRIPTION_MAX_CHARS)
-                                updated_fields = True
-                                updated_keys.append("description")
-                                note = "Текст очищен: убраны строки расписания других дат"
-                                if note not in text_filter_facts:
-                                    text_filter_facts.append(note)
-                                skip_topic_reclassify = True
+                                or cleaned
+                            )
+                            cleaned = _ensure_minimal_description_headings(cleaned) or cleaned
+                            event_db.description = _clip(cleaned, SMART_UPDATE_DESCRIPTION_MAX_CHARS)
+                            updated_fields = True
+                            updated_keys.append("description")
+                            note = "Текст очищен: убраны строки расписания других дат"
+                            if note not in text_filter_facts:
+                                text_filter_facts.append(note)
+                            skip_topic_reclassify = True
         else:
             ticket_updates = _apply_ticket_fields(
                 event_db,
