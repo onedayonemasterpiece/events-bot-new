@@ -1049,23 +1049,7 @@ def _normalize_digest_eligibility(
         return False, reason or "cancelled"
     if digest_eligible:
         return True, reason or None
-    evidence_count = sum(
-        1
-        for value in (
-            time_text,
-            city,
-            meeting_point,
-            route_summary,
-            price_text,
-            booking_text,
-            booking_url,
-            summary_one_liner,
-            digest_blurb,
-        )
-        if collapse_ws(value)
-    )
-    if mode in {"", "scheduled_public", "limited"} and evidence_count >= 2:
-        return True, reason or "fact_policy_promoted"
+    # Field density must not override the extractor's negative eligibility decision.
     return bool(digest_eligible), reason or None
 
 
@@ -2962,6 +2946,8 @@ def _coerce_occurrence_from_payload(
         digest_eligible=bool(payload.get("digest_eligible")),
         digest_reason=collapse_ws(payload.get("digest_eligibility_reason")) or None,
     )
+    if payload.get("digest_eligible") is False:
+        logger.info("guide_import.exclusion_preserved source=%s message_id=%s", source_row["username"], post.message_id)
     return GuideParsedOccurrence(
         block_text=collapse_ws(payload.get("source_excerpt") or post.text),
         canonical_title=title,

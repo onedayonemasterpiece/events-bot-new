@@ -198,3 +198,38 @@ async def test_handle_vk_captcha_invalid(tmp_path: Path, monkeypatch):
     assert bot.messages and bot.messages[-1][1] == "код не подошёл"
     markup = bot.messages[-1][2]["reply_markup"]
     assert markup.inline_keyboard[0][0].text == "Отправить новый код"
+
+
+@pytest.mark.asyncio
+async def test_docs_save_captcha_logs_hide_ticket_preserve_recovery(monkeypatch, caplog):
+    ticket = "synthetic-upload-ticket-must-stay-private"
+    sent = []
+
+    async def fake_http_call(*args, **kwargs):
+        sent.append(dict(kwargs["data"]))
+        return DummyResp({"error": {
+            "error_code": 14, "error_msg": "Captcha needed",
+            "captcha_sid": "sid", "captcha_img": "img",
+        }})
+
+    async def no_throttle():
+        pass
+
+    monkeypatch.setattr(main, "http_call", fake_http_call)
+    monkeypatch.setattr(main, "_vk_throttle", no_throttle)
+    monkeypatch.setattr(main, "_vk_actor_flood_remaining", lambda token: 0)
+    for name in ("_vk_captcha_needed", "_vk_captcha_sid", "_vk_captcha_img",
+                 "_vk_captcha_method", "_vk_captcha_params"):
+        monkeypatch.setattr(main, name, False if name.endswith("needed") else None)
+    params = {"file": ticket, "title": "calendar"}
+    with pytest.raises(main.VKAPIError) as exc:
+        await main._vk_api("docs.save", params, token="synthetic-token", token_kind="user")
+    assert exc.value.code == 14
+    assert len(sent) == 1 and sent[0]["file"] == ticket
+    assert main._vk_captcha_params == params == {"file": ticket, "title": "calendar"}
+    assert main._vk_captcha_method == "docs.save"
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("VK API error: method=docs.save code=14" in msg for msg in messages)
+    assert any("vk captcha sid=sid method=docs.save" in msg for msg in messages)
+    assert ticket not in "\n".join(messages)
+    assert all("<redacted>" in msg for msg in messages if "params=" in msg)

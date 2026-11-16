@@ -628,3 +628,16 @@ updates one Event and preserves source binding instead of creating a second.
 Different-time, true native-ID and ambiguous same-slot controls must survive.
 The two confirmed old duplicate pairs need separate managed reconciliation;
 this prevention change is not an accepted cleanup or permission to replay.
+
+
+### Rejected rich-fact evidence scope
+
+The existing `smart_update.rich_fact_rejected` warning records `quote_present`,
+`quote_chars`, and `corpus_reason`/`corpus_matched`/`corpus_ratio` alongside the
+original quote-based verdict. These scalar fields do not record the source or
+quote text. If quote support fails but `corpus_reason=grounded`, investigate
+quote scope or claim wording; full-source support does not establish ownership
+by the selected event. A corpus rejection indicates insufficient lexical
+support in that supplied corpus, not proof of semantic falsity. The original
+rejection remains authoritative; these diagnostics never admit a rejected fact
+and do not reconstruct replies from earlier imports.
