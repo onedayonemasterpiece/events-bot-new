@@ -33,6 +33,7 @@ from telegram_sources import canonicalize_tg_url, parse_tg_post_url
 
 from .dedup import deduplicate_occurrence_rows
 from .digest import RU_MONTH_GEN, format_date_time
+from .digest_writer import ask_vk_narrative
 from .parser import collapse_ws
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,12 @@ VISUAL_DIGEST_TG_TARGET_CHATS_RAW = (
 )
 VISUAL_DIGEST_TELEGRAM_ENABLED = (
     (os.getenv("ENABLE_GUIDE_VISUAL_DIGEST_TELEGRAM") or "1").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
+# Owner decision 2026-11-16: personal VK mentions are tested in the sandbox only;
+# ordinary editions keep plain names until he enables them.
+VISUAL_DIGEST_VK_MENTIONS_ENABLED = (
+    (os.getenv("GUIDE_VISUAL_DIGEST_VK_MENTIONS") or "").strip().lower()
     in {"1", "true", "yes", "on"}
 )
 VISUAL_DIGEST_STORIES_ENABLED = (
@@ -1177,6 +1184,7 @@ async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) ->
         item["organizer_names"] = _parse_json_array(item.get("organizer_names_json"))
         item["audience_fit"] = _parse_json_array(item.get("audience_fit_json"))
         item["fact_pack"] = _safe_json_object(item.get("fact_pack_json"))
+        item["guide_profile_facts"] = _safe_json_object(item.get("guide_profile_facts_rollup_json"))
         await _load_transport(conn, item)
         for key in (
             "canonical_title",
@@ -1329,6 +1337,7 @@ async def _fetch_rows_by_ids(conn: aiosqlite.Connection, occurrence_ids: Sequenc
         item["organizer_names"] = _parse_json_array(item.get("organizer_names_json"))
         item["audience_fit"] = _parse_json_array(item.get("audience_fit_json"))
         item["fact_pack"] = _safe_json_object(item.get("fact_pack_json"))
+        item["guide_profile_facts"] = _safe_json_object(item.get("guide_profile_facts_rollup_json"))
         await _load_transport(conn, item)
         for key in (
             "canonical_title", "date", "time", "duration_text", "city", "meeting_point", "route_summary",
@@ -1928,6 +1937,126 @@ async def build_visual_digest_telegram_text(
     return "\n".join(compact_lines).strip()
 
 
+_VK_MOVEMENT = {"walk": "пешком", "bus": "автобус", "tram": "трамвай", "boat": "по воде"}
+_VK_NAME_MARK_RE = re.compile(r"\[\[(\d+)\|([^\[\]|]+)\]\]")
+
+
+def _vk_narrative_payload(items: Sequence[Mapping[str, Any]]) -> tuple[dict[str, Any], dict[int, tuple[int, str]]]:
+    """Writer input for the whole edition plus {person number: (personal VK id, name)} for confirmed guides."""
+    people: dict[str, dict[str, Any]] = {}
+    mention_ids: dict[int, tuple[int, str]] = {}
+    sources: dict[str, dict[str, Any]] = {}
+    excursions: list[dict[str, Any]] = []
+    for row in items:
+        row_id = int(row.get("id") or 0)
+        participants = row.get("participant_medallions")
+        if not isinstance(participants, list):
+            participants = [{"name": name, "roles": [role]} for field, role in
+                            (("guide_names", "Гид"), ("organizer_names", "Организатор"))
+                            for name in (row.get(field) or [])]
+        for person in participants:
+            roles = [role for role in person.get("roles") or [] if role != "Источник"]
+            name = _plain(person.get("name"))
+            if not roles or not name:
+                continue
+            owner = int(person.get("owner") or 0)
+            entry = people.setdefault(f"vk:{owner}" if owner else name.casefold(),
+                                      {"n": len(people) + 1, "name": name, "roles": [], "excursions": []})
+            entry["roles"] = sorted({*entry["roles"], *roles})
+            entry["excursions"].append(row_id)
+            if owner > 0 and "Гид" in roles:
+                mention_ids[entry["n"]] = (owner, name)
+        source_text = _plain(row.get("dedup_source_text"))
+        if source_text:
+            source = sources.setdefault(source_text, {"url": _plain(row.get("source_post_url")),
+                                                      "text": source_text[:3500], "excursions": []})
+            source["excursions"].append(row_id)
+        try:
+            weekday = RU_WEEK_FULL[date.fromisoformat(_plain(row.get("date"))).weekday()]
+        except ValueError:
+            weekday = ""
+        facts = {key: value for key in ("summary_one_liner", "digest_blurb", "route_summary", "meeting_point",
+                                        "duration_text", "group_format", "audience_fit", "main_hook", "main_hook_evidence")
+                 if (value := _fact(row, key) or row.get(key)) and (not isinstance(value, str) or _plain(value))}
+        profile = {"kind": _plain(row.get("source_kind")), "title": _plain(row.get("source_title")),
+                   "about": _plain(row.get("source_about_text"))[:600],
+                   "summary": _plain(row.get("guide_profile_summary")), "facts": row.get("guide_profile_facts") or {}}
+        excursions.append({
+            "occurrence_id": row_id, "title": _plain(row.get("canonical_title")),
+            "date": _plain(row.get("date")), "weekday": weekday, "city": _plain(row.get("city")),
+            "movement": [_VK_MOVEMENT[mode] for mode in _modes_for(row) if mode in _VK_MOVEMENT],
+            "guides": [_plain(x) for x in row.get("guide_names") or []],
+            "organizers": [_plain(x) for x in row.get("organizer_names") or []],
+            "facts": facts, "source_profile": {key: value for key, value in profile.items() if value},
+        })
+    return {"excursions": excursions, "people": list(people.values()), "sources": list(sources.values())}, mention_ids
+
+
+async def _assemble_vk_narrative(
+    items: Sequence[Mapping[str, Any]],
+    narrative: Mapping[str, Any],
+    *,
+    period: str,
+    mention_ids: Mapping[int, tuple[int, str]],
+    shorten: Callable[[str], Awaitable[str]],
+) -> str | None:
+    """Wrap the written prose with exact titles, dates, prices, contacts and hashtags from the rows."""
+    def names(text: str) -> str | None:
+        plain = _VK_NAME_MARK_RE.sub(lambda m: m[2], text)
+        if "[" in plain or "]" in plain:
+            return None  # unpaired writer markup would become broken VK markup
+        if not VISUAL_DIGEST_VK_MENTIONS_ENABLED:
+            return plain
+        def mention(m: re.Match[str]) -> str:
+            owner, name = mention_ids.get(int(m[1]), (0, ""))
+            label = m[2].casefold()
+            # A notification must reach the person the label names: every word of the stored
+            # name has to open a word of the inflected label, else the name stays plain text.
+            same = owner and all(any(w.startswith(part[:3]) for w in label.split()) for part in name.casefold().split())
+            return f"[id{owner}|{m[2]}]" if same else m[2]
+
+        return _VK_NAME_MARK_RE.sub(mention, text)
+
+    texts = [narrative["lead"], narrative.get("outro") or "", *(p["text"] for p in narrative["paragraphs"])]
+    if any(names(text) is None for text in texts):
+        return None
+    by_id = {int(row.get("id") or 0): row for row in items}
+    blocks = [f"ЭКСКУРСИИ {period.upper()}".strip() + "\n" + (names(narrative["lead"]) or ""),
+              "Это дайджест экскурсий по Калининградской области от «Ух ты, Калининград!». "
+              "Даты, цены и запись — под каждым рассказом."]
+    for paragraph in narrative["paragraphs"]:
+        rows = sorted((by_id[i] for i in paragraph["occurrence_ids"]),
+                      key=lambda r: (_plain(r.get("date")), _plain(r.get("time")) or "99:99"))
+        details: list[tuple[str, str, str]] = []
+        for row in rows:
+            try:
+                day = date.fromisoformat(_plain(row.get("date")))
+                when = f"{day.day} {RU_MONTH_GEN.get(day.month, '')} ({RU_WEEK_SHORT[day.weekday()]})"
+            except ValueError:
+                when = ""
+            if _plain(row.get("time")):
+                when = f"{when}, {_plain(row.get('time'))}".strip(", ")
+            link, is_phone = _primary_link(row)
+            if link and is_phone:
+                contact = f"Запись по телефону: {_normalize_phone(link) or _plain(link)}"
+            elif link:
+                is_booking = _plain(link) != _plain(row.get("source_post_url") or row.get("channel_url"))
+                contact = f"{'Запись' if is_booking else 'Подробности'}: {link if _is_vk_url(link) else await shorten(link)}"
+            else:
+                contact = ""
+            details.append((when, _plain(row.get("price_line") or row.get("price_text")), contact))
+        if len({(price, contact) for _when, price, contact in details}) == 1:
+            lines = [" · ".join(when for when, _p, _c in details if when), " · ".join(x for x in details[0][1:] if x)]
+        else:
+            lines = [" · ".join(x for x in detail if x) for detail in details]
+        title = _plain(rows[0].get("canonical_title")) or "Экскурсия"
+        blocks.append("\n".join(x for x in [title.upper(), names(paragraph["text"]) or "", *lines] if x))
+    if narrative.get("outro"):
+        blocks.append(names(narrative["outro"]) or "")
+    blocks.append(" ".join(_digest_hashtags(items)))
+    return "\n\n".join(blocks)
+
+
 async def build_visual_digest_vk_text(
     rows: Sequence[Mapping[str, Any]],
     *,
@@ -1938,13 +2067,27 @@ async def build_visual_digest_vk_text(
 ) -> str:
     items = [dict(r) for r in rows]
     period = _period_of(items)
+    short_cache: dict[str, str | None] = {}
+
+    async def shorten(link: str) -> str:
+        cache_key = _ensure_https(_plain(link))
+        if cache_key not in short_cache:
+            short_cache[cache_key] = await _shorten_external_for_vk(link, db=db, bot=bot, vk_api_fn=vk_api_fn)
+        return short_cache[cache_key] or link
+
+    payload, mention_ids = _vk_narrative_payload(items)
+    narrative = await ask_vk_narrative(payload, issue_id=int(issue_id)) if items else None
+    if narrative:
+        text = await _assemble_vk_narrative(items, narrative, period=period, mention_ids=mention_ids, shorten=shorten)
+        if text:
+            return text
+        logger.warning("guide_vk_narrative issue_id=%s outcome=rejected reason=stray_markup", issue_id)
     lines = [
         f"Дайджест экскурсий №{int(issue_id)}",
         "",
         f"Коротко: {len(items)} будущих экскурсий" + (f" на {period}" if period else "") + ". Смотрите карточку, а детали и запись — ниже.",
         "",
     ]
-    short_cache: dict[str, str | None] = {}
     for idx, row in enumerate(items, start=1):
         title = _plain(row.get("canonical_title")) or "Экскурсия"
         link, is_phone = _primary_link(row)
@@ -1954,11 +2097,7 @@ async def build_visual_digest_vk_text(
         elif link and _is_vk_url(link):
             line = f"{idx}. {_vk_link(title, link)}"
         elif link:
-            cache_key = _ensure_https(_plain(link))
-            if cache_key not in short_cache:
-                short_cache[cache_key] = await _shorten_external_for_vk(link, db=db, bot=bot, vk_api_fn=vk_api_fn)
-            short = short_cache.get(cache_key)
-            line = f"{idx}. {title} — {short or link}"
+            line = f"{idx}. {title} — {await shorten(link)}"
         else:
             line = f"{idx}. {title}"
         lines.append(line)

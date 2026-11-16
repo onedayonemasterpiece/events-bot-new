@@ -521,6 +521,49 @@ def _get_digest_writer_runtime():
     return client, candidate_key_ids
 
 
+async def _generate_json(
+    client: Any,
+    prompt: str,
+    schema: dict[str, Any],
+    *,
+    temperature: float,
+    candidate_key_ids: Sequence[str] | None,
+) -> dict[str, Any] | None:
+    raw = None
+    waited_seconds = 0.0
+    for attempt in range(6):
+        try:
+            raw, _usage = await asyncio.wait_for(
+                client.generate_content_async(
+                    model=GUIDE_DIGEST_WRITER_MODEL,
+                    prompt=prompt,
+                    generation_config={
+                        "temperature": temperature,
+                        "response_mime_type": "application/json",
+                        "response_schema": schema,
+                    },
+                    max_output_tokens=2400,
+                    candidate_key_ids=list(candidate_key_ids) if candidate_key_ids else None,
+                ),
+                timeout=float(GUIDE_DIGEST_WRITER_LLM_TIMEOUT_SECONDS),
+            )
+            break
+        except Exception as exc:
+            retry_after = _retry_after_seconds(str(exc))
+            if (
+                retry_after is not None
+                and attempt < 5
+                and (waited_seconds + retry_after) <= float(GUIDE_DIGEST_WRITER_MAX_WAIT_SECONDS)
+            ):
+                logger.info("guide_digest_writer: retrying after %.1fs due to provider limit", retry_after)
+                await asyncio.sleep(retry_after)
+                waited_seconds += retry_after
+                continue
+            logger.warning("guide_digest_writer: llm request failed: %s", exc)
+            return None
+    return _extract_json(raw or "")
+
+
 async def _ask_digest_batch_llm_batch(
     client: Any,
     payload_rows: Sequence[dict[str, Any]],
@@ -597,39 +640,7 @@ async def _ask_digest_batch_llm_batch(
         f"JSON schema: {json.dumps(schema, ensure_ascii=False)}\n\n"
         f"Input:\n{json.dumps({'items': list(payload_rows)}, ensure_ascii=False)}"
     )
-    raw = None
-    waited_seconds = 0.0
-    for attempt in range(6):
-        try:
-            raw, _usage = await asyncio.wait_for(
-                client.generate_content_async(
-                    model=GUIDE_DIGEST_WRITER_MODEL,
-                    prompt=prompt,
-                    generation_config={
-                        "temperature": 0.2,
-                        "response_mime_type": "application/json",
-                        "response_schema": schema,
-                    },
-                    max_output_tokens=2400,
-                    candidate_key_ids=list(candidate_key_ids) if candidate_key_ids else None,
-                ),
-                timeout=float(GUIDE_DIGEST_WRITER_LLM_TIMEOUT_SECONDS),
-            )
-            break
-        except Exception as exc:
-            retry_after = _retry_after_seconds(str(exc))
-            if (
-                retry_after is not None
-                and attempt < 5
-                and (waited_seconds + retry_after) <= float(GUIDE_DIGEST_WRITER_MAX_WAIT_SECONDS)
-            ):
-                logger.info("guide_digest_writer: batch retrying after %.1fs due to provider limit", retry_after)
-                await asyncio.sleep(retry_after)
-                waited_seconds += retry_after
-                continue
-            logger.warning("guide_digest_writer: llm batch failed: %s", exc)
-            return None
-    data = _extract_json(raw or "")
+    data = await _generate_json(client, prompt, schema, temperature=0.2, candidate_key_ids=candidate_key_ids)
     if not isinstance(data, dict):
         return None
     items = data.get("items")
@@ -754,3 +765,145 @@ async def apply_digest_batch_copy(
                 item["booking_line"] = booking_line
         out.append(item)
     return out
+
+
+# One opening approach per edition, rotated by issue number: the owner asked for
+# editions that do not read as one template (Slack 2026-11-16).
+_VK_NARRATIVE_ANGLES = (
+    "зачин-вопрос — начни с вопроса, на который отвечает одна из экскурсий выпуска",
+    "зачин-контраст — поставь рядом две самые непохожие экскурсии выпуска",
+    "зачин-деталь — начни с одной зримой детали (предмет, место, сцена) самой любопытной экскурсии",
+    "зачин-человек — начни с гида и того, как он смотрит на свою тему",
+)
+_VK_NARRATIVE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "lead": {"type": "string"},
+        "paragraphs": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "occurrence_ids": {"type": "array", "items": {"type": "integer"}},
+                    "text": {"type": "string"},
+                },
+                "required": ["occurrence_ids", "text"],
+            },
+        },
+        "outro": {"type": "string"},
+    },
+    "required": ["lead", "paragraphs"],
+}
+
+
+def _vk_narrative_prompt(payload: Mapping[str, Any], *, issue_id: int) -> str:
+    angle = _VK_NARRATIVE_ANGLES[int(issue_id) % len(_VK_NARRATIVE_ANGLES)]
+    return (
+        "Ты — автор сообщества «Ух ты, Калининград!» и пишешь текст поста ВКонтакте к дайджесту экскурсий "
+        "по Калининградской области. Читатель видит картинку с расписанием и первые две строки текста; "
+        "дальше он читает, только если стало интересно. Текст должен помочь ему выбрать экскурсию и захотеть записаться.\n\n"
+        "Что вернуть\n"
+        "- lead: 1–2 предложения сразу под заголовком «ЭКСКУРСИИ <период>». Это общий хук выпуска: конкретная деталь "
+        "или вопрос из материала, ради которых хочется раскрыть текст. Не пересказывай состав выпуска и не обещай «интересное».\n"
+        "- paragraphs: абзацы об экскурсиях в порядке входного списка excursions.\n"
+        "- outro: один короткий вопрос к читателю, на который легко ответить в комментариях и который вытекает "
+        "из выпуска; если естественного вопроса нет — пустая строка.\n"
+        "Сборщик сам добавит заголовок с периодом, название каждой экскурсии КАПСОМ отдельной строкой перед абзацем, "
+        "точные даты и время, цену, ссылку или телефон для записи и хештеги. Поэтому не пиши числа дат, время, цены, "
+        "телефоны и ссылки и не начинай абзац с названия. День недели (weekday) называть можно: он помогает связать абзацы.\n\n"
+        "Факты\n"
+        "1. Пиши только то, что есть во входных данных этой экскурсии: в её полях и в текстах sources, где её id указан "
+        "в excursions. Не добавляй мест, событий, наград, опыта гида, транспорта, угощений и впечатлений, которых там нет.\n"
+        "2. Текст source может описывать программу из нескольких экскурсий. Сказанное о программе или команде в целом "
+        "(формат, награды, общая идея) не превращай в особенность отдельной экскурсии и в личную заслугу гида; "
+        "это можно один раз упомянуть как сведение о проекте.\n"
+        "3. Различай роли: гид ведёт экскурсию, организатор или проект её проводит, автор страницы-источника мог лишь "
+        "опубликовать анонс. source_profile описывает страницу-источник; говори его словами о человеке, только если "
+        "из данных ясно, что это профиль именно этого гида.\n"
+        "4. О гиде скажи то полезное, что подтверждают данные: его подход, тему, сильную сторону. Если таких сведений нет, "
+        "просто назови, кто ведёт, без оценок.\n"
+        "5. Мало фактов — короче абзац. Короткий точный абзац лучше длинного с домыслами. Отсутствующие сведения "
+        "не обсуждай.\n\n"
+        "Голос\n"
+        "6. Пиши от первого лица — как автор, который сам собрал подборку и неравнодушен к области. Личное отношение "
+        "выражай к теме, детали или идее экскурсии, не чаще одного раза на абзац и каждый раз по-разному.\n"
+        "7. Ты не был на этих экскурсиях и не обещаешь на них пойти. Не пиши «я бы пошёл», «я бы выбрал», «я был», "
+        "«мне понравилось», «собираюсь». Читателя приглашай: «можно пройтись», «пойдём», «стоит заглянуть».\n"
+        "8. Глагол движения выбирай по movement: пешком — «пойдём», «пройдёмся», «прогуляемся»; автобус, поезд и другой "
+        "транспорт — «поедем», «отправимся». Если movement пуст, но из данных очевидно, что из Калининграда едут "
+        "в другой город, посёлок или за город, тоже говори «поедем», не называя вид транспорта. Иначе — нейтральные слова.\n"
+        "9. Экскурсию называй экскурсией, прогулкой или маршрутом — как в данных. Не называй её встречей, мероприятием, "
+        "событием или активностью.\n\n"
+        "Рассказ\n"
+        "10. Каждый абзац открывается своим хуком — самой конкретной и любопытной деталью именно этой экскурсии: "
+        "неожиданный факт, вопрос, на который она отвечает, странность в названии, предмет, место, человек. "
+        "Если есть main_hook, опирайся на его смысл, но не повторяй дословно: он уже стоит на картинке.\n"
+        "11. Абзац — маленькая история, а не пересказ маршрута и не перечень полей. Маршрут можно дать одним движением "
+        "(«пройдёмся от … вдоль … до …») как часть истории. В абзаце 2–5 предложений, 250–550 знаков.\n"
+        "12. Абзацы связаны: начиная со второго, первая фраза перекидывает мостик от предыдущей экскурсии — через контраст, "
+        "общую тему, смену места или день недели. Мостики разные. Весь пост читается подряд как один лёгкий рассказ.\n"
+        "13. Если одна и та же экскурсия того же гида идёт в несколько дат, напиши о ней один абзац и перечисли в нём "
+        "все её occurrence_ids. Разные экскурсии не объединяй. Каждый id из excursions входит ровно в один абзац.\n"
+        f"14. Подход этого выпуска: {angle}. Если материал такому подходу не поддаётся, выбери зачин, который материал "
+        "поддерживает.\n\n"
+        "Язык\n"
+        "15. Живая письменная речь образованного человека: простые слова, предложения разной длины, без канцелярита.\n"
+        "16. Без штампов рекламных и нейросетевых текстов: «погрузиться в атмосферу», «окунуться», «уникальная возможность», "
+        "«незабываемые впечатления», «не упустите», «откройте для себя», «путешествие во времени», «с новой стороны», "
+        "«никого не оставит равнодушным», «это не просто …, а …», «настоящий» как усилитель, перечисления из трёх "
+        "однородных слов ради ритма, восклицательные призывы. Без эмодзи. Запрещены основы: "
+        + ", ".join(_BANNED_HYPE_STEMS)
+        + ".\n"
+        "17. Не повторяй одну мысль разными словами.\n\n"
+        "Имена\n"
+        "18. В people перечислены люди и проекты выпуска с номерами. Называя кого-то из них, пиши имя в нужном падеже "
+        "внутри разметки [[номер|имя]], например [[2|Анны Ивановой]]. Гида назови так хотя бы раз в абзаце его экскурсии. "
+        "Других квадратных скобок в тексте быть не должно.\n\n"
+        "Верни только JSON по схеме.\n"
+        f"JSON schema: {json.dumps(_VK_NARRATIVE_SCHEMA, ensure_ascii=False)}\n\n"
+        f"Input:\n{json.dumps(dict(payload), ensure_ascii=False)}"
+    )
+
+
+async def ask_vk_narrative(payload: Mapping[str, Any], *, issue_id: int) -> dict[str, Any] | None:
+    """One editorial request for the whole VK edition; None means "use the compact text"."""
+    expected = sorted(int(item["occurrence_id"]) for item in payload.get("excursions") or [])
+    if not GUIDE_DIGEST_WRITER_ENABLED or not expected:
+        return None
+    client, candidate_key_ids = _get_digest_writer_runtime()
+    if client is None:
+        return None
+    try:
+        data = await asyncio.wait_for(
+            _generate_json(
+                client,
+                _vk_narrative_prompt(payload, issue_id=issue_id),
+                _VK_NARRATIVE_SCHEMA,
+                temperature=0.7,
+                candidate_key_ids=candidate_key_ids,
+            ),
+            timeout=float(GUIDE_DIGEST_WRITER_TOTAL_TIMEOUT_SECONDS),
+        )
+    except Exception as exc:
+        logger.warning("guide_vk_narrative issue_id=%s outcome=failed error_type=%s", issue_id, type(exc).__name__)
+        return None
+    paragraphs: list[dict[str, Any]] = []
+    for raw in (data or {}).get("paragraphs") or []:
+        if not isinstance(raw, Mapping):
+            continue
+        ids = [int(x) for x in raw.get("occurrence_ids") or [] if str(x).lstrip("-").isdigit()]
+        text = collapse_ws(raw.get("text"))
+        if ids and text:
+            paragraphs.append({"occurrence_ids": ids, "text": text})
+    lead = collapse_ws((data or {}).get("lead"))
+    outro = collapse_ws((data or {}).get("outro"))
+    covered = sorted(x for paragraph in paragraphs for x in paragraph["occurrence_ids"])
+    prose = " ".join([lead, outro, *(paragraph["text"] for paragraph in paragraphs)])
+    if not lead or covered != expected or _URLISH_RE.search(prose):
+        logger.warning(
+            "guide_vk_narrative issue_id=%s outcome=rejected expected=%s covered=%s lead=%s",
+            issue_id, expected, covered, bool(lead),
+        )
+        return None
+    logger.info("guide_vk_narrative issue_id=%s outcome=written paragraphs=%s chars=%s", issue_id, len(paragraphs), len(prose))
+    return {"lead": lead, "paragraphs": paragraphs, "outro": outro}

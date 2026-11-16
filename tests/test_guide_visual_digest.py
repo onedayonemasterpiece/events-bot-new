@@ -4,6 +4,8 @@ from datetime import date
 
 import pytest
 
+from guide_excursions import visual_digest as vd
+
 from guide_excursions.visual_digest import (
     _BRAND_LOCKUP_FILE,
     _avatar_key,
@@ -90,6 +92,14 @@ async def test_vk_upload_keeps_full_card_as_png(monkeypatch):
             object(), issue_id=328, vk_api_fn=object(),
             post_to_vk_fn=post, upload_vk_photo_bytes_fn=upload,
         )
+
+
+@pytest.fixture(autouse=True)
+def _no_story_writer(monkeypatch):
+    async def writer(payload, *, issue_id):
+        return None
+
+    monkeypatch.setattr(vd, "ask_vk_narrative", writer)
 
 
 @pytest.mark.asyncio
@@ -280,3 +290,119 @@ def test_visual_digest_katya_identity_uses_surname_and_avatar():
     }
     assert _source_name(row) == "Катя Костюгова"
     assert _avatar_key(row) == "katya_kostyugova"
+
+
+EDITION_349 = [
+    {"id": 745, "canonical_title": "Зелёные истории", "date": "2026-11-17", "time": "14:00",
+     "guide_names": ["Ольга Рубцова"], "organizer_names": ["80 лет единства"], "price_text": "500 руб.",
+     "booking_url": "https://docs.google.com/forms/d/e/form/viewform", "source_post_url": "https://vk.com/wall-211429559_3892",
+     "dedup_source_text": "Программа «80 лет единства»: расписание ноября",
+     "participant_medallions": [{"name": "Ольга Рубцова", "roles": ["Гид"], "owner": 41501067},
+                                {"name": "80 лет единства", "roles": ["Организатор"], "owner": -237389053}]},
+    {"id": 746, "canonical_title": "Рассвет над Балтикой", "date": "2026-11-20", "time": "14:00",
+     "guide_names": ["Ноза Усманова"], "price_text": "500 руб.",
+     "booking_url": "https://docs.google.com/forms/d/e/form/viewform", "source_post_url": "https://vk.com/wall-211429559_3892",
+     "dedup_source_text": "Программа «80 лет единства»: расписание ноября",
+     "participant_medallions": [{"name": "Ноза Усманова", "roles": ["Гид"], "owner": 408521495}]},
+    {"id": 747, "canonical_title": "Зелёные истории", "date": "2026-11-21", "time": "11:00",
+     "guide_names": ["Ольга Рубцова"], "price_text": "500 руб.",
+     "booking_url": "https://docs.google.com/forms/d/e/form/viewform", "source_post_url": "https://vk.com/wall-211429559_3892",
+     "dedup_source_text": "Программа «80 лет единства»: расписание ноября",
+     "participant_medallions": [{"name": "Ольга Рубцова", "roles": ["Гид"], "owner": 41501067}]},
+    {"id": 763, "canonical_title": "Секреты чёрного золота: экскурсия на Осетровую ферму", "date": "2026-11-22",
+     "guide_names": ["Мария Морозова"], "price_text": "не указано", "booking_text": "8 (911) 858-58-49",
+     "source_post_url": "https://vk.com/wall1746008_13815", "dedup_source_text": "Осетровая ферма: 15, 22 и 29 ноября",
+     "participant_medallions": [{"name": "Olga Ox", "roles": ["Источник"], "owner": 1746008},
+                                {"name": "Мария Морозова", "roles": ["Гид"], "owner": None}]},
+]
+NARRATIVE_349 = {
+    "lead": "Где начинается рассвет в два часа дня?",
+    "paragraphs": [
+        {"occurrence_ids": [745, 747], "text": "Вдоль ручья пройдёмся с [[1|Ольгой Рубцовой]]."},
+        {"occurrence_ids": [746], "text": "У [[3|Нозы Усмановой]] другая отправная точка."},
+        {"occurrence_ids": [763], "text": "А в воскресенье можно побывать на осетровой ферме с [[4|Марией Морозовой]]."},
+    ],
+    "outro": "Пешком или на ферму?",
+}
+
+
+async def _fake_shortener(method, params, db=None, bot=None, **kwargs):
+    return {"response": {"short_url": "https://vk.cc/d3XqaE"}}
+
+
+@pytest.mark.asyncio
+async def test_vk_text_wraps_written_story_with_exact_dates_contacts_and_plain_names(monkeypatch):
+    seen = {}
+
+    async def writer(payload, *, issue_id):
+        seen.update(payload)
+        return NARRATIVE_349
+
+    monkeypatch.setattr(vd, "ask_vk_narrative", writer)
+    text = await build_visual_digest_vk_text(EDITION_349, issue_id=349, vk_api_fn=_fake_shortener)
+
+    # The writer sees every excursion, one shared programme text and people without the wall owner.
+    assert [x["occurrence_id"] for x in seen["excursions"]] == [745, 746, 747, 763]
+    assert seen["sources"][0]["excursions"] == [745, 746, 747]
+    assert [p["name"] for p in seen["people"]] == ["Ольга Рубцова", "80 лет единства", "Ноза Усманова", "Мария Морозова"]
+    assert seen["excursions"][3]["movement"] == []
+
+    assert text.startswith("ЭКСКУРСИИ 17–22 НОЯБРЯ\nГде начинается рассвет в два часа дня?\n\n")
+    assert "дайджест экскурсий по Калининградской области от «Ух ты, Калининград!»" in text
+    assert ("ЗЕЛЁНЫЕ ИСТОРИИ\nВдоль ручья пройдёмся с Ольгой Рубцовой.\n"
+            "17 ноября (вт), 14:00 · 21 ноября (сб), 11:00\n500 руб. · Запись: vk.cc/d3XqaE") in text
+    assert "РАССВЕТ НАД БАЛТИКОЙ\nУ Нозы Усмановой другая отправная точка.\n20 ноября (пт), 14:00\n" in text
+    # Unknown time and price stay absent; the phone is the booking contact.
+    assert ("с Марией Морозовой.\n22 ноября (вс)\nЗапись по телефону: +7 (911) 858-58-49") in text
+    assert "[" not in text and "docs.google.com" not in text
+    assert text.rstrip().endswith("#экскурсии #Калининград #УхтыКалининград")
+
+
+@pytest.mark.asyncio
+async def test_vk_text_mentions_only_guides_with_personal_vk_id_when_enabled(monkeypatch):
+    async def writer(payload, *, issue_id):
+        # The outro puts guide 1's number on another person's name: no mention for it.
+        return dict(NARRATIVE_349, outro="Или пойти с [[1|Нозой Усмановой]]?")
+
+    monkeypatch.setattr(vd, "ask_vk_narrative", writer)
+    monkeypatch.setattr(vd, "VISUAL_DIGEST_VK_MENTIONS_ENABLED", True)
+    text = await build_visual_digest_vk_text(EDITION_349, issue_id=349, vk_api_fn=_fake_shortener)
+
+    assert "с [id41501067|Ольгой Рубцовой]." in text
+    assert "У [id408521495|Нозы Усмановой] другая" in text
+    assert "с Марией Морозовой." in text  # no confirmed personal id: plain name
+    assert "Или пойти с Нозой Усмановой?" in text
+
+
+@pytest.mark.asyncio
+async def test_vk_text_keeps_compact_list_when_story_is_missing_or_has_stray_markup(monkeypatch):
+    broken = dict(NARRATIVE_349, lead="Смотрите [id1|кто-то]")
+    for result in (None, broken):
+        async def writer(payload, *, issue_id, result=result):
+            return result
+
+        monkeypatch.setattr(vd, "ask_vk_narrative", writer)
+        text = await build_visual_digest_vk_text(EDITION_349, issue_id=349, vk_api_fn=_fake_shortener)
+        assert text.splitlines()[0] == "Дайджест экскурсий №349"
+        assert "4. Секреты чёрного золота: экскурсия на Осетровую ферму — +7 (911) 858-58-49" in text
+
+
+@pytest.mark.asyncio
+async def test_writer_rejects_story_that_drops_or_invents_an_excursion(monkeypatch):
+    from guide_excursions import digest_writer as dw
+
+    payload = {"excursions": [{"occurrence_id": 745}, {"occurrence_id": 746}]}
+    answers = iter([
+        {"lead": "Хук", "paragraphs": [{"occurrence_ids": [745], "text": "Один абзац."}]},
+        {"lead": "Хук", "paragraphs": [{"occurrence_ids": [745, 746, 999], "text": "Лишний id."}]},
+        {"lead": "Хук", "paragraphs": [{"occurrence_ids": [745, 746], "text": "Оба на месте."}]},
+    ])
+
+    async def generate(*_args, **_kwargs):
+        return next(answers)
+
+    monkeypatch.setattr(dw, "_get_digest_writer_runtime", lambda: (object(), None))
+    monkeypatch.setattr(dw, "_generate_json", generate)
+    assert await dw.ask_vk_narrative(payload, issue_id=1) is None
+    assert await dw.ask_vk_narrative(payload, issue_id=1) is None
+    assert (await dw.ask_vk_narrative(payload, issue_id=1))["paragraphs"][0]["occurrence_ids"] == [745, 746]

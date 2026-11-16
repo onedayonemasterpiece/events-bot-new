@@ -10,6 +10,9 @@
 
 ## [Unreleased]
 
+### Changed
+- Guide visual VK digest (owner request 2026-11-16): the post text was a numbered list `title — link`; it is now a connected first-person editorial story written by one LLM request per edition, with exact titles in caps, dates, price, booking contact, brand line and hashtags added from stored rows. The compact list remains the text when the writer is unavailable or its answer is rejected. Personal guide mentions `[id…|name]` exist behind `GUIDE_VISUAL_DIGEST_VK_MENTIONS` (default off, sandbox testing only).
+
 ### Fixed
 - Bound repeated VK CAPTCHA per existing job without counting unrelated transport failures; retain frozen payloads and exhausted terminal outcomes across restart and enqueue so one refused document cannot loop forever ahead of other publications.
 - Resolve the exact venue name «ВОРОТА» as Закхаймские ворота through the shared location reference, while preserving street/title and other-gate negatives.
