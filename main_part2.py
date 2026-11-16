@@ -7391,7 +7391,7 @@ async def _upload_vk_event_gallery(
         attachments.append(uploaded)
     # Upload the cover last in a carousel: a partial edit can still use a lone unlabelled photo.
     for url in (reversed(urls) if carousel or relation_cards else urls):
-        if carousel and url == urls[0] and attachments:
+        if (carousel or (relation_cards and len(urls) == 1)) and url == urls[0] and attachments:
             photo = await upload_vk_photo(group_id, url, db, bot, swipe_hint=cue if relation_cards else True)
             if not photo:
                 mode = "grid"
