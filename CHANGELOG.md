@@ -11,6 +11,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Guide import preserves the extractor's negative digest eligibility decision instead of promoting it from filled logistics fields, including offers restricted to an organized group.
 - Redact signed VK upload tickets in existing API error and CAPTCHA logs while preserving upload requests and cached recovery parameters.
 - Explain rejected rich facts in the existing warning with quote presence/length and full-source lexical support metrics, without logging source quotes or changing fact admission.
 - Bound repeated VK CAPTCHA per existing job without counting unrelated transport failures; retain frozen payloads and exhausted terminal outcomes across restart and enqueue so one refused document cannot loop forever ahead of other publications.
