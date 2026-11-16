@@ -379,6 +379,9 @@ async def test_resume_guide_monitor_jobs_uses_output_when_status_lookup_fails(
     monkeypatch.setattr(guide_service, "remove_job", fake_remove_job)
     monkeypatch.setattr(guide_service, "update_job_meta", fake_update_job_meta)
 
+    async def no_delivered_jobs(_db):
+        return []
+    monkeypatch.setattr("guide_excursions.result_delivery.pending_result_jobs", no_delivered_jobs)
     recovered = await guide_service.resume_guide_monitor_jobs(object(), None, chat_id=123)
 
     assert recovered == 1

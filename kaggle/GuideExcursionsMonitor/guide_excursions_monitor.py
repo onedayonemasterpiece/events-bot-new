@@ -13,6 +13,7 @@ import subprocess
 import sys
 import time
 import urllib.parse
+import urllib.error
 import urllib.request
 import zipfile
 from dataclasses import dataclass
@@ -3017,12 +3018,55 @@ async def process_source(client: TelegramClient | None, source_payload: dict[str
     }
 
 
+def _save_run_checkpoint(config, run_id, started_at, sources, partial):
+    payload = {"schema_version": 1, "run_id": run_id,
+               "scan_mode": str(config.get("scan_mode") or "full"),
+               "started_at": started_at, "finished_at": datetime.now(timezone.utc).isoformat(),
+               "partial": partial, "stats": _summarize_run_stats(sources), "sources": sources}
+    RESULT_PATH.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+
+def deliver_guide_results() -> None:
+    """Push files, not just a completion notification, independently of a poller."""
+    if STATUS_CLIENT is None or not STATUS_CLIENT.enabled or not RESULT_PATH.is_file():
+        return
+    config = STATUS_CLIENT.config
+    archive = WORK_DIR / "guide_results_delivery.zip"
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+        bundle.write(RESULT_PATH, RESULT_PATH.name)
+        if MEDIA_OUTPUT_DIR.is_dir():
+            for path in sorted(MEDIA_OUTPUT_DIR.rglob("*")):
+                if path.is_file():
+                    bundle.write(path, path.relative_to(WORK_DIR).as_posix())
+    for attempt in range(3):
+        try:
+            with archive.open("rb") as body:
+                request = urllib.request.Request(config["callback_url"], data=body, method="POST",
+                    headers={"Content-Type": "application/zip", "Content-Length": str(archive.stat().st_size),
+                             "X-Kaggle-Run-ID": config["run_id"], "Authorization": f"Bearer {config['token']}"})
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    receipt = json.loads(response.read())
+            if not receipt.get("saved") or receipt.get("run_id") != config["run_id"]:
+                raise RuntimeError("Result delivery did not return a saved receipt for this run")
+            print(f"[guide_result] saved receipt run_id={config['run_id']}", flush=True)
+            archive.unlink()
+            return
+        except Exception as exc:
+            print(f"[guide_result] delivery failed attempt={attempt + 1} error={type(exc).__name__}", flush=True)
+            if isinstance(exc, urllib.error.HTTPError) and 400 <= exc.code < 500:
+                break
+            if attempt < 2:
+                time.sleep(10 * (attempt + 1))
+    print("[guide_result] Files retained in Kaggle output for ordinary recovery", flush=True)
+
+
 async def main() -> None:
     config = load_runtime_config()
     _bootstrap_repo_bundle()
     refresh_runtime_settings()
     run_id = str(config.get("run_id") or f"guide_kaggle_{int(datetime.now(timezone.utc).timestamp())}")
     started_at = datetime.now(timezone.utc).isoformat()
+    _save_run_checkpoint(config, run_id, started_at, [], True)
     sources = [item for item in (config.get("sources") or []) if isinstance(item, dict)]
     acquired_resources: list[str] = []
     STATUS_PROGRESS.update(
@@ -3100,6 +3144,7 @@ async def main() -> None:
             if result.get("source_status") != "ok":
                 partial = True
             sources_output.append(result)
+            _save_run_checkpoint(config, run_id, started_at, sources_output, partial)
             STATUS_PROGRESS.update(
                 {
                     "sources_done": len(sources_output),
@@ -3175,5 +3220,25 @@ async def main() -> None:
     print(f"Wrote {RESULT_PATH}")
 
 
+async def run_with_delivery() -> None:
+    try:
+        await main()
+    except BaseException as exc:
+        payload = json.loads(RESULT_PATH.read_text()) if RESULT_PATH.exists() else {
+            "schema_version": 1, "sources": [],
+            "run_id": str((STATUS_CLIENT.config if STATUS_CLIENT else {}).get("run_id", "")).removeprefix("guide_monitor:"),
+        }
+        payload.update(partial=True, run_error=f"{type(exc).__name__}: {exc}",
+                       finished_at=datetime.now(timezone.utc).isoformat())
+        RESULT_PATH.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        _status_event("report_written", phase="report", status="error", message=payload["run_error"])
+        raise
+    finally:
+        try:
+            await asyncio.to_thread(deliver_guide_results)
+        except Exception as exc:
+            print(f"[guide_result] bundle failed error={type(exc).__name__}; raw output retained", flush=True)
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(run_with_delivery())

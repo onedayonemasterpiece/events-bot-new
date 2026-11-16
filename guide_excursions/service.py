@@ -3281,6 +3281,9 @@ async def _import_results_file_inner(
     }
     errors: list[str] = []
     source_reports: list[dict[str, Any]] = []
+    if data.get("run_error"):
+        errors.append(str(data["run_error"]))
+        metrics["errors"] += 1
     occurrence_changes: list[dict[str, Any]] = []
     async with db.raw_conn() as conn:
         await _enable_row_factory(conn)
@@ -3552,13 +3555,15 @@ async def run_guide_import_from_results(
         await _enable_row_factory(conn)
         cur = await conn.execute(
             "SELECT id, metrics_json, details_json FROM ops_run "
-            "WHERE kind='guide_monitoring' AND status IN ('success','partial') "
+            "WHERE kind='guide_monitoring' AND status IN ('success','partial','error') "
             "AND json_extract(details_json, '$.run_id')=? "
             "AND json_type(details_json, '$.import_summary')='object' "
             "ORDER BY id DESC LIMIT 1", (run_id,),
         )
         accepted = await cur.fetchone()
     if accepted:
+        from .result_delivery import acknowledge_import
+        acknowledge_import(run_id)
         details = _safe_json_object(accepted["details_json"])
         await reconcile_kaggle_run_terminal_from_host(
             db, run_id=f"guide_monitor:{run_id}", message="Guide import already accepted",
@@ -3635,6 +3640,10 @@ async def run_guide_import_from_results(
     run_details["errors"] = errors[:20]
     run_details["warnings"] = warnings[:20]
     await finish_ops_run(db, run_id=ops_run_id, status=status, metrics=metrics, details=run_details)
+
+    if import_completed:
+        from .result_delivery import acknowledge_import
+        acknowledge_import(run_id)
 
     if send_progress and bot and chat_id:
         await bot.send_message(
@@ -3911,6 +3920,9 @@ async def run_guide_monitor(
     run_details["warnings"] = warnings[:20]
     await finish_ops_run(db, run_id=ops_run_id, status=status, metrics=metrics, details=run_details)
 
+    if import_completed:
+        from .result_delivery import acknowledge_import
+        acknowledge_import(run_id)
     if recovery_kernel_ref and import_completed and not auto_publish_after_import:
         try:
             await clear_guide_monitor_recovery_job(recovery_kernel_ref)
@@ -3971,6 +3983,14 @@ async def _resume_guide_monitor_jobs(
     chat_id: int | None = None,
 ) -> int:
     jobs = await list_jobs("guide_monitoring")
+    from .result_delivery import pending_result_jobs
+    delivered = await pending_result_jobs(db)
+    by_run = {str(job.get("meta", {}).get("run_id")): job for job in jobs}
+    for job in delivered:
+        previous = by_run.get(job["meta"]["run_id"], {})
+        job["meta"] = {**previous.get("meta", {}), **job["meta"]}
+        by_run[job["meta"]["run_id"]] = job
+    jobs = list(by_run.values())
     if not jobs:
         return 0
 
@@ -4000,6 +4020,9 @@ async def _resume_guide_monitor_jobs(
                     results_path = candidate
                     transport = "kaggle_recovery_saved_results"
 
+            if results_path is None and meta.get("push_delivery"):
+                logger.error("guide_result.saved_file_missing run_id=%s path=%s", run_id, results_path_raw)
+                continue
             if results_path is None:
                 try:
                     status = await asyncio.to_thread(client.get_kernel_status, kernel_ref)
@@ -4045,7 +4068,7 @@ async def _resume_guide_monitor_jobs(
 
                     results_path = await download_guide_results(client, kernel_ref, run_id)
 
-            if results_path_raw != str(results_path):
+            if results_path_raw != str(results_path) and not meta.get("push_delivery"):
                 await update_job_meta(
                     "guide_monitoring", kernel_ref,
                     meta_updates={"results_path": str(results_path)},
@@ -4146,7 +4169,10 @@ async def _resume_guide_monitor_jobs(
                                     disable_web_page_preview=True,
                                 )
             if not keep_recovery_job:
-                await remove_job("guide_monitoring", kernel_ref)
+                if meta.get("push_delivery"):
+                    await remove_job("guide_monitoring", kernel_ref, run_id=run_id)
+                else:
+                    await remove_job("guide_monitoring", kernel_ref)
             recovered += 1
             if bot and notify_chat_id:
                 await bot.send_message(
