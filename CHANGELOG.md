@@ -6,6 +6,8 @@
 
 ### Fixed
 
+- Telegram venue inference without an extracted venue, configured default or curated reference reaches the existing semantic location reviewer instead of treating an inferred phrase as venue proof.
+
 - Related-event verification excludes an umbrella announcement of the same specific programme through its existing reject verdict, while keeping independent programmes eligible.
 
 - Occurrence scope review receives already-read assigned poster OCR alongside the caption, using the same bounded text for source quotations and grounding; literal inflected city names survive the existing city rail without admitting regional adjectives.

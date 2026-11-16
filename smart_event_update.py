@@ -44,6 +44,7 @@ from event_age_rating import (
 from festival_grounding import ground_kgd80_festival
 from location_reference import (
     find_known_venue_in_text,
+    match_known_venue,
     match_known_venue_via_alias,
     normalise_event_location_from_reference,
     normalize_venue_key,
@@ -7363,6 +7364,19 @@ def _candidate_needs_llm_location_grounding_review(
     # transient provider failures still fail closed inside the review call.
     if SMART_UPDATE_LLM_DISABLED:
         return False, "llm_disabled"
+
+    # Producer inference without an extracted venue is not semantic venue proof.
+    # Curated references and configured defaults retain their existing routing.
+    metrics = candidate.metrics if isinstance(candidate.metrics, dict) else {}
+    if (
+        str(candidate.source_type or "").strip().lower() in {"tg", "telegram"}
+        and candidate.location_name
+        and "tg_extracted_location_name" in metrics
+        and metrics["tg_extracted_location_name"] is None
+        and not metrics.get("tg_default_location")
+        and match_known_venue(candidate.location_name, city=candidate.city) is None
+    ):
+        return True, "telegram_inferred_location_without_extracted_venue"
 
     # A structured event/festival label can be copied verbatim into the venue
     # field while still not naming an attendee-facing place.  This is only a
