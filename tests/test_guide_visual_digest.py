@@ -516,13 +516,14 @@ async def test_vk_same_departure_has_one_booking_and_keeps_full_fare(monkeypatch
     rows[0].update(id=740, time="09:00-18:00", price_text="4000 рублей с человека; обед 600", source_post_url=url)
     rows[1].update(id=741, time="09:00", price_text="4000 рублей")
     async def writer(*args, **kwargs):
-        return {"lead": "Чем примечателен Черняховск?", "paragraphs": [
+        return {"lead": "Чем примечателен #Черняховск?", "paragraphs": [
             {"occurrence_ids": [740, 741], "text": "Поедем к кирхе."}], "outro": ""}
     monkeypatch.setattr(vd, "ask_vk_narrative", writer)
     text = await build_visual_digest_vk_text(rows, issue_id=350, test_mention=858363572)
     assert text.count("28 ноября (сб), 09:00") == text.count("4000 рублей") == text.count(url) == 1
     assert "09:00-18:00" in text and "обед 600" in text and f"[{url}|Запись]" in text
-    assert text.count("#Черняховск") == 1 and "#Черняховск?" in text.splitlines()[1]
+    assert "Чем примечателен Черняховск?" in text.splitlines()[1]
+    assert "#" not in text.splitlines()[1] and "#Черняховск" in text.splitlines()[-3]
     assert text.index("КОЛЬЦО") < text.index("от «Ух ты, Калининград!»")
     # A second departure or a conflicting tariff remains visible.
     rows[1]["time"] = "11:00"
@@ -553,18 +554,20 @@ async def test_vk_writer_heading_is_removed_only_when_it_is_a_separate_matching_
     assert "ДРУГОЙ ЗАГОЛОВОК На ферме покажут осетров." in text
 
 
-@pytest.mark.parametrize("header", ["Расписание:\n", ""])
-def test_timetable_line_grounds_only_an_excursion_without_details(header):
-    row = {"canonical_title": "Рассвет над Балтикой", "date": "2026-11-20",
-           "guide_names": ["Ноза Усманова", "Другой гид"], "fact_pack": {}}
-    post = {"text": "Про растения.\n" + header
-            + "13.11 (пт) 14:00 — «Рассвет над Балтикой», гид Другой гид.\n"
-            + "🔸 20.11 (пт) 14:00 — «Рассвет над Балтикой», гид [id123|Ноза Усманова]",
-            "post_kind": "announce_multi", "raw_facts_json": None}
-    vd._scope_visual_source(row, post)
-    ids = {3: (123, "Ноза Усманова")}
-    assert vd._timetable_description([row], ids) == "Гид — [[3|Ноза Усманова]]."
-    assert vd._timetable_description([dict(row, timetable_guides=[])], ids) == ""
-    assert vd._timetable_description([row], {**ids, 4: (456, "Ноза Усманова")}) == "Гид — Ноза Усманова."
-    assert vd._timetable_description([dict(row, route_summary="Ленинский проспект")], ids) is None
-    assert vd._timetable_description([row, {"canonical_title": "Рассвет над Балтикой"}], ids) is None
+def test_vk_card_keeps_complete_hook_and_skips_blurb_fragments():
+    hook = "Почему у платанов отслаивается кора?"
+    row = {"canonical_title": "Прогулка", "fact_pack": {"main_hook": hook},
+           "digest_blurb": "Приглашаем на прогулку с гидом."}
+    assert vd._card_description(row) == hook
+    assert vd._card_description(dict(row, fact_pack={})) == ""
+
+
+@pytest.mark.asyncio
+async def test_sparse_excursion_keeps_grounded_writer_transition(monkeypatch):
+    row = dict(EDITION_349[1])
+    async def writer(*args, **kwargs):
+        return {"lead": "Что меняется в пятницу?", "paragraphs": [
+            {"occurrence_ids": [row["id"]], "text": "А в пятницу прогулку ведёт Ноза Усманова."}], "outro": ""}
+    monkeypatch.setattr(vd, "ask_vk_narrative", writer)
+    text = await build_visual_digest_vk_text([row], issue_id=349, vk_api_fn=_fake_shortener)
+    assert "А в пятницу прогулку ведёт Ноза Усманова." in text
