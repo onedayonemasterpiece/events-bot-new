@@ -983,3 +983,10 @@ def test_warm_pgvector_targets_keep_partial_cache_and_rebuild_dependents(tmp_pat
         assert fetched == [], "unchanged warm full export must not fetch an old unverified tail"
         assert audited == []
         assert result["related"]["1"]["strict_verified"]
+        if cap == 0:
+            incompatible = json.loads(cache_path.read_text())
+            incompatible["schema_version"] = "unknown-cache-contract"
+            cache_path.write_text(json.dumps(incompatible))
+            rebuilt = run(None)
+            assert set(fetched) == set(range(1, 7)), "incompatible full cache must bootstrap instead of erasing output"
+            assert all(rebuilt["related"][str(i)]["strict_verified"] for i in range(1, 7))
