@@ -105,8 +105,11 @@ async def ensure_vk_avatar(owner: int) -> Path | None:
 
 
 def _identity_names(profile: dict[str, Any]) -> set[str]:
+    from guide_excursions.identity_policy import _candidate_anchor
     names = set()
-    for value in (profile.get("display_name"), profile.get("marketing_name")):
+    rollup = json.loads(profile.get("facts_rollup_json") or "{}")
+    guide_name = _candidate_anchor(rollup.get("guide_line")) if profile.get("profile_kind") in {"person", "guide"} else ""
+    for value in (profile.get("display_name"), profile.get("marketing_name"), guide_name):
         value = str(value or "").split(" — ")[0].strip()
         variants = [value, re.sub(r"\s*\([^)]*\)", "", value)]
         if match := re.fullmatch(r"\S+\s+\(([^)]+)\)(.*)", value):
@@ -126,6 +129,8 @@ def guide_participants(row: dict[str, Any], profiles: list[dict[str, Any]]) -> l
         for name in names if isinstance(names, list) else []:
             key = " ".join(str(name).casefold().replace("ё", "е").split())
             matches = [p for p in profiles if key in _identity_names(p)]
+            aliases = set().union(*(_identity_names(p) for p in matches))
+            matches = [p for p in profiles if aliases & _identity_names(p)]
             owners = set()
             paths = set()
             for profile in matches:
@@ -155,7 +160,7 @@ async def prepare_guide_avatars(rows: list[dict[str, Any]], db: Any = None) -> N
         async with db.raw_conn() as conn:
             conn.row_factory = aiosqlite.Row
             profiles = [dict(p) for p in await (await conn.execute(
-                "SELECT display_name,marketing_name,source_links_json,facts_rollup_json FROM guide_profile"
+                "SELECT display_name,marketing_name,profile_kind,source_links_json,facts_rollup_json FROM guide_profile"
             )).fetchall()]
     for row in rows:
         participants = guide_participants(row, profiles)
@@ -184,9 +189,9 @@ async def prepare_guide_avatars(rows: list[dict[str, Any]], db: Any = None) -> N
             for person in participants:
                 if not person.get("owner") and _identity_names({"display_name": person["name"]}) & _identity_names({"display_name": public_name}):
                     person.update(owner=owner, path=str(path))
-            if not any(p.get("owner") == owner for p in participants):
+            if not participants:
                 participants.append({"name": public_name or row.get("source_title"),
-                    "roles": ["Источник"], "owner": owner, "path": str(path)})
+                    "roles": [], "owner": owner, "path": str(path)})
 
 
 def source_medallions(urls: Any, *, index: dict[str, Any] | None = None) -> list[dict[str, Any]]:

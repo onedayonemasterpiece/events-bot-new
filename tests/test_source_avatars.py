@@ -116,6 +116,80 @@ async def test_source_matching_an_explicit_organizer_gets_that_role_once(tmp_pat
     assert people[1]['owner'] == -237389053 and people[1]['roles'] == ['Организатор']
 
 
+def test_old_card_features_and_full_size_horizontal_participants_are_preserved(monkeypatch):
+    from guide_excursions import visual_digest as visual
+    avatars_drawn, badges, chips, texts = [], [], [], []
+    monkeypatch.setattr(visual, '_draw_avatar', lambda img, row, x, y, size, *args: avatars_drawn.append((x,y,size)))
+    original_badges, original_chip, original_text = visual._draw_icon_badges, visual._draw_chip, ImageDraw.ImageDraw.text
+    def badge(img, modes, *args): badges.extend(modes); return original_badges(img,modes,*args)
+    def chip(draw, text, *args): chips.append(text); return original_chip(draw,text,*args)
+    def text(draw, xy, value, *args, **kwargs): texts.append(value); return original_text(draw,xy,value,*args,**kwargs)
+    monkeypatch.setattr(visual, '_draw_icon_badges', badge)
+    monkeypatch.setattr(visual, '_draw_chip', chip)
+    monkeypatch.setattr(ImageDraw.ImageDraw, 'text', text)
+    row = {'canonical_title': 'Амалиенау', 'date': '2026-11-20', 'seats_text':'10 мест',
+        'fact_pack': {'group_format':'walking_tour', 'route_summary':'Амалиенау'},
+        'participant_medallions': [ {'name':'Гид Один','roles':['Гид']}, {'name':'Проект','roles':['Организатор']} ]}
+    visual.render_visual_digest_card([row], issue_id=309)
+    assert [a[2] for a in avatars_drawn] == [140,140]
+    assert avatars_drawn[0][1] == avatars_drawn[1][1]
+    assert avatars_drawn[1][0]-avatars_drawn[0][0] == 112
+    assert 'walk' in badges and chips == ['10 мест']
+    assert 'архитектура · виллы · детали' in texts
+    assert not set(texts) & {'Гид','Организатор','Источник','Источник ВКонтакте'}
+    assert visual._modes_for({'fact_pack':{'group_format':'bus_tour'}}) == ['bus']
+    assert visual._seats_text({'seats_text':'7+', 'fact_pack':{'seats_text':None}}) == ''
+
+
+def test_route_title_is_not_repeated_as_the_place_for_real_new_tour():
+    from guide_excursions.visual_digest import _place_line
+    assert _place_line({'canonical_title':'Зелёные истории', 'city':'Калининград',
+        'fact_pack':{'route_summary':'Зелёные истории'}}) == 'Калининград'
+
+
+def test_existing_person_profile_alias_keeps_one_portrait_for_both_roles():
+    profiles = [
+        {'display_name':'Amber Fringilla','profile_kind':'person',
+         'facts_rollup_json':'{"guide_line":"Юлия Гришанова, орнитолог и гид"}'},
+        {'display_name':'Юлия Гришанова — экопрогулки','profile_kind':'guide',
+         'facts_rollup_json':'{"vk_user_id":51545052}'},
+    ]
+    people = avatars.guide_participants({'guide_names':['Юлия Гришанова'],
+        'organizer_names':['Amber Fringilla']},profiles)
+    assert len(people) == 1 and people[0]['owner'] == 51545052
+    assert people[0]['roles'] == ['Гид','Организатор']
+    profiles[0]['profile_kind']='project'
+    assert len(avatars.guide_participants({'guide_names':['Юлия Гришанова'],
+        'organizer_names':['Amber Fringilla']},profiles)) == 2
+
+
+def test_card_description_spends_space_on_new_facts():
+    from guide_excursions.visual_digest import _card_description
+    row = {'canonical_title': 'Зелёные истории', 'guide_names': ['Ольга Рубцова'],
+           'organizer_names': ['80 ЛЕТ ЕДИНСТВА'],
+           'fact_pack': {'main_hook': 'экскурсия проекта 80 ЛЕТ ЕДИНСТВА с музыкой, играми и квестами'},
+           'digest_blurb': 'Приглашаем на экскурсию «Зелёные истории» 17 ноября в 14:00. Гид — Ольга Рубцова.'}
+    assert _card_description(row, 'Ольга Рубцова, 80 ЛЕТ ЕДИНСТВА') == 'С музыкой, играми и квестами'
+    row = {'canonical_title': 'Секреты чёрного золота: экскурсия на Осетровую ферму',
+           'fact_pack': {'main_hook': 'экскурсия на Осетровую ферму с секретами чёрного золота'},
+           'digest_blurb': 'Увлекательная экскурсия на Осетровую ферму с дегустацией эксклюзивных закусок'}
+    assert _card_description(row) == 'С дегустацией эксклюзивных закусок'
+    assert _card_description({'canonical_title': 'Поездка', 'digest_blurb': 'Поездка'}) == ''
+
+
+def test_card_does_not_repeat_named_venue_below_title(monkeypatch):
+    from guide_excursions.visual_digest import render_visual_digest_card
+    texts = []
+    original = ImageDraw.ImageDraw.text
+    def capture(self, xy, text, *args, **kwargs):
+        texts.append(text)
+        return original(self, xy, text, *args, **kwargs)
+    monkeypatch.setattr(ImageDraw.ImageDraw, 'text', capture)
+    render_visual_digest_card([{'canonical_title': 'Экскурсия на Осетровую ферму',
+        'route_summary': 'Осетровую ферму', 'date': '2026-11-22'}], issue_id=1)
+    assert 'Осетровую ферму' not in texts
+
+
 @pytest.mark.parametrize('original_cached', [False, True])
 def test_publisher_avatar_is_not_an_original_source_fallback(tmp_path, monkeypatch, original_cached):
     from tg_graphic_medallions import resolve_event_graphic_medallions
