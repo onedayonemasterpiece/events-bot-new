@@ -451,21 +451,3 @@ def test_related_embedding_ignores_generated_facets_and_place() -> None:
     assert "Краеведение" not in before.related_embedding_input
     assert "Янтарный" not in before.related_embedding_input
     assert before.search_embedding_input != after.search_embedding_input
-
-
-def test_related_doc_uses_one_factual_summary_and_falls_back_to_description() -> None:
-    event = _event(11068, title="Властелин колец: Две крепости")
-    event.update(summary="Кинопоказ второй части трилогии.", description_html="<p>Информация о студиях фильма.</p>")
-    options = dict(site_origin="https://kenigevents.ru", base_path="", ics_base_url="")
-    doc = sync.build_search_doc(event, **options)
-    assert doc.document["related_digest"] == event["summary"]
-    assert "Информация о студиях фильма." in doc.search_embedding_input
-
-    event["description_html"] = "<p>Подробное описание кинопоказа.</p>"
-    edited = sync.build_search_doc(event, **options)
-    assert edited.document["related_text_hash"] == doc.document["related_text_hash"]
-    assert edited.document["text_hash"] != doc.document["text_hash"]
-    event["summary"] = "  "
-    fallback = sync.build_search_doc(event, **options)
-    assert fallback.document["related_digest"] == "Подробное описание кинопоказа."
-    assert fallback.document["related_text_hash"] != edited.document["related_text_hash"]

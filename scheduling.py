@@ -4088,6 +4088,14 @@ def schedule_event_batch(
 # APScheduler wrapper used by the main application
 
 _scheduler: AsyncIOScheduler | None = None
+
+
+def request_guide_result_import() -> None:
+    """Wake the existing durable consumer after Kaggle has delivered files."""
+    if _scheduler is not None and _scheduler.get_job("kaggle_recovery"):
+        _scheduler.modify_job("kaggle_recovery", next_run_time=datetime.now(timezone.utc))
+
+
 _run_meta: dict[str, tuple[str, float]] = {}
 _heavy_job_lock = asyncio.Lock()
 _VIDEO_TOMORROW_EXISTING_SESSION_STATUSES: set[str] = {
@@ -5920,8 +5928,11 @@ def startup(
         logging.info("SCHED skipping telegraph_cache_sanitize (ENABLE_TELEGRAPH_CACHE_SANITIZER!=1)")
 
     enable_kaggle_recovery = _env_enabled("ENABLE_KAGGLE_RECOVERY", default=is_prod)
-    if enable_kaggle_recovery:
-        from kaggle_recovery import kaggle_recovery_scheduler
+    if enable_kaggle_recovery or _guide_monitoring_schedule_settings()[0]:
+        if enable_kaggle_recovery:
+            from kaggle_recovery import kaggle_recovery_scheduler
+        else:
+            from guide_excursions.service import resume_guide_monitor_jobs as kaggle_recovery_scheduler
         interval_raw = os.getenv("KAGGLE_RECOVERY_INTERVAL_MINUTES", "5").strip()
         try:
             interval_min = max(1, int(interval_raw))

@@ -242,3 +242,86 @@ list; sparse status updates still preserve roles. The distinguishing test uses
 the ordinary results importer twice, fails before the change with the old
 organizer still present, and passes after it. This fixes the stored data path,
 not only its portrait rendering.
+
+
+### 2026-11-16: durable guide recovery after a container restart
+
+The owner requested a permanent fix for a remote scan whose local poller dies
+at deployment. Live run8a5351821148/version17 continued while ops12367 became
+crashed. Production has ENABLE_KAGGLE_RECOVERY=0 intentionally; consequently
+neither its broad periodic sweep nor startup sweep handled guide results.
+Do not enable the other product recoveries to repair this narrow failure.
+
+The existing recovery interval now selects the guide-only handler when guide
+scheduling is enabled and the broad switch remains off. It uses the existing
+run lock instead of a PID comparison that fails after Docker reuses PID1.
+Downloaded exact results are recorded in existing registry metadata before
+import. Failed materialization retains that job for a later ordinary tick.
+An accepted ops_run import_summary receipt is reused rather than materialized
+again if the process exits before registry settlement. The common importer
+reconciles the exact completed Kaggle ledger and its owned session lease.
+No new table, scheduler, model, scan, queue or general recovery switch.
+
+Baseline regressions failed for missing periodic registration, reused PID and
+repeated accepted import. Focused guide/scheduler checks pass. Full relevant
+scheduler/guide/video/session regression run is recorded in task evidence.
+Production deployment and automatic acceptance of17 are separate live checks;
+this entry does not claim they have completed. Visual rendering is unchanged.
+
+Expanded local regression: 218 tests PASS, including scheduler, guide, Kaggle status, video poller/pipeline and partner scheduling. Initial five video fixture failures were due to missing tracked CherryFlash assets in the sparse checkout; restoring those tracked paths resolved all five. Runtime release remains a separate live acceptance step.
+
+### 16 November 2026 — Transport evidence on schedule cards
+
+The old card selected walking from street names and missed the extracted value
+`walking_tour`. Replacing an occurrence fact pack on a sparse update could also
+discard transport. The normal import now keeps post-linked, scoped transport
+claims. Card selection uses direct evidence, a named route template, or an
+explicitly linked monthly VK programme. Group size remains a participation fact.
+
+Retained comparison: `transport-d07db37d/` in the incident artifact directory.
+Nine real primary inputs produced 26 Tier-1/template rows on main and 30 on the
+candidate. On a disposable import, the 20 and 28 November “Рассвет над Балтикой”
+cards showed walking with both the schedule (wall-211429559_3892) and programme
+(wall6939421_6285) URLs. The 22 November farm card had no transport. The source
+poster and both canonical posts were already inspected; neither has a repost
+that explains these cases. This change has no VK ingestion or publisher delta.
+Release, live import and public card verification belong to coordinator acceptance.
+
+Coordinator review reproduced 13 legacy-icon regressions from actual production
+claim spellings (including `walking tour`, «пешеходная», «автобусная»). Exact
+alias normalization now reads only the existing type field; title/geography
+guesses stay removed. The distinguishing regression changed from 13 FAIL / 2 PASS
+to all PASS. Independent integrated transport/import/push/recovery tests: 89 PASS.
+Avatar layout PR1026 stays separate; this entry does not claim a live typed import.
+
+### 16 November 2026 — Coordinator release and automatic scan acceptance
+
+PR 1031 merged after four successful CI checks. Independent integration tests: 89
+PASS; legacy regression before correction: 13 FAIL / 2 PASS. Events-only release
+2397c970d988333f8e1e6ec61de4b052f344919d uses immutable image
+24dad7d68dcc2ec068e8420d4fab5966e077cd2abf719bbabacc317a900050e8
+(`guide-transport-20261116`). All 4522 tracked files passed verification. Isolated
+preflight exercised legacy walking/bus/mixed types and the negative geographic
+control. Live readiness, database, scheduler and tasks are healthy. Existing
+environment, mounts, data and Kotopogoda were preserved. Rollback is the
+previous `guide-result-push-20261116` image a204fc391382. This release does not
+activate the separate avatar layout or the prototype narrative writer.
+
+The ordinary recovery scheduler accepted LIGHT 18 / run 495d0491c019 in ops 12385
+SUCCESS at 14:15 Kaliningrad, without manual resume. All 192 source reports are
+ok, including late IDs 190–196; no enabled source is missing. 173 posts, 51 LLM
+OK, zero deferred/errors, 3 created and 22 updated. These are raw row counts:
+784 is undated/ineligible;785 is a variant of 781 from the same original
+post 23490;783 offers a December 15 visit for an organized school group. Do not
+report these as three new unique public tours.
+
+The first real direct-push run on this release and old programme grounding
+remain separate live acceptance steps. The November 2 programme post 6285 is
+absent from the imported posts and outside a normal five-day full scan; a
+subsequent successful full alone cannot establish that specific claim. No
+manual transport, source dates or event rows were assigned. Retained receipts:
+`guide18-auto-import-acceptance-20261116.json`,
+`guide18-new-occurrences-identity-20261116.json`,
+`guide-transport-live-acceptance-20261116.log` in the canonical incident artifact
+directory. Completed preflight fixtures can be removed; keep release rollback
+and canonical source results.

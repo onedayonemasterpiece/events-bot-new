@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import requests
@@ -362,7 +363,11 @@ async def test_resume_guide_monitor_jobs_uses_output_when_status_lookup_fails(
             import_completed=True,
         )
 
-    async def fake_remove_job(job_type: str, kernel_ref: str) -> None:
+    async def fake_update_job_meta(*args, **kwargs):
+        return None
+
+    async def fake_remove_job(job_type: str, kernel_ref: str, *, run_id=None) -> None:
+        assert run_id == "f18774f300c7"
         removed.append((job_type, kernel_ref))
 
     monkeypatch.setattr(guide_service, "KaggleClient", DummyKaggleClient)
@@ -374,8 +379,12 @@ async def test_resume_guide_monitor_jobs_uses_output_when_status_lookup_fails(
         fake_run_guide_import_from_results,
     )
     monkeypatch.setattr(guide_service, "remove_job", fake_remove_job)
+    monkeypatch.setattr(guide_service, "update_job_meta", fake_update_job_meta)
 
-    recovered = await guide_service.resume_guide_monitor_jobs(object(), None, chat_id=123)
+    async def no_delivered_jobs(_db):
+        return []
+    monkeypatch.setattr("guide_excursions.result_delivery.pending_result_jobs", no_delivered_jobs)
+    recovered = await guide_service.resume_guide_monitor_jobs(SimpleNamespace(path=str(tmp_path / "db.sqlite")), None, chat_id=123)
 
     assert recovered == 1
     assert len(imported) == 1

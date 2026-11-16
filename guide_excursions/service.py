@@ -24,8 +24,8 @@ from aiogram.types import BufferedInputFile
 from admin_chat import resolve_superadmin_chat_id
 from db import Database
 from heavy_ops import heavy_operation
-from kaggle_registry import list_jobs, remove_job
-from kaggle_status import enrich_kaggle_status_from_ledger
+from kaggle_registry import list_jobs, remove_job, update_job_meta
+from kaggle_status import enrich_kaggle_status_from_ledger, reconcile_kaggle_run_terminal_from_host
 from ops_run import finish_ops_run, start_ops_run
 from remote_telegram_session import (
     RemoteTelegramSessionBusyError,
@@ -65,6 +65,7 @@ from .parser import (
 from .public_identity import resolve_public_guide_names
 from .scanner import GuideScannedPost, scan_source_posts
 from .seed import seed_guide_sources
+from .result_delivery import serialized_guide_process
 from .telethon_client import create_telethon_runtime_client
 
 logger = logging.getLogger(__name__)
@@ -154,8 +155,6 @@ GUIDE_RECENT_CHANGES_DEFAULT_HOURS = max(
     min(int((os.getenv("GUIDE_RECENT_CHANGES_DEFAULT_HOURS") or "24") or 24), 720),
 )
 
-_RUN_LOCK = asyncio.Lock()
-_GUIDE_MONITOR_RECOVERY_ACTIVE: set[str] = set()
 
 
 @dataclass(slots=True)
@@ -2379,6 +2378,18 @@ async def _insert_occurrence_claims(
                 "organizer_names": list(parsed.organizer_names),
             }
         )
+    claims = [claim for claim in claims if claim["fact_key"] not in {"transport", "program"}
+              and not (claim["fact_key"] == "group_format" and (fact_pack or {}).get("group_format"))]
+    if program := (fact_pack or {}).get("program"):
+        claims.append({"fact_key": "program", "fact_value": program})
+    if group_format := (fact_pack or {}).get("group_format"):
+        claims.append({"fact_key": "group_format", "fact_value": group_format})
+    transport = (fact_pack or {}).get("transport")
+    if isinstance(transport, Mapping) and isinstance(transport.get("modes"), list) and transport.get("quote"):
+        provenance = {key: transport.get(key) for key in ("quote", "scope", "source_block_id")}
+        if provenance["scope"] == "program" and program and not parsed.date_iso:
+            provenance["program"] = program
+        claims.append({"fact_key": "transport", "fact_value": transport["modes"], "provenance": provenance})
     await _insert_entity_claims(
         conn,
         entity_kind="occurrence",
@@ -2397,6 +2408,7 @@ async def _upsert_occurrence(
     parsed: GuideParsedOccurrence,
     template_id: int | None,
     fact_pack: Mapping[str, Any] | None = None,
+    fact_claims: Sequence[Mapping[str, Any]] | None = None,
 ) -> tuple[int, bool]:
     cur = await conn.execute(
         """
@@ -2617,6 +2629,7 @@ async def _upsert_occurrence(
         post_id=post_id,
         parsed=parsed,
         fact_pack=fact_pack,
+        fact_claims=fact_claims,
     )
     return occurrence_id, created
 
@@ -3175,6 +3188,7 @@ async def _import_source_payload(
                 parsed=parsed,
                 template_id=template_id,
                 fact_pack=fact_pack,
+                fact_claims=occurrence_claims,
             )
             if occurrence_id:
                 enrich_targets.append(
@@ -3193,14 +3207,6 @@ async def _import_source_payload(
                         "guide_names": list(parsed.guide_names),
                         "post_excerpt": post.text,
                     }
-                )
-                await _insert_occurrence_claims(
-                    conn,
-                    occurrence_id=occurrence_id,
-                    post_id=post_id,
-                    parsed=parsed,
-                    fact_pack=fact_pack,
-                    fact_claims=occurrence_claims,
                 )
                 if created:
                     metrics["occurrences_created"] += 1
@@ -3281,6 +3287,9 @@ async def _import_results_file_inner(
     }
     errors: list[str] = []
     source_reports: list[dict[str, Any]] = []
+    if data.get("run_error"):
+        errors.append(str(data["run_error"]))
+        metrics["errors"] += 1
     occurrence_changes: list[dict[str, Any]] = []
     async with db.raw_conn() as conn:
         await _enable_row_factory(conn)
@@ -3385,6 +3394,11 @@ async def _import_results_file(
             reason="after_results_import",
         )
     summary["media_retention"] = retention_runs
+    if summary.get("run_id"):
+        await reconcile_kaggle_run_terminal_from_host(
+            db, run_id=f"guide_monitor:{summary['run_id']}",
+            message="Guide result materialized through ordinary importer",
+        )
     return metrics, errors, summary
 
 
@@ -3529,6 +3543,7 @@ def _guide_monitor_completion_lines(
     return lines
 
 
+@serialized_guide_process
 async def run_guide_import_from_results(
     db: Database,
     *,
@@ -3543,6 +3558,30 @@ async def run_guide_import_from_results(
     send_progress: bool = False,
     kaggle_meta: dict[str, Any] | None = None,
 ) -> GuideMonitorResult:
+    async with db.raw_conn() as conn:
+        await _enable_row_factory(conn)
+        cur = await conn.execute(
+            "SELECT id, metrics_json, details_json FROM ops_run "
+            "WHERE kind='guide_monitoring' AND status IN ('success','partial','error') "
+            "AND json_extract(details_json, '$.run_id')=? "
+            "AND json_type(details_json, '$.import_summary')='object' "
+            "ORDER BY id DESC LIMIT 1", (run_id,),
+        )
+        accepted = await cur.fetchone()
+    if accepted:
+        from .result_delivery import acknowledge_import
+        acknowledge_import(run_id)
+        details = _safe_json_object(accepted["details_json"])
+        await reconcile_kaggle_run_terminal_from_host(
+            db, run_id=f"guide_monitor:{run_id}", message="Guide import already accepted",
+        )
+        logger.info("guide_monitor.import_already_accepted run_id=%s ops_run_id=%s", run_id, accepted["id"])
+        return GuideMonitorResult(
+            run_id=run_id, ops_run_id=int(accepted["id"]), trigger=trigger, mode=mode,
+            metrics=_safe_json_object(accepted["metrics_json"]),
+            errors=list(details.get("errors") or []), warnings=list(details.get("warnings") or []),
+            import_completed=True,
+        )
     started_monotonic = time.monotonic()
     import_completed = False
     metrics = {
@@ -3609,6 +3648,10 @@ async def run_guide_import_from_results(
     run_details["warnings"] = warnings[:20]
     await finish_ops_run(db, run_id=ops_run_id, status=status, metrics=metrics, details=run_details)
 
+    if import_completed:
+        from .result_delivery import acknowledge_import
+        acknowledge_import(run_id)
+
     if send_progress and bot and chat_id:
         await bot.send_message(
             int(chat_id),
@@ -3637,6 +3680,7 @@ async def run_guide_import_from_results(
     )
 
 
+@serialized_guide_process
 async def run_guide_monitor(
     db: Database,
     bot: Bot | None,
@@ -3682,198 +3726,197 @@ async def run_guide_monitor(
         "occurrence_changes": [],
     }
 
-    async with _RUN_LOCK:
-        async with heavy_operation(
+    async with heavy_operation(
+        kind="guide_monitoring",
+        trigger=trigger,
+        run_id=run_id,
+        operator_id=operator_id,
+        chat_id=chat_id,
+    ) as allowed:
+        if not allowed:
+            raise RuntimeError("guide_monitoring is already running")
+
+        ops_run_id = await start_ops_run(
+            db,
             kind="guide_monitoring",
             trigger=trigger,
-            run_id=run_id,
-            operator_id=operator_id,
             chat_id=chat_id,
-        ) as allowed:
-            if not allowed:
-                raise RuntimeError("guide_monitoring is already running")
-
-            ops_run_id = await start_ops_run(
-                db,
-                kind="guide_monitoring",
-                trigger=trigger,
-                chat_id=chat_id,
-                operator_id=operator_id,
-                details=run_details,
+            operator_id=operator_id,
+            details=run_details,
+        )
+        if send_progress and bot and chat_id:
+            await bot.send_message(
+                int(chat_id),
+                (
+                    "🧭 Запускаю мониторинг экскурсий.\n"
+                    f"transport={'kaggle' if GUIDE_EXCURSIONS_KAGGLE_ENABLED else 'local'}\n"
+                    f"mode={html.escape(mode)}\n"
+                    f"limit={limit}, days_back={days_back}\n"
+                    f"run_id={html.escape(run_id)}"
+                ),
+                parse_mode="HTML",
+                disable_web_page_preview=True,
             )
+
+        client = None
+        try:
+            if GUIDE_EXCURSIONS_KAGGLE_ENABLED:
+                kaggle_status_message_id: int | None = None
+
+                async def _update_kaggle_status(phase: str, kernel_ref: str, status: dict | None) -> None:
+                    nonlocal kaggle_status_message_id
+                    if not (send_progress and bot and chat_id):
+                        return
+                    status = await enrich_kaggle_status_from_ledger(
+                        db,
+                        f"guide_monitor:{run_id}",
+                        status,
+                    )
+                    text = format_kaggle_status_message(phase, kernel_ref, status)
+                    try:
+                        if kaggle_status_message_id is None:
+                            sent = await bot.send_message(
+                                int(chat_id),
+                                text,
+                                disable_web_page_preview=True,
+                            )
+                            kaggle_status_message_id = getattr(sent, "message_id", None)
+                        else:
+                            await bot.edit_message_text(
+                                chat_id=int(chat_id),
+                                message_id=int(kaggle_status_message_id),
+                                text=text,
+                                disable_web_page_preview=True,
+                            )
+                    except Exception:
+                        logger.exception("guide_monitor: failed to update kaggle status")
+
+                try:
+                    await raise_if_remote_telegram_session_busy(
+                        current_job_type="guide_monitoring",
+                        current_auth_scope=remote_telegram_auth_scope(),
+                    )
+                    results_path, kaggle_meta = await run_guide_monitor_kaggle(
+                        db,
+                        run_id=run_id,
+                        mode=mode,
+                        limit=limit,
+                        days_back=days_back,
+                        chat_id=chat_id,
+                        recovery_meta={
+                            "trigger": trigger,
+                            "auto_publish_after_import": auto_publish_after_import,
+                        },
+                        status_callback=_update_kaggle_status if send_progress and bot and chat_id else None,
+                    )
+                    run_details["kaggle_meta"] = dict(kaggle_meta or {})
+                    run_details["results_path"] = str(results_path)
+                    recovery_kernel_ref = collapse_ws((kaggle_meta or {}).get("kernel_ref"))
+                    import_metrics, import_errors, import_summary = await _import_results_file(
+                        db,
+                        results_path=str(results_path),
+                    )
+                    import_completed = True
+                    run_details["import_summary"] = dict(import_summary or {})
+                    run_details["source_reports"] = list(import_summary.get("sources") or [])
+                    run_details["occurrence_changes"] = list(import_summary.get("occurrence_changes") or [])
+                    for key, value in import_metrics.items():
+                        metrics[key] = metrics.get(key, 0) + int(value or 0)
+                    if import_errors:
+                        errors.extend(import_errors)
+                    partial_warning = _import_partial_warning(import_summary)
+                    if partial_warning:
+                        warnings.append(partial_warning)
+                except RemoteTelegramSessionBusyError:
+                    raise
+                except Exception as exc:
+                    logger.exception("guide_monitor: kaggle path failed")
+                    errors.append(f"Kaggle path failed: {type(exc).__name__}: {exc}")
+                    metrics["errors"] += 1
+                    if remote_session_busy or not GUIDE_EXCURSIONS_LOCAL_FALLBACK_ENABLED:
+                        raise
+                    run_details["transport"] = "local_fallback"
+                    if send_progress and bot and chat_id:
+                        await bot.send_message(
+                            int(chat_id),
+                            "⚠️ Kaggle путь не завершился, перехожу на локальный fallback scan/import.",
+                            disable_web_page_preview=True,
+                        )
+            if (not GUIDE_EXCURSIONS_KAGGLE_ENABLED) or (
+                GUIDE_EXCURSIONS_LOCAL_FALLBACK_ENABLED and metrics["sources_scanned"] == 0 and bool(errors)
+            ):
+                if not GUIDE_EXCURSIONS_KAGGLE_ENABLED:
+                    run_details["transport"] = "local"
+                async with db.raw_conn() as conn:
+                    await _enable_row_factory(conn)
+                    await seed_guide_sources(conn)
+                    await conn.commit()
+                    sources = await _get_enabled_sources(conn)
+                client = await create_telethon_runtime_client()
+                async with db.raw_conn() as conn:
+                    await _enable_row_factory(conn)
+                    for source in sources:
+                        if (collapse_ws(_mapping_value(source, "platform")) or "telegram") != "telegram":
+                            continue
+                        try:
+                            source_metrics, source_report = await _scan_and_import_source(
+                                conn,
+                                client,
+                                source_row=source,
+                                limit=limit,
+                                days_back=days_back,
+                            )
+                            run_details["source_reports"].append(source_report)
+                            run_details["occurrence_changes"].extend(list(source_report.get("occurrence_changes") or []))
+                            metrics["sources_scanned"] += 1
+                            for key, value in source_metrics.items():
+                                metrics[key] = metrics.get(key, 0) + int(value or 0)
+                        except Exception as exc:
+                            logger.exception("guide_monitor: source failed username=%s", source["username"])
+                            metrics["errors"] += 1
+                            errors.append(f"@{source['username']}: {type(exc).__name__}: {exc}")
+                    await conn.commit()
+        except RemoteTelegramSessionBusyError as exc:
+            logger.warning(
+                "guide_monitor.remote_telegram_session_busy run_id=%s conflicts=%s",
+                run_id,
+                [conflict.kernel_ref for conflict in exc.conflicts],
+            )
+            remote_session_busy = True
+            metrics["errors"] += 1
+            run_details["remote_telegram_session_conflicts"] = [
+                {
+                    "job_type": conflict.job_type,
+                    "kernel_ref": conflict.kernel_ref,
+                    "run_id": conflict.run_id,
+                    "status": conflict.status,
+                    "failure_message": conflict.failure_message,
+                    "created_at": conflict.created_at,
+                }
+                for conflict in exc.conflicts
+            ]
+            errors.append(f"remote_telegram_session_busy: {exc}")
             if send_progress and bot and chat_id:
                 await bot.send_message(
                     int(chat_id),
-                    (
-                        "🧭 Запускаю мониторинг экскурсий.\n"
-                        f"transport={'kaggle' if GUIDE_EXCURSIONS_KAGGLE_ENABLED else 'local'}\n"
-                        f"mode={html.escape(mode)}\n"
-                        f"limit={limit}, days_back={days_back}\n"
-                        f"run_id={html.escape(run_id)}"
+                    "\n".join(
+                        format_remote_telegram_session_busy_lines(
+                            exc.conflicts,
+                            actor_label="Мониторинг экскурсий",
+                        )
                     ),
-                    parse_mode="HTML",
                     disable_web_page_preview=True,
                 )
-
-            client = None
-            try:
-                if GUIDE_EXCURSIONS_KAGGLE_ENABLED:
-                    kaggle_status_message_id: int | None = None
-
-                    async def _update_kaggle_status(phase: str, kernel_ref: str, status: dict | None) -> None:
-                        nonlocal kaggle_status_message_id
-                        if not (send_progress and bot and chat_id):
-                            return
-                        status = await enrich_kaggle_status_from_ledger(
-                            db,
-                            f"guide_monitor:{run_id}",
-                            status,
-                        )
-                        text = format_kaggle_status_message(phase, kernel_ref, status)
-                        try:
-                            if kaggle_status_message_id is None:
-                                sent = await bot.send_message(
-                                    int(chat_id),
-                                    text,
-                                    disable_web_page_preview=True,
-                                )
-                                kaggle_status_message_id = getattr(sent, "message_id", None)
-                            else:
-                                await bot.edit_message_text(
-                                    chat_id=int(chat_id),
-                                    message_id=int(kaggle_status_message_id),
-                                    text=text,
-                                    disable_web_page_preview=True,
-                                )
-                        except Exception:
-                            logger.exception("guide_monitor: failed to update kaggle status")
-
-                    try:
-                        await raise_if_remote_telegram_session_busy(
-                            current_job_type="guide_monitoring",
-                            current_auth_scope=remote_telegram_auth_scope(),
-                        )
-                        results_path, kaggle_meta = await run_guide_monitor_kaggle(
-                            db,
-                            run_id=run_id,
-                            mode=mode,
-                            limit=limit,
-                            days_back=days_back,
-                            chat_id=chat_id,
-                            recovery_meta={
-                                "trigger": trigger,
-                                "auto_publish_after_import": auto_publish_after_import,
-                            },
-                            status_callback=_update_kaggle_status if send_progress and bot and chat_id else None,
-                        )
-                        run_details["kaggle_meta"] = dict(kaggle_meta or {})
-                        run_details["results_path"] = str(results_path)
-                        recovery_kernel_ref = collapse_ws((kaggle_meta or {}).get("kernel_ref"))
-                        import_metrics, import_errors, import_summary = await _import_results_file(
-                            db,
-                            results_path=str(results_path),
-                        )
-                        import_completed = True
-                        run_details["import_summary"] = dict(import_summary or {})
-                        run_details["source_reports"] = list(import_summary.get("sources") or [])
-                        run_details["occurrence_changes"] = list(import_summary.get("occurrence_changes") or [])
-                        for key, value in import_metrics.items():
-                            metrics[key] = metrics.get(key, 0) + int(value or 0)
-                        if import_errors:
-                            errors.extend(import_errors)
-                        partial_warning = _import_partial_warning(import_summary)
-                        if partial_warning:
-                            warnings.append(partial_warning)
-                    except RemoteTelegramSessionBusyError:
-                        raise
-                    except Exception as exc:
-                        logger.exception("guide_monitor: kaggle path failed")
-                        errors.append(f"Kaggle path failed: {type(exc).__name__}: {exc}")
-                        metrics["errors"] += 1
-                        if remote_session_busy or not GUIDE_EXCURSIONS_LOCAL_FALLBACK_ENABLED:
-                            raise
-                        run_details["transport"] = "local_fallback"
-                        if send_progress and bot and chat_id:
-                            await bot.send_message(
-                                int(chat_id),
-                                "⚠️ Kaggle путь не завершился, перехожу на локальный fallback scan/import.",
-                                disable_web_page_preview=True,
-                            )
-                if (not GUIDE_EXCURSIONS_KAGGLE_ENABLED) or (
-                    GUIDE_EXCURSIONS_LOCAL_FALLBACK_ENABLED and metrics["sources_scanned"] == 0 and bool(errors)
-                ):
-                    if not GUIDE_EXCURSIONS_KAGGLE_ENABLED:
-                        run_details["transport"] = "local"
-                    async with db.raw_conn() as conn:
-                        await _enable_row_factory(conn)
-                        await seed_guide_sources(conn)
-                        await conn.commit()
-                        sources = await _get_enabled_sources(conn)
-                    client = await create_telethon_runtime_client()
-                    async with db.raw_conn() as conn:
-                        await _enable_row_factory(conn)
-                        for source in sources:
-                            if (collapse_ws(_mapping_value(source, "platform")) or "telegram") != "telegram":
-                                continue
-                            try:
-                                source_metrics, source_report = await _scan_and_import_source(
-                                    conn,
-                                    client,
-                                    source_row=source,
-                                    limit=limit,
-                                    days_back=days_back,
-                                )
-                                run_details["source_reports"].append(source_report)
-                                run_details["occurrence_changes"].extend(list(source_report.get("occurrence_changes") or []))
-                                metrics["sources_scanned"] += 1
-                                for key, value in source_metrics.items():
-                                    metrics[key] = metrics.get(key, 0) + int(value or 0)
-                            except Exception as exc:
-                                logger.exception("guide_monitor: source failed username=%s", source["username"])
-                                metrics["errors"] += 1
-                                errors.append(f"@{source['username']}: {type(exc).__name__}: {exc}")
-                        await conn.commit()
-            except RemoteTelegramSessionBusyError as exc:
-                logger.warning(
-                    "guide_monitor.remote_telegram_session_busy run_id=%s conflicts=%s",
-                    run_id,
-                    [conflict.kernel_ref for conflict in exc.conflicts],
-                )
-                remote_session_busy = True
-                metrics["errors"] += 1
-                run_details["remote_telegram_session_conflicts"] = [
-                    {
-                        "job_type": conflict.job_type,
-                        "kernel_ref": conflict.kernel_ref,
-                        "run_id": conflict.run_id,
-                        "status": conflict.status,
-                        "failure_message": conflict.failure_message,
-                        "created_at": conflict.created_at,
-                    }
-                    for conflict in exc.conflicts
-                ]
-                errors.append(f"remote_telegram_session_busy: {exc}")
-                if send_progress and bot and chat_id:
-                    await bot.send_message(
-                        int(chat_id),
-                        "\n".join(
-                            format_remote_telegram_session_busy_lines(
-                                exc.conflicts,
-                                actor_label="Мониторинг экскурсий",
-                            )
-                        ),
-                        disable_web_page_preview=True,
-                    )
-            except Exception as exc:
-                logger.exception("guide_monitor failed")
-                metrics["errors"] += 1
-                errors.append(f"{type(exc).__name__}: {exc}")
-            finally:
-                if client is not None:
-                    try:
-                        await client.disconnect()
-                    except Exception:
-                        logger.warning("guide_monitor: failed to disconnect telethon client", exc_info=True)
+        except Exception as exc:
+            logger.exception("guide_monitor failed")
+            metrics["errors"] += 1
+            errors.append(f"{type(exc).__name__}: {exc}")
+        finally:
+            if client is not None:
+                try:
+                    await client.disconnect()
+                except Exception:
+                    logger.warning("guide_monitor: failed to disconnect telethon client", exc_info=True)
 
     metrics["duration_sec"] = int(max(0, round(time.monotonic() - started_monotonic)))
     if remote_session_busy:
@@ -3884,6 +3927,9 @@ async def run_guide_monitor(
     run_details["warnings"] = warnings[:20]
     await finish_ops_run(db, run_id=ops_run_id, status=status, metrics=metrics, details=run_details)
 
+    if import_completed:
+        from .result_delivery import acknowledge_import
+        acknowledge_import(run_id)
     if recovery_kernel_ref and import_completed and not auto_publish_after_import:
         try:
             await clear_guide_monitor_recovery_job(recovery_kernel_ref)
@@ -3928,8 +3974,31 @@ async def resume_guide_monitor_jobs(
     bot: Bot | None,
     *,
     chat_id: int | None = None,
+    run_id: str | None = None,
+) -> int:
+    try:
+        return await _resume_guide_monitor_jobs(db, bot, chat_id=chat_id)
+    except BlockingIOError:
+        logger.info("guide_monitor.recovery_deferred other_process=true")
+        return 0
+
+
+@serialized_guide_process
+async def _resume_guide_monitor_jobs(
+    db: Database,
+    bot: Bot | None,
+    *,
+    chat_id: int | None = None,
 ) -> int:
     jobs = await list_jobs("guide_monitoring")
+    from .result_delivery import pending_result_jobs
+    delivered = await pending_result_jobs(db)
+    by_run = {str(job.get("meta", {}).get("run_id")): job for job in jobs}
+    for job in delivered:
+        previous = by_run.get(job["meta"]["run_id"], {})
+        job["meta"] = {**previous.get("meta", {}), **job["meta"]}
+        by_run[job["meta"]["run_id"]] = job
+    jobs = list(by_run.values())
     if not jobs:
         return 0
 
@@ -3941,176 +4010,179 @@ async def resume_guide_monitor_jobs(
     recovered = 0
     for job in jobs:
         kernel_ref = str(job.get("kernel_ref") or "").strip()
-        if not kernel_ref or kernel_ref in _GUIDE_MONITOR_RECOVERY_ACTIVE:
+        if not kernel_ref:
             continue
-        _GUIDE_MONITOR_RECOVERY_ACTIVE.add(kernel_ref)
-        try:
-            meta = job.get("meta") if isinstance(job.get("meta"), dict) else {}
-            owner_pid = meta.get("pid")
-            if owner_pid == os.getpid():
-                continue
+        meta = job.get("meta") if isinstance(job.get("meta"), dict) else {}
+        run_id = str(meta.get("run_id") or "").strip() or uuid.uuid4().hex[:12]
+        mode = collapse_ws(meta.get("mode")) or "full"
+        results_path_raw = collapse_ws(meta.get("results_path"))
+        auto_publish_after_import = bool(meta.get("auto_publish_after_import"))
+        results_path: Path | None = None
+        status: dict[str, Any] | None = None
+        transport = "kaggle_recovery"
+        if results_path_raw:
+            candidate = Path(results_path_raw)
+            if meta.get("push_delivery") or candidate.is_file():
+                results_path = candidate
+                transport = "kaggle_recovery_saved_results"
 
-            run_id = str(meta.get("run_id") or "").strip() or uuid.uuid4().hex[:12]
-            mode = collapse_ws(meta.get("mode")) or "full"
-            results_path_raw = collapse_ws(meta.get("results_path"))
-            auto_publish_after_import = bool(meta.get("auto_publish_after_import"))
-            results_path: Path | None = None
-            status: dict[str, Any] | None = None
-            transport = "kaggle_recovery"
-            if results_path_raw:
-                candidate = Path(results_path_raw)
-                if candidate.is_file():
-                    results_path = candidate
-                    transport = "kaggle_recovery_saved_results"
-
-            if results_path is None:
+        if results_path is None:
+            try:
+                status = await asyncio.to_thread(client.get_kernel_status, kernel_ref)
+            except Exception as exc:
+                logger.warning(
+                    "guide_monitor_recovery.status_failed_try_output kernel=%s run_id=%s",
+                    kernel_ref,
+                    run_id,
+                    exc_info=True,
+                )
+                status = {
+                    "status": "UNKNOWN",
+                    "failureMessage": str(exc) or type(exc).__name__,
+                }
                 try:
-                    status = await asyncio.to_thread(client.get_kernel_status, kernel_ref)
-                except Exception as exc:
-                    logger.warning(
-                        "guide_monitor_recovery.status_failed_try_output kernel=%s run_id=%s",
+                    results_path = await download_guide_results(client, kernel_ref, run_id)
+                except Exception:
+                    logger.exception(
+                        "guide_monitor_recovery.output_download_failed kernel=%s run_id=%s",
                         kernel_ref,
                         run_id,
-                        exc_info=True,
                     )
-                    status = {
-                        "status": "UNKNOWN",
-                        "failureMessage": str(exc) or type(exc).__name__,
-                    }
-                    try:
-                        results_path = await download_guide_results(client, kernel_ref, run_id)
-                    except Exception:
-                        logger.exception(
-                            "guide_monitor_recovery.output_download_failed kernel=%s run_id=%s",
-                            kernel_ref,
-                            run_id,
+                    continue
+
+            if results_path is None:
+                state = str(status.get("status") or "").lower()
+                if state in {"error", "failed", "cancelled"}:
+                    failure = collapse_ws(extract_guide_failure_message(status))
+                    await remove_job("guide_monitoring", kernel_ref)
+                    if bot and notify_chat_id:
+                        await bot.send_message(
+                            int(notify_chat_id),
+                            (
+                                "⚠️ guide_monitor recovery: "
+                                f"kernel {kernel_ref} завершился ошибкой"
+                                f"{': ' + failure if failure else ''}"
+                            ),
+                            disable_web_page_preview=True,
                         )
-                        continue
+                    continue
+                if state != "complete":
+                    continue
 
-                if results_path is None:
-                    state = str(status.get("status") or "").lower()
-                    if state in {"error", "failed", "cancelled"}:
-                        failure = collapse_ws(extract_guide_failure_message(status))
-                        await remove_job("guide_monitoring", kernel_ref)
-                        if bot and notify_chat_id:
-                            await bot.send_message(
-                                int(notify_chat_id),
-                                (
-                                    "⚠️ guide_monitor recovery: "
-                                    f"kernel {kernel_ref} завершился ошибкой"
-                                    f"{': ' + failure if failure else ''}"
-                                ),
-                                disable_web_page_preview=True,
-                            )
-                        continue
-                    if state != "complete":
-                        continue
+                results_path = await download_guide_results(client, kernel_ref, run_id)
 
-                    results_path = await download_guide_results(client, kernel_ref, run_id)
-
-            import_result = await run_guide_import_from_results(
-                db,
-                results_path=str(results_path),
-                bot=bot,
-                chat_id=notify_chat_id,
-                run_id=run_id,
-                trigger="recovery_import",
-                operator_id=0,
-                mode=mode,
-                transport=transport,
-                send_progress=bool(bot and notify_chat_id),
-                kaggle_meta={
-                    "kernel_ref": kernel_ref,
-                    "status": "complete",
-                    "status_data": status or {},
-                },
+        if results_path_raw != str(results_path):
+            await update_job_meta(
+                "guide_monitoring", kernel_ref,
+                meta_updates={"results_path": str(results_path)},
             )
-            keep_recovery_job = False
-            if auto_publish_after_import and not import_result.errors:
-                if bot is None:
+        import_result = await run_guide_import_from_results(
+            db,
+            results_path=str(results_path),
+            bot=bot,
+            chat_id=notify_chat_id,
+            run_id=run_id,
+            trigger="recovery_import",
+            operator_id=0,
+            mode=mode,
+            transport=transport,
+            send_progress=bool(bot and notify_chat_id),
+            kaggle_meta={
+                "kernel_ref": kernel_ref,
+                "status": "complete",
+                "status_data": status or {},
+            },
+        )
+        if not import_result.import_completed:
+            logger.warning(
+                "guide_monitor.recovery_import_incomplete kernel=%s run_id=%s ops_run_id=%s registry_retained=true",
+                kernel_ref, run_id, import_result.ops_run_id,
+            )
+            continue
+        keep_recovery_job = False
+        if auto_publish_after_import and not import_result.errors:
+            if bot is None:
+                keep_recovery_job = True
+            else:
+                try:
+                    publish_result = await publish_guide_digest(
+                        db,
+                        bot,
+                        family="new_occurrences",
+                        chat_id=notify_chat_id,
+                    )
+                except Exception as exc:
                     keep_recovery_job = True
+                    logger.exception(
+                        "guide_monitor recovery: scheduled digest publish failed kernel=%s run_id=%s",
+                        kernel_ref,
+                        run_id,
+                    )
+                    if notify_chat_id:
+                        await bot.send_message(
+                            int(notify_chat_id),
+                            (
+                                "❌ guide_monitor recovery: автопубликация digest не завершилась\n"
+                                f"kernel={kernel_ref}\n"
+                                f"reason={str(exc) or type(exc).__name__}"
+                            ),
+                            disable_web_page_preview=True,
+                        )
                 else:
-                    try:
-                        publish_result = await publish_guide_digest(
-                            db,
-                            bot,
-                            family="new_occurrences",
-                            chat_id=notify_chat_id,
-                        )
-                    except Exception as exc:
-                        keep_recovery_job = True
-                        logger.exception(
-                            "guide_monitor recovery: scheduled digest publish failed kernel=%s run_id=%s",
-                            kernel_ref,
-                            run_id,
-                        )
-                        if notify_chat_id:
+                    vk_result = None
+                    if publish_result.get("published") and guide_digest_vk_enabled():
+                        try:
+                            vk_result = await publish_latest_guide_digest_to_vk(
+                                db,
+                                bot,
+                                family="new_occurrences",
+                                issue_id=int(publish_result.get("issue_id") or 0),
+                            )
+                        except Exception as exc:
+                            logger.exception(
+                                "guide_monitor recovery: scheduled VK digest publish failed kernel=%s run_id=%s",
+                                kernel_ref,
+                                run_id,
+                            )
+                            vk_result = {"published": False, "reason": str(exc) or type(exc).__name__}
+                    if notify_chat_id:
+                        if publish_result.get("published"):
                             await bot.send_message(
                                 int(notify_chat_id),
                                 (
-                                    "❌ guide_monitor recovery: автопубликация digest не завершилась\n"
-                                    f"kernel={kernel_ref}\n"
-                                    f"reason={str(exc) or type(exc).__name__}"
+                                    "📣 guide_monitor recovery: scheduled digest опубликован\n"
+                                    f"issue_id={publish_result.get('issue_id')}\n"
+                                    f"targets={', '.join(publish_result.get('target_chats') or [str(publish_result.get('target_chat') or '—')])}"
+                                    + (
+                                        "\n"
+                                        f"vk={vk_result.get('url') or 'skipped'}"
+                                        if vk_result
+                                        else ""
+                                    )
                                 ),
                                 disable_web_page_preview=True,
                             )
-                    else:
-                        vk_result = None
-                        if publish_result.get("published") and guide_digest_vk_enabled():
-                            try:
-                                vk_result = await publish_latest_guide_digest_to_vk(
-                                    db,
-                                    bot,
-                                    family="new_occurrences",
-                                    issue_id=int(publish_result.get("issue_id") or 0),
-                                )
-                            except Exception as exc:
-                                logger.exception(
-                                    "guide_monitor recovery: scheduled VK digest publish failed kernel=%s run_id=%s",
-                                    kernel_ref,
-                                    run_id,
-                                )
-                                vk_result = {"published": False, "reason": str(exc) or type(exc).__name__}
-                        if notify_chat_id:
-                            if publish_result.get("published"):
-                                await bot.send_message(
-                                    int(notify_chat_id),
-                                    (
-                                        "📣 guide_monitor recovery: scheduled digest опубликован\n"
-                                        f"issue_id={publish_result.get('issue_id')}\n"
-                                        f"targets={', '.join(publish_result.get('target_chats') or [str(publish_result.get('target_chat') or '—')])}"
-                                        + (
-                                            "\n"
-                                            f"vk={vk_result.get('url') or 'skipped'}"
-                                            if vk_result
-                                            else ""
-                                        )
-                                    ),
-                                    disable_web_page_preview=True,
-                                )
-                            else:
-                                await bot.send_message(
-                                    int(notify_chat_id),
-                                    (
-                                        "ℹ️ guide_monitor recovery: новых карточек для scheduled digest нет\n"
-                                        f"issue_id={publish_result.get('issue_id')}"
-                                    ),
-                                    disable_web_page_preview=True,
-                                )
-            if not keep_recovery_job:
-                await remove_job("guide_monitoring", kernel_ref)
-            recovered += 1
-            if bot and notify_chat_id:
-                await bot.send_message(
-                    int(notify_chat_id),
-                    (
-                        "✅ guide_monitor recovery: "
-                        f"kernel {kernel_ref} обработан"
-                    ),
-                    disable_web_page_preview=True,
-                )
-        finally:
-            _GUIDE_MONITOR_RECOVERY_ACTIVE.discard(kernel_ref)
+                        else:
+                            await bot.send_message(
+                                int(notify_chat_id),
+                                (
+                                    "ℹ️ guide_monitor recovery: новых карточек для scheduled digest нет\n"
+                                    f"issue_id={publish_result.get('issue_id')}"
+                                ),
+                                disable_web_page_preview=True,
+                            )
+        if not keep_recovery_job:
+            await remove_job("guide_monitoring", kernel_ref, run_id=run_id)
+        recovered += 1
+        if bot and notify_chat_id:
+            await bot.send_message(
+                int(notify_chat_id),
+                (
+                    "✅ guide_monitor recovery: "
+                    f"kernel {kernel_ref} обработан"
+                ),
+                disable_web_page_preview=True,
+            )
 
     return recovered
 

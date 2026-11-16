@@ -110,7 +110,8 @@ Do not add raw OCR dumps, poster service headings or unreviewed poster venue str
 The current implementation deliberately uses **one embedding model and one table**, but **two document representations** per event:
 
 - `search_v3` — broad query-search document. It includes weekday/month/season, daypart (`утро/день/вечер/ночь`), weekend/holiday language, free/registration/paid/sold-out status, charity/family/tourist/Pushkin-card hints and query-friendly synonyms. This is the document kind used by `/poisk/`.
-- `related_v1` — cleaner event-to-event document. The Gemini `event-related-doc-v3-summary` document contains the title and the exported factual summary. A row with an empty summary uses its cleaned description. The verifier still receives both fields. Generated categories, types, topics, venue/city and inferred audience are excluded. These metadata remain available to `search_v3`, but cannot influence event-to-event embeddings. This is the document kind used by static related generation.
+- `related_v1` — cleaner event-to-event document. Its current document version is `event-related-doc-v2-content-only`: title once, summary and factual description, with identical summary/description included once. Generated categories, types, topics, venue/city and inferred audience are excluded. These metadata remain available to `search_v3`, but cannot influence event-to-event embeddings. This is the document kind used by static related generation.
+- The static pgvector assembler presents the closest available representative of each verified occurrence family first, then fills any remaining places with additional dates. It uses mutual catalogue links. Updating these links invalidates the affected cached candidates. Raw cosine distances and the stored Gemini input contract stay at the existing production version.
 - When canonical `location_name` is only the same settlement fallback as `city`, the preview/vector projection exports no synthetic `venue_name`; `search_v3` keeps the city once; `related_v1` does not embed the place metadata. Exact presentation deduplication does not infer a venue and does not replace the LLM grounding verdict.
 
 Why this is not “two vector databases”: both kinds use `gemini-embedding-2/vector(768)` and live in `event_embeddings`; the key difference is `embedding_doc_kind`. RPCs filter by `embedding_model`, `embedding_dim` and `embedding_doc_kind`, so search and related retrieval cannot accidentally mix representations.
@@ -128,7 +129,7 @@ It consumes the exported `site/src/data/preview-events.json`, builds compact sea
 - date/time plus weekday ISO/RU, weekend/weekday, month, season and RU daypart words in `search_v3`;
 - admission/availability (`бесплатно`, `регистрация`, `по билетам`, sold-out when present) in `search_v3`;
 - controlled tags, Pushkin-card/family/charity/tourist hints when source text or existing topics explicitly support them;
-- an event-to-event digest built from the factual summary, with the description as a fallback;
+- a cleaner `related_v1` digest that removes most calendar/price noise and keeps theme/format/audience/venue context;
 - trusted card URL/snapshot fields.
 
 The list above is deliberately canonical-field-only. It excludes raw OCR, raw source HTML, raw poster text and provider/debug payloads; see the poster/OCR boundary above for the only supported indirect path.

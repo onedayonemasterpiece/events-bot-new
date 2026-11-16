@@ -647,7 +647,7 @@ def build_search_digest(event: dict[str, Any], category: str, tags: list[str]) -
 
 
 def build_related_digest(event: dict[str, Any], category: str, tags: list[str]) -> str:
-    """Long-form content used by the frozen BGE related-document contract.
+    """Content-only related text; category/tags remain caller-compatible inputs.
 
     The title is already supplied by the embedding prefix. Generated facets,
     venue/city and inferred audience are search metadata, not event similarity.
@@ -762,8 +762,7 @@ def build_search_doc(event: dict[str, Any], *, site_origin: str, base_path: str,
     category = ru_event_category(event)
     tags = event_tags(event, category)
     digest = build_search_digest(event, category, tags)
-    # Gemini related_v1 embeds one factual account per event.
-    related_digest = clean_text(event.get("summary"))[:5200] or clean_text(event.get("description_html"))[:2200]
+    related_digest = build_related_digest(event, category, tags)
     # Gemini Embedding 2 has no taskType field; the task is part of the prompt.
     search_embedding_input = f"title: {clean_text(event.get('title'))} | text: {digest}"
     related_embedding_input = f"related-event: title: {clean_text(event.get('title'))} | text: {related_digest}"
@@ -778,7 +777,7 @@ def build_search_doc(event: dict[str, Any], *, site_origin: str, base_path: str,
     doc = {
         "event_id": int(event["id"]),
         "search_doc_version": "event-search-doc-v3-search-facets",
-        "related_doc_version": "event-related-doc-v3-summary",
+        "related_doc_version": "event-related-doc-v2-content-only",
         "card_snapshot_version": "event-card-v3-media-layout",
         "text_hash": search_text_hash,
         "related_text_hash": related_text_hash,

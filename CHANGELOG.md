@@ -1,14 +1,31 @@
+- Shared source medallions retain original-source identity and use alpha-preserving circular avatars across encoder, Telegram, VK and site data.
+
+## 2026-11-16
+
+- VK relation cards accept shared source-avatar paths from the persistent data mount, preserving first-publication carousels.
+
 # Changelog
 
 - VK source avatars are fetched through the existing reader and reused by tour cards and event source medallions; tour cards use their existing description when space permits. No extra LLM generation step.
 
 ## [Unreleased]
 
+### Fixed
+- Resolve the exact venue name «ВОРОТА» as Закхаймские ворота through the shared location reference, while preserving street/title and other-gate negatives.
+- Guide Kaggle pushes saved JSON/media results directly into the existing HTTP receiver and durable importer, including partial/error outcomes and late delivery after a dead waiter; repeated delivery reuses the accepted run receipt.
+
 - Calendar comment jobs start 5–12 minutes after public release, leaving three minutes inside the requested 5–15 minute window for existing upload pacing and retries; known-publication deferral uses the same schedule.
 
 - VK event galleries keep the existing grid/carousel selection when recommendation cards are present, with source photos before other dates and related events in both formats. Existing posts are not rewritten to change their layout.
 
 ### Fixed
+
+- Source registries reject signed duplicates of event walls and resolved aliases of the same excursion VK owner; original guide seed entries retain stable owner IDs. Existing duplicate records require lossless reconciliation before this schema is delivered.
+- Guide scans resume and materialize their saved remote result after a process restart even when broad Kaggle recovery is disabled. Failed imports retain their registry entry; accepted imports reuse their receipt and release the exact completed session lease.
+
+- Guide schedule cards use source-anchored travel modes for the tour, including mixed itineraries. Sparse announcements can reuse an explicitly linked route or monthly program.
+
+- Telegraf in Svetlogorsk has one shared circular venue medallion for site, VK and Telegram, prepared from its official channel avatar.
 
 - Shared site and VK medallions recognize the observed declined names of the Hermann Brachert museum; a street bearing the surname does not select the museum medallion.
 

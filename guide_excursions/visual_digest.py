@@ -657,25 +657,22 @@ def _focus_line(row: Mapping[str, Any]) -> str:
 
 
 def _modes_for(row: Mapping[str, Any]) -> list[str]:
-    fp_group = _plain(_fact(row, "group_format") or row.get("group_format"))
-    text = " ".join([_plain(row.get("canonical_title")), _route_raw(row), fp_group, _plain(row.get("duration_text"))]).lower().replace("ё", "е")
-    modes: list[str] = []
-    if "трамва" in text:
-        modes.append("tram")
-    if re.search(r"сплав|байдар|лодк|катер|корабл|яхт|водн|река", text):
-        modes.append("boat")
-    if "автобус" in fp_group.lower() or "автобус" in text:
-        modes.append("bus")
-    road_like = re.search(r"кольц|коса|куршск|балтийск|балткос|самбия|вармийск|выезд|8 часов|10 часов", text)
-    if road_like and "bus" not in modes:
-        modes.append("route")
-    if re.search(r"пешеход|пеш|прогулк|район|улица|амалиенау|понарт|проспект|фрунзе|ворот|городск|железнодорожн|зеленоградск|культурная", text):
-        modes.append("walk")
-    out: list[str] = []
-    for mode in modes:
-        if mode not in out:
-            out.append(mode)
-    return out[:2]
+    transport = row.get("transport") or _fact(row, "transport") or {}
+    if isinstance(transport, Mapping) and "modes" in transport:
+        return [mode for mode in transport["modes"] if mode in _ICON_FILES][:2]
+    legacy = _plain(_fact(row, "group_format") or row.get("group_format")).casefold()
+    legacy = " ".join(re.sub(r"[_-]+", " ", legacy).split())
+    # Explicit types already stored by older imports; never infer from a title.
+    return {
+        **dict.fromkeys(("walking", "walking tour", "guided walk", "guided walking tour",
+                         "пешком", "пешеходная", "пешеходная экскурсия",
+                         "пешеходная прогулка экскурсия", "пешая прогулка"), ["walk"]),
+        **dict.fromkeys(("bus", "bus tour", "автобус", "автобусная",
+                         "автобусная экскурсия", "автобусная группа"), ["bus"]),
+        "автобусно пешеходная": ["bus", "walk"],
+        "джип тур": ["route"], "автомобильный выезд": ["route"],
+        "tram": ["tram"], "boat": ["boat"],
+    }.get(legacy, [])
 
 
 def _seats_text(row: Mapping[str, Any]) -> str:
@@ -1089,6 +1086,53 @@ async def _enable_row_factory(conn: aiosqlite.Connection) -> None:
     conn.row_factory = aiosqlite.Row
 
 
+async def _load_transport(conn: aiosqlite.Connection, row: dict[str, Any]) -> None:
+    """Resolve direct evidence first; only explicitly reusable claims may cross dates."""
+    cur = await conn.execute(
+        """
+        SELECT c.entity_id, c.fact_key, c.fact_value, c.provenance_json, p.source_url, p.post_date,
+               member_post.source_url AS program_source_url
+        FROM guide_fact_claim c
+        JOIN guide_monitor_post p ON p.id=c.source_post_id
+        LEFT JOIN guide_fact_claim member
+          ON c.fact_key='transport' AND json_extract(c.provenance_json,'$.program')=member.fact_value
+         AND member.entity_kind='occurrence' AND member.entity_id=? AND member.fact_key='program'
+         AND substr(member.fact_value,-7)=substr(?,1,7)
+        LEFT JOIN guide_monitor_post member_post ON member_post.id=member.source_post_id
+        WHERE c.entity_kind='occurrence' AND c.fact_key IN ('transport', 'group_format')
+          AND (c.entity_id=? OR member_post.id IS NOT NULL OR
+               (c.fact_key='transport' AND json_extract(c.provenance_json, '$.scope')='route'
+                AND c.entity_id IN (SELECT id FROM guide_occurrence WHERE template_id=?)))
+        ORDER BY (c.entity_id=?) DESC, p.post_date DESC, c.id DESC
+        """,
+        (row["id"], row.get("date"), row["id"], row.get("template_id"), row["id"]),
+    )
+    candidates = []
+    group_format = None
+    for claim in await cur.fetchall():
+        if claim["fact_key"] == "transport":
+            modes = _parse_json_array(claim["fact_value"])
+        else:
+            modes = _modes_for({"group_format": claim["fact_value"]})
+            if not modes and group_format is None:
+                group_format = claim["fact_value"]
+        if modes:
+            candidates.append((claim, modes))
+    if group_format:
+        row["group_format"] = group_format
+    if candidates:
+        first, modes = candidates[0]
+        direct = first["entity_id"] == row["id"]
+        for claim, other_modes in candidates[1:]:
+            if direct and (claim["entity_id"] != row["id"] or claim["post_date"] != first["post_date"]):
+                break
+            if set(other_modes) != set(modes):
+                modes = []
+                break
+        row["transport"] = {**_safe_json_object(first["provenance_json"]), "modes": modes,
+                            "source_url": first["source_url"], "program_source_url": first["program_source_url"]}
+
+
 async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) -> list[dict[str, Any]]:
     await ensure_visual_digest_schema(conn)
     sql = """
@@ -1133,6 +1177,7 @@ async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) ->
         item["organizer_names"] = _parse_json_array(item.get("organizer_names_json"))
         item["audience_fit"] = _parse_json_array(item.get("audience_fit_json"))
         item["fact_pack"] = _safe_json_object(item.get("fact_pack_json"))
+        await _load_transport(conn, item)
         for key in (
             "canonical_title",
             "date",
@@ -1284,6 +1329,7 @@ async def _fetch_rows_by_ids(conn: aiosqlite.Connection, occurrence_ids: Sequenc
         item["organizer_names"] = _parse_json_array(item.get("organizer_names_json"))
         item["audience_fit"] = _parse_json_array(item.get("audience_fit_json"))
         item["fact_pack"] = _safe_json_object(item.get("fact_pack_json"))
+        await _load_transport(conn, item)
         for key in (
             "canonical_title", "date", "time", "duration_text", "city", "meeting_point", "route_summary",
             "price_text", "booking_text", "booking_url", "status", "seats_text", "summary_one_liner",

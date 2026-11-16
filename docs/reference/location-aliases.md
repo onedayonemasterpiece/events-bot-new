@@ -6,6 +6,8 @@
 # Notes:
 # - Keep aliases data-driven here instead of adding venue-specific regex branches.
 # - Canonical target must exactly match a line from `docs/reference/locations.md`.
+# - «Ворота» is an exact structured venue alias for Закхаймские ворота.
+#   The bare word is excluded from free-text scanning (street names and titles).
 
 bar sovetov => Бар Советов, Мира 118, Калининград
 бар sovetov => Бар Советов, Мира 118, Калининград
@@ -57,6 +59,7 @@ pub london => Паб London, Мира 33, Калининград
 форт дёнхофф => Форт №11 Дёнхофф, Энергетиков 12, Калининград
 форт денхофф => Форт №11 Дёнхофф, Энергетиков 12, Калининград
 
+ворота => Закхаймские ворота, Литовский Вал 61, Калининград
 ворота галерея => Закхаймские ворота, Литовский Вал 61, Калининград
 закхеймские ворота => Закхаймские ворота, Литовский Вал 61, Калининград
 

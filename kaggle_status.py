@@ -1125,6 +1125,9 @@ def make_kaggle_run_event_handler(db: Database):
     from aiohttp import web
 
     async def kaggle_run_event_handler(request: web.Request) -> web.Response:
+        if request.content_type == "application/zip":
+            from guide_excursions.result_delivery import receive_guide_results
+            return await receive_guide_results(request, db)
         try:
             payload = await request.json()
         except Exception:

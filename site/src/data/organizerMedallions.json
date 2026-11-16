@@ -901,6 +901,28 @@
       "sourcePath": "site/src/assets/organizers/source/dom-semyi.vk-avatar-20261114.jpg",
       "listingStatus": "listing_ready",
       "listingBinding": "venue"
+    },
+    {
+      "slug": "telegraf-svetlogorsk",
+      "name": "Телеграф",
+      "shortName": "Телеграф",
+      "aliases": [
+        "Телеграф Светлогорск",
+        "telegraf_svetlogorsk"
+      ],
+      "category": "venue_brand",
+      "sourcePage": "https://t.me/telegraf_svetlogorsk",
+      "sourceUrl": "https://t.me/telegraf_svetlogorsk",
+      "sourceFile": "telegraf-svetlogorsk.tg-avatar-20261116.jpg",
+      "avatarUrl": "/assets/organizers/telegraf-svetlogorsk.webp",
+      "retrievedAt": "2026-11-16",
+      "assetFormat": "webp-source-tg-avatar",
+      "ariaLabel": "Площадка: Телеграф, Светлогорск",
+      "renderNote": "Официальный аватар канала Телеграф Светлогорск; общий круглый PNG и lossless WebP подготовлены normalize-organizer-medallions.py.",
+      "fallbackPngUrl": "/assets/organizers/telegraf-svetlogorsk.png",
+      "sourcePath": "site/src/assets/organizers/source/telegraf-svetlogorsk.tg-avatar-20261116.jpg",
+      "listingStatus": "listing_ready",
+      "listingBinding": "venue"
     }
   ]
 }

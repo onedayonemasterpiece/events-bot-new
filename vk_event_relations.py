@@ -88,8 +88,7 @@ async def presentation(db, event):
                 'place': row.location_name or '', 'event_type': row.event_type or '',
                 'url': row.source_vk_post_url or '',
                 'description': row.search_digest or '', 'daily_hours': daily_hours,
-                'medallions': [str(Path(m['asset_path']).relative_to(ROOT))
-                               for m in resolve_event_graphic_medallions(row, limit=2)],
+                'medallions': resolve_event_graphic_medallions(row, limit=2),
                 'is_free': bool(row.is_free)}
     return {'dates': [item(row) for row in dates[:6]],
             'related': [item(row) for row in related]}
@@ -144,7 +143,11 @@ def render_card(items, *, schedule=False, more_related=False):
             medallions = medallions[:1] + ['site/public/assets/badges/free-listing-medallion.png']
         medallions = medallions[:2]
         for index, asset in enumerate(medallions):
-            medal = Image.open(ROOT / asset).convert('RGBA')
+            item = asset if isinstance(asset, dict) else {'asset_path': str(ROOT / asset)}
+            medal = Image.open(item['asset_path']).convert('RGBA')
+            if item.get('source_owner'):
+                from source_avatars import round_avatar_image
+                medal = round_avatar_image(medal)
             medal.thumbnail((100, 100), Image.Resampling.LANCZOS)
             layer.alpha_composite(medal, (974 - (len(medallions) - index) * 108, 20))
         width = 738 - len(medallions) * 108 - (20 if medallions else 0)

@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import aiosqlite
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageDraw, ImageChops
 
 logger = logging.getLogger(__name__)
 AVATAR_ROOT = Path(os.getenv("DB_PATH", "/data/db.sqlite")).parent / "source_avatars"
@@ -42,6 +42,14 @@ def avatar_metadata(owner: int) -> dict[str, Any]:
         return json.loads(path.read_text()) if path.is_file() else {}
     except (OSError, ValueError):
         return {}
+
+
+def round_avatar_image(image: Image.Image) -> Image.Image:
+    image = ImageOps.fit(image.convert("RGBA"), (min(image.size),) * 2)
+    mask = Image.new("L", image.size, 0)
+    ImageDraw.Draw(mask).ellipse((0, 0, image.width - 1, image.height - 1), fill=255)
+    image.putalpha(ImageChops.multiply(image.getchannel("A"), mask))
+    return image
 
 
 def _write(path: Path, data: bytes) -> None:
@@ -76,7 +84,7 @@ async def ensure_vk_avatar(owner: int) -> Path | None:
                 data.extend(chunk)
                 if len(data) > 5 * 1024 * 1024:
                     raise ValueError("Avatar exceeds 5 MiB")
-        image = ImageOps.fit(Image.open(io.BytesIO(data)).convert("RGB"), (320, 320))
+        image = round_avatar_image(ImageOps.fit(Image.open(io.BytesIO(data)), (320, 320)))
         out = io.BytesIO()
         image.save(out, "WEBP", quality=90)
         encoded = out.getvalue()

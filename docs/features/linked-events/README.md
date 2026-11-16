@@ -298,6 +298,7 @@ HTML-экспорт и явный cold-запуск сохраняют полн�
 Карточки 1080×1350 используют кожаную бирку сайта, шрифты Cygre без засечек,
 дату, время, название, локацию и существующие curated графические медальоны.
 Общий справочник сайта и VK содержит полные падежные названия музея Брахерта; одноимённая улица не выбирает его медальон.
+Медальон «Телеграфа» в Светлогорске берётся из того же справочника и общего круглого PNG/WebP, подготовленного из аватара официального канала площадки.
 Бесплатный вход обозначается только по `Event.is_free`; PNG получен из
 канонического `free-listing-medallion.svg` для Pillow, без runtime SVG dependency.
 Оригинальные изображения остаются первыми; карточки занимают только свободные
@@ -433,3 +434,5 @@ anchor не добавляется. `strict_verified` означает заве�
 ### Сохранение частично выполненного semantic audit
 
 Успешные batches сохраняются в существующем `gemma_audit_cache` с обычным ключом модели, policy и fingerprints anchor/candidates. Следующий штатный цикл повторяет только отсутствующие batches. Полный ключ anchor и `strict_verified` появляются после всех batches; частичный успех не выдаётся за полную проверку. Pruning сохраняет только ключи текущих полных выборок и batches, без второго кеша или новой очереди.
+
+Source-avatar medallions retain original source identity rather than the publisher wall identity. Their existing source_owner metadata reaches VK rendering; older string asset paths remain supported. The shared avatar encoder and TG/VK renderers use the same circular, alpha-preserving transform; curated medallion geometry is preserved.
