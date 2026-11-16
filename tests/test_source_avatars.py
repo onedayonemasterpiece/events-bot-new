@@ -262,3 +262,28 @@ async def test_site_medallion_uses_original_while_source_links_keep_publication(
         assert [item['owner_id'] for item in event['source_medallions']] == [-123]
     finally:
         await db.close()
+
+
+def test_dated_guide_credit_supplies_writer_identity_without_a_profile():
+    title = 'Время первых: через тернии к звёздам'
+    line = f'28.11 (сб) 11:00 — «{title}», гид [id123|Варвара Лалэко]'
+    post = {'url': 'https://vk.com/wall-10_20', 'post_date': '2026-11-10', 'text': line}
+    row = {'id': 749, 'canonical_title': title, 'date': '2026-11-28', 'time': '11:00',
+           'linked_posts': [post], 'source_roles_checked': True, 'fact_pack': {'guide_names': []}}
+    row['participant_medallions'] = avatars.guide_participants(row, [])
+    from guide_excursions.visual_digest import _vk_narrative_payload
+    payload, identities = _vk_narrative_payload([row])
+    assert list(identities.values()) == [(123, 'Варвара Лалэко')]
+    assert payload['excursions'][0]['guides'] == ['Варвара Лалэко']
+
+    for different in (dict(date='2026-11-29'), dict(time='12:00'), dict(canonical_title='Другой маршрут')):
+        assert not avatars.guide_participants(dict(row, **different), [])
+    for wrong in (dict(url='https://t.me/example/20'), dict(text=line.replace('гид', 'организатор')),
+                  dict(text=line.replace('[id123', '[club123'))):
+        assert not avatars.guide_participants(dict(row, linked_posts=[dict(post, **wrong)]), [])
+    other = dict(post, text=line.replace('[id123', '[id456'))
+    conflict, = avatars.guide_participants(dict(row, linked_posts=[post, other]), [])
+    assert conflict['name'] == 'Варвара Лалэко' and conflict['owner'] is None
+    stale = {'display_name': 'Варвара Лалэко', 'facts_rollup_json': '{"vk_user_id":456}'}
+    conflict, = avatars.guide_participants(row, [stale])
+    assert conflict['owner'] is None and conflict['path'] is None

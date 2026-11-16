@@ -14,6 +14,7 @@ import os
 import re
 import time
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -118,14 +119,53 @@ def _identity_names(profile: dict[str, Any]) -> set[str]:
     return names
 
 
+def _scheduled_guide_tags(row: dict[str, Any]) -> dict[str, set[int]]:
+    """Personal VK tags explicitly credited as guides on the exact dated programme line."""
+    from guide_excursions.parser import QUOTE_TITLE_RE, extract_date_iso, extract_time_text, normalize_title_key
+    title = normalize_title_key(row.get("canonical_title")).replace("ё", "е")
+    day = row.get("date")
+    start = extract_time_text(str(row.get("time") or ""))
+    slots: dict[str, set[int]] = {}
+    if not title or not day or not start:
+        return slots
+    for post in row.get("linked_posts") or []:
+        if not vk_post_owners(post.get("url") or post.get("source_url")):
+            continue
+        try:
+            published = datetime.fromisoformat(str(post.get("post_date") or day))
+        except ValueError:
+            continue
+        for line in str(post.get("text") or "").splitlines():
+            if "[id" not in line or extract_time_text(line) != start or extract_date_iso(line, post_date=published) != day:
+                continue
+            titles = list(QUOTE_TITLE_RE.finditer(line))
+            if len(titles) != 1 or normalize_title_key(titles[0][1]).replace("ё", "е") != title:
+                continue
+            credit = re.match(r"\s*[,;—–-]?\s*гид(?:ы)?\s*[:—–-]?\s*(\[id\d+\|[^\]]+\]"
+                              r"(?:(?:\s*,\s*|\s+и\s+)\[id\d+\|[^\]]+\])*)", line[titles[0].end():], re.I)
+            if not credit:
+                continue
+            for uid, label in re.findall(r"\[id([1-9]\d*)\|([^\]]+)\]", credit[1]):
+                name = " ".join(label.split())
+                if len(name.split()) >= 2:
+                    slots.setdefault(name, set()).add(int(uid))
+    return slots
+
+
 def guide_participants(row: dict[str, Any], profiles: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Bind already extracted roles to explicit public profile identities, never surnames."""
     from guide_excursions.visual_digest import _AVATAR_DIR, _AVATAR_FILES
     result: dict[str, dict[str, Any]] = {}
     facts = row.get("fact_pack") or {}
+    tags = _scheduled_guide_tags(row)
+    tagged_owners: dict[str, set[int]] = {}
+    for label, ids in tags.items():
+        tagged_owners.setdefault(label.casefold().replace("ё", "е"), set()).update(ids)
     for field, role in (("guide_names", "Гид"), ("organizer_names", "Организатор")):
         # The latest extracted facts supersede older role metadata left by upsert.
         names = facts.get(field, row.get(field, []))
+        if role == "Гид" and tags:
+            names = list(dict.fromkeys([*(names if isinstance(names, list) else []), *tags]))
         for name in names if isinstance(names, list) else []:
             key = " ".join(str(name).casefold().replace("ё", "е").split())
             matches = [p for p in profiles if key in _identity_names(p)]
@@ -145,12 +185,22 @@ def guide_participants(row: dict[str, Any], profiles: list[dict[str, Any]]) -> l
                             paths.add(str(_AVATAR_DIR / filename))
             owner = next(iter(owners)) if len(owners) == 1 else None
             path = next(iter(paths)) if len(paths) == 1 else None
+            conflicting_tags = False
+            if role == "Гид" and key in tagged_owners:
+                ids = tagged_owners[key]
+                known_people = {uid for uid in owners if uid > 0}
+                conflicting_tags = len(ids) != 1 or bool(known_people and ids.isdisjoint(known_people))
+                owner = None if conflicting_tags else next(iter(ids))
+                if owner not in owners:
+                    path = None
             identity = f"vk:{owner}" if owner else key
             if identity in result:
                 if role not in result[identity]["roles"]:
                     result[identity]["roles"].append(role)
                 continue
             result[identity] = {"name": name, "roles": [role], "owner": owner, "path": path}
+            if conflicting_tags:
+                result[identity]["conflicting_guide_tags"] = True
     return list(result.values())
 
 
@@ -192,7 +242,7 @@ async def prepare_guide_avatars(rows: list[dict[str, Any]], db: Any = None) -> N
             source_participant = None
             resolved = []
             for person in participants:
-                if not person.get("owner") and source_names & _identity_names({"display_name": person["name"]}):
+                if not person.get("owner") and not person.get("conflicting_guide_tags") and source_names & _identity_names({"display_name": person["name"]}):
                     person.update(owner=owner, path=str(path))
                 if person["owner"] == owner:
                     if source_participant is not None:
