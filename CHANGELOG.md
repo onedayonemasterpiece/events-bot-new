@@ -11,6 +11,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Related events keep the verified Gemma decisions from partial batches and request the missing candidates before marking an event ready for VK publication.
 - Redact signed VK upload tickets in existing API error and CAPTCHA logs while preserving upload requests and cached recovery parameters.
 - Explain rejected rich facts in the existing warning with quote presence/length and full-source lexical support metrics, without logging source quotes or changing fact admission.
 - Bound repeated VK CAPTCHA per existing job without counting unrelated transport failures; retain frozen payloads and exhausted terminal outcomes across restart and enqueue so one refused document cannot loop forever ahead of other publications.

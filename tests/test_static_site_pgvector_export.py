@@ -614,7 +614,7 @@ def test_related_audit_retry_respects_shared_minute_bucket(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_related_audit_inherits_operator_normal_pool(monkeypatch) -> None:
+async def test_related_audit_inherits_operator_normal_pool_and_keeps_unambiguous_requested_ids(monkeypatch) -> None:
     import google_ai.client
     exporter = _load_exporter_module()
     monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
@@ -624,13 +624,16 @@ async def test_related_audit_inherits_operator_normal_pool(monkeypatch) -> None:
         def __init__(self, **kwargs):
             captured.update(kwargs)
         async def generate_content_async(self, **kwargs):
-            return json.dumps({'ranked': [{'event_id': 2, 'llm_semantic_score': .8,
-                   'similarity_class': 'highly_similar', 'confidence': .9, 'reject': False}]}), None
+            return json.dumps({'ranked': [{'event_id': i, 'llm_semantic_score': .8,
+                   'similarity_class': 'highly_similar', 'confidence': .9, 'reject': False}
+                    for i in (2, 0, 3, 3, 1, 3)]}), None
     monkeypatch.setattr(google_ai.client, 'GoogleAIClient', Client)
     monkeypatch.setattr(exporter, 'supabase_limiter_client', object)
     result = await exporter.call_gemma_related_audit_async(
         model='models/gemma-4-26b-a4b-it', key_env='GOOGLE_API_KEY4',
-        anchor={'id': 1, 'title': 'Standup'}, candidates=[{'id': 2, 'title': 'Comedy'}])
+        anchor={'id': 1, 'title': 'Standup'},
+        candidates=[{'id': 2, 'title': 'Comedy'}, {'id': 3, 'title': 'Matinee'}])
+    assert set(result) == {2}
     assert captured['reserve_key_envs'] == 'GOOGLE_API_KEY,GOOGLE_API_KEY4'
     assert result[2]['llm_semantic_score'] == .8
 
@@ -800,8 +803,8 @@ def test_shrinking_catalog_persists_bounded_audit_progress(tmp_path, monkeypatch
     assert len(saved['gemma_audit_cache']) == 3
 
 
-@pytest.mark.parametrize('empty_first_batch', [False, True])
-def test_partial_related_batches_survive_save_and_resume(tmp_path, monkeypatch, empty_first_batch):
+@pytest.mark.parametrize('first_reply', ['complete', 'partial', 'empty'])
+def test_partial_related_batches_survive_save_and_resume(tmp_path, monkeypatch, first_reply):
     exporter = _load_exporter_module()
     monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
     monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '2')
@@ -818,12 +821,10 @@ def test_partial_related_batches_survive_save_and_resume(tmp_path, monkeypatch, 
         calls.append(ids)
         if cycle == 1 and ids[0] == 8:
             raise RuntimeError('provider minute bucket exhausted')
-        if cycle == 2 and ids[0] == 2:
-            pytest.fail('completed batch was repeated after saving the cache')
-        if empty_first_batch and ids[0] == 2:
-            return {}
-        return {ids[0]: {'llm_semantic_score': .8, 'confidence': .9,
-                        'reject': False, 'similarity_class': 'highly_similar'}}
+        if cycle == 1 and ids[0] == 2 and first_reply != 'complete':
+            ids = [] if first_reply == 'empty' else [2, 3, 0]
+        return {i: {'llm_semantic_score': .8, 'confidence': .9,
+                    'reject': False, 'similarity_class': 'highly_similar'} for i in ids}
     monkeypatch.setattr(exporter, 'build_pgvector_related_chain', retrieve)
     monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
     path = tmp_path / 'cache.json'
@@ -836,10 +837,58 @@ def test_partial_related_batches_survive_save_and_resume(tmp_path, monkeypatch, 
     cycle = 2
     second = run()
     assert second['related']['1']['strict_verified']
-    assert calls == [list(range(2, 8)), list(range(8, 14)), list(range(8, 14))]
+    initial = [list(range(2, 8)), list(range(8, 14))]
+    resumed = {'empty': [list(range(2, 8))], 'partial': [list(range(4, 8))], 'complete': []}
+    assert calls == initial + resumed[first_reply] + [list(range(8, 14))]
+    assert 0 not in second['related']['1']['pure_related']
+    before_edit = len(calls)
     cycle = 3
     events[1]['title'] = 'Changed source programme'
     third = run()
     assert third['related']['1']['strict_verified']
     assert calls[-1] == list(range(2, 8))
-    assert len(calls) == 4, 'changed peer invalidates its batch, while the other stays reusable'
+    assert len(calls) == before_edit + 1, 'a changed peer invalidates only its batch'
+
+
+@pytest.mark.parametrize('scoped', [True, False])
+def test_legacy_verified_packet_repairs_only_missing_verdicts(tmp_path, monkeypatch, scoped):
+    exporter = _load_exporter_module()
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '2')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT', '6')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS', '1')
+    ids = list(range(2, 14))
+    events = [{'id': i, 'title': f'Event {i}', 'date': '2026-12-01'} for i in [1, *ids]]
+    def retrieve(*args, **kwargs):
+        return {str(e['id']): ([{'event_id': i, 'vector_similarity': .8, 'related_score': .8}
+                                 for i in ids] if e['id'] == 1 else []) for e in events}
+    calls = []
+    def audit(**kwargs):
+        requested = [e['id'] for e in kwargs['candidates']]
+        calls.append(requested)
+        return {i: {'llm_semantic_score': .8, 'confidence': .9, 'reject': False,
+                    'similarity_class': 'highly_similar'} for i in requested}
+    monkeypatch.setattr(exporter, 'build_pgvector_related_chain', retrieve)
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+    path = tmp_path / 'cache.json'
+    def run(anchors):
+        return exporter.build_related(events, current_date='2026-11-16', related_mode='pgvector',
+            cache_path=path, gemma_verify=True, anchor_ids=anchors)
+    assert run(None)['strict_verified_related']
+    cache = json.loads(path.read_text())
+    for packet in cache['gemma_audit_cache'].values():
+        if '3' in packet:
+            packet['0'] = packet.pop('3')
+    path.write_text(json.dumps(cache))
+    calls.clear()
+    if scoped:
+        untargeted = run({12})
+        assert not untargeted['related']['1']['strict_verified']
+        assert untargeted['related']['12']['strict_verified']
+        assert not calls
+    repaired = run({1} if scoped else None)
+    assert repaired['strict_verified_related']
+    assert calls == [[3]]
+    assert not any('0' in p for p in json.loads(path.read_text())['gemma_audit_cache'].values())
+    assert run(None)['strict_verified_related']
+    assert calls == [[3]]
