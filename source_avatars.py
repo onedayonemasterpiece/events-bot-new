@@ -168,6 +168,8 @@ async def prepare_guide_avatars(rows: list[dict[str, Any]], db: Any = None) -> N
             if person["owner"] and (path := await ensure_vk_avatar(person["owner"])):
                 person["path"] = str(path)
         row["participant_medallions"] = participants
+        if row.get("source_roles_checked") and not participants:
+            continue
         if row.get("source_platform") != "vk":
             continue
         flags = json.loads(row.get("source_flags_json") or "{}")

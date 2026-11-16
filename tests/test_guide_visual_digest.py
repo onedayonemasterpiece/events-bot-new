@@ -482,6 +482,40 @@ async def test_review_marks_test_recipient_when_the_story_has_no_confirmed_name(
     assert text.count("[id") == 1
 
 
+def test_writer_receives_all_linked_articles_with_their_own_source_and_paragraphs():
+    first = {"url": "https://vk.ru/wall-10_20", "text": "Предисловие\n\n" + "Текст полного анонса. " * 200}
+    second = {"url": "https://vk.ru/wall-10_21", "text": "Другая статья\n\nМаршрут по парку."}
+    rows = [dict(EDITION_349[0], linked_posts=[first, first, second]),
+            dict(EDITION_349[1], linked_posts=[first])]
+    payload, _ = vd._vk_narrative_payload(rows)
+    assert payload["sources"] == [
+        {"url": first["url"], "text": first["text"].strip(), "excursions": [745, 746]},
+        {"url": second["url"], "text": second["text"], "excursions": [745]},
+    ]
+
+
+def test_same_trip_prefers_complete_announcement_and_keeps_conflicting_sessions():
+    date_row = dict(date="2026-11-28", city="Калининградская область", guide_names=["Эмма Басова"],
+                    organizer_names=["Хранители руин"])
+    brief = dict(date_row, id=705, canonical_title="Большое путешествие по Самбийскому кольцу",
+                 route_summary="Самбийское кольцо", time=None, price_text=None,
+                 linked_posts=[{"url": "https://vk.ru/wall-10_10", "text": "Сводная афиша"}])
+    full = dict(date_row, id=740, canonical_title="Самбийское кольцо", route_summary="Музей Вайденен, усадьба Грюнхоф",
+                time="09:00-18:00", price_text="4000 рублей с человека",
+                linked_posts=[{"url": "https://t.me/ruin_keepers/6490", "text": "Полный маршрут"}])
+    together = dict(full, id=741, time="09:00", price_text="4000 рублей")
+    # The previous issue may refer to the sparse schedule row only.
+    single, = vd._select_documented_departures([brief], [brief, full, together])
+    assert single["id"] == 740 and single["covered_visual_ids"] == [705, 740, 741]
+    assert single["time"] == "09:00-18:00"
+    assert {p["text"] for p in single["linked_posts"]} == {"Сводная афиша", "Полный маршрут"}
+    for other in (dict(together, time="11:00"), dict(together, time="09:00-17:00"),
+                  dict(together, price_text="8000 рублей"), dict(together, guide_names=["Другой гид"])):
+        selection = vd._select_documented_departures([brief, full, other], [brief, full, other])
+        assert len(selection) >= 2
+        assert not any(740 in r["covered_visual_ids"] and 741 in r["covered_visual_ids"] for r in selection)
+
+
 def test_vk_narrative_pairs_source_excerpt_with_selected_post_url():
     original = EDITION_349[0]
     selected_url = "https://vk.com/wall-10_12"
@@ -492,20 +526,6 @@ def test_vk_narrative_pairs_source_excerpt_with_selected_post_url():
     assert [(s["url"], s["excursions"]) for s in payload["sources"]] == [
         (selected_url, [745]), (original["source_post_url"], [746]), ("", [747]),
     ]
-
-
-def test_multi_announcement_assigns_its_description_only_to_named_excursion():
-    post = {"text": "Приглашаем на прогулку «Парки».\nСмотрим деревья.\nРасписание:\n20.11 — Проспект\n21.11 — Парки",
-            "post_kind": "announce_multi", "raw_facts_json": None}
-    row = {"canonical_title": "Проспект", "date": "2026-11-20", "fact_pack": {
-        "main_hook": "Деревья городских парков", "main_hook_evidence": ["Смотрим деревья"]}}
-    vd._scope_visual_source(row, post)
-    assert row["excursion_excerpt"] == "20.11 — Проспект"
-    assert "main_hook" not in row["fact_pack"]
-    row = dict(row, canonical_title="Парки")
-    vd._scope_visual_source(row, post)
-    assert "Смотрим деревья" in row["excursion_excerpt"]
-    assert "Проспект" not in row["excursion_excerpt"]
 
 
 @pytest.mark.asyncio
@@ -571,3 +591,27 @@ async def test_sparse_excursion_keeps_grounded_writer_transition(monkeypatch):
     monkeypatch.setattr(vd, "ask_vk_narrative", writer)
     text = await build_visual_digest_vk_text([row], issue_id=349, vk_api_fn=_fake_shortener)
     assert "А в пятницу прогулку ведёт Ноза Усманова." in text
+
+
+def test_extracted_empty_roles_do_not_present_source_owner_as_guide():
+    row = {"date": "2026-11-22", "canonical_title": "Осетровая ферма", "guide_names": ["Мария"],
+           "source_kind": "guide_personal", "source_title": "Мария", "guide_profile_summary": "Гид Мария",
+           "participant_medallions": [{"name": "Мария", "owner": 123, "roles": ["Гид"]}],
+           "fact_pack": {"guide_names": ["Мария"]}}
+    posts = [{"text": "На осетровой ферме покажут осетров.", "raw_facts_json": [
+        {"canonical_title": "Осетровая ферма", "date": "2026-11-22", "guide_names": [], "organizer_names": []}]}]
+    vd._apply_published_facts(row, posts)
+    payload, mentions = vd._vk_narrative_payload([dict(row, id=1)])
+    assert row["participant_medallions"] == [] and vd._source_name(row) == ""
+    assert not payload["excursions"][0]["guides"] and not payload["excursions"][0]["source_profile"] and not mentions
+
+
+def test_price_stays_with_its_dated_outing_and_deposit_policy_is_not_a_fare():
+    row = {"date": "2026-11-21", "canonical_title": "Под сенью ангелов", "price_text": "по запросу"}
+    post = {"post_date": "2026-11-01", "text": "8 ноября Дюны\nСтоимость 4400 руб\n"
+            "21 ноября — Под сенью ангелов\nСтоимость 4800 руб (завтрак и обед)\n"
+            "5 декабря — Лес\nЦена 2000 руб"}
+    vd._apply_published_facts(row, [post])
+    assert row["price_text"] == "4800 руб (завтрак и обед)"
+    vd._apply_published_facts(row := dict(row, fact_pack={}, price_text="Предоплату мы не берём"), [])
+    assert not row["price_text"]

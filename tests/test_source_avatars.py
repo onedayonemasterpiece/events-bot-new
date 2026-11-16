@@ -59,7 +59,7 @@ def test_card_uses_existing_description_without_generation(monkeypatch):
         texts.append(text)
         return original(self, xy, text, *args, **kwargs)
     monkeypatch.setattr(ImageDraw.ImageDraw, 'text', text)
-    render_visual_digest_card([{'canonical_title': 'Поездка', 'date': '2026-11-29', 'city': 'Город', 'digest_blurb': 'Увидим лес и старые кирхи.'}], issue_id=1)
+    render_visual_digest_card([{'canonical_title': 'Поездка', 'date': '2026-11-29', 'city': 'Город', 'fact_pack': {'main_hook': 'Увидим лес и старые кирхи.'}}], issue_id=1)
     assert any('Увидим лес' in str(x) for x in texts)
 
 
@@ -186,17 +186,17 @@ def test_existing_person_profile_alias_keeps_one_portrait_for_both_roles():
         'organizer_names':['Amber Fringilla']},profiles)) == 2
 
 
-def test_card_description_spends_space_on_new_facts():
+def test_card_description_keeps_the_entire_hook():
     from guide_excursions.visual_digest import _card_description
     row = {'canonical_title': 'Зелёные истории', 'guide_names': ['Ольга Рубцова'],
            'organizer_names': ['80 ЛЕТ ЕДИНСТВА'],
            'fact_pack': {'main_hook': 'экскурсия проекта 80 ЛЕТ ЕДИНСТВА с музыкой, играми и квестами'},
            'digest_blurb': 'Приглашаем на экскурсию «Зелёные истории» 17 ноября в 14:00. Гид — Ольга Рубцова.'}
-    assert _card_description(row, 'Ольга Рубцова, 80 ЛЕТ ЕДИНСТВА') == 'С музыкой, играми и квестами'
+    assert _card_description(row) == row['fact_pack']['main_hook']
     row = {'canonical_title': 'Секреты чёрного золота: экскурсия на Осетровую ферму',
            'fact_pack': {'main_hook': 'экскурсия на Осетровую ферму с секретами чёрного золота'},
            'digest_blurb': 'Увлекательная экскурсия на Осетровую ферму с дегустацией эксклюзивных закусок'}
-    assert _card_description(row) == 'С дегустацией эксклюзивных закусок'
+    assert _card_description(row) == row['fact_pack']['main_hook']
     assert _card_description({'canonical_title': 'Поездка', 'digest_blurb': 'Поездка'}) == ''
 
 

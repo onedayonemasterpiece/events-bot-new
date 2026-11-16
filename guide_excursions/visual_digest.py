@@ -34,7 +34,7 @@ from telegram_sources import canonicalize_tg_url, parse_tg_post_url
 from .dedup import deduplicate_occurrence_rows
 from .digest import RU_MONTH_GEN, format_date_time
 from .digest_writer import ask_vk_narrative
-from .parser import collapse_ws
+from .parser import collapse_ws, normalize_title_key, occurrence_fare, price_for_publication
 
 logger = logging.getLogger(__name__)
 
@@ -567,6 +567,8 @@ def _source_name(row: Mapping[str, Any]) -> str:
         return ", ".join(guides)
     if orgs:
         return ", ".join(orgs)
+    if row.get("source_roles_checked"):
+        return ""
     return _plain(row.get("guide_line") or row.get("organizer_line") or row.get("guide_profile_marketing_name") or row.get("source_title"))
 
 
@@ -634,52 +636,71 @@ def _place_line(row: Mapping[str, Any]) -> str:
     return _plain(_fact(row, "city") or row.get("city")) or "детали в тексте"
 
 
-def _scope_visual_source(row: dict[str, Any], post: Mapping[str, Any]) -> None:
-    """Keep a programme's other outings out of both the caption and the story."""
-    entries = _parse_json_array(post["raw_facts_json"])
-    titles = {_plain(e.get("canonical_title") or e.get("title")).casefold()
-              for e in entries if isinstance(e, Mapping)}
-    titles.discard("")
-    parts = re.split(r"(?im)^\s*расписание\s*:\s*$", post["text"] or "", maxsplit=1)
-    if len(titles) < 2 and post["post_kind"] != "announce_multi" and len(parts) == 1:
-        return
-    title = _plain(row["canonical_title"]).casefold()
-    date_iso = _plain(row["date"])
-    matches = [e for e in entries if isinstance(e, Mapping)
-               and _plain(e.get("canonical_title") or e.get("title")).casefold() == title
-               and _plain(e.get("date") or e.get("date_iso")) == date_iso]
-    excerpt = ""
-    if len(matches) == 1:
-        excerpt = _plain(matches[0].get("source_excerpt"))
-    # Older imports have no per-outing excerpt. A named timetable line is still
-    # usable; a whole article attached to several excursions is not.
-    if not excerpt or excerpt == _plain(post["text"]):
-        excerpt = ""
-        body = parts[0]
-        sentences = re.split(r"(?<=[.!?])\s+|\n+", body)
-        if len(parts) == 2:
-            start = next((i for i, sentence in enumerate(sentences)
-                          if title and title in sentence.casefold()), None)
-            if start is not None:
-                excerpt = " ".join(sentences[start:]).strip()
-        if not excerpt:
-            schedule = parts[-1]
-            excerpt = "\n".join(line.strip() for line in schedule.splitlines()
-                                if title and title in line.casefold())
-    row["excursion_excerpt"] = excerpt
-    pack = row.get("fact_pack") or {}
-    hook = _plain(pack.get("main_hook"))
-    evidence = [_plain(e).casefold() for e in pack.get("main_hook_evidence") or [] if _plain(e)]
-    # Historic hooks were sometimes extracted from another excursion in that post.
-    if hook and hook.casefold() not in excerpt.casefold() and not (
-        evidence and all(e in excerpt.casefold() for e in evidence)
-    ):
-        row["fact_pack"] = dict(pack)
-        for field in ("main_hook", "main_hook_evidence", "summary_one_liner", "digest_blurb"):
-            value = _plain(pack.get(field) or row.get(field))
-            if field in ("main_hook", "main_hook_evidence") or value.casefold() not in excerpt.casefold():
-                row["fact_pack"].pop(field, None)
-                row.pop(field, None)
+def _apply_published_facts(row: dict[str, Any], posts: Sequence[Mapping[str, Any]]) -> None:
+    """Recover the outing's extracted roles and fare before loading portraits or composing a post."""
+    title = _plain(row.get("canonical_title"))
+    day = _plain(row.get("date"))
+    title_key = normalize_title_key(title).removeprefix("на ")
+    pack = row.setdefault("fact_pack", {})
+    roles: dict[str, set[str]] = {}
+    current_price = price_for_publication(row.get("price_line") or row.get("price_text") or pack.get("price_text"))
+    fares = set()
+    for post in posts:
+        text = post.get("text") or ""
+        extractions = _parse_json_array(post.get("raw_facts_json"))
+        programme = len({e.get("canonical_title") or e.get("title") for e in extractions
+                         if isinstance(e, Mapping)}) > 1 or post.get("post_kind") == "announce_multi"
+        for item in extractions:
+            if not isinstance(item, Mapping) or (item.get("date") or item.get("date_iso")) != day:
+                continue
+            if normalize_title_key(item.get("canonical_title") or item.get("title") or "").removeprefix("на ") != title_key:
+                continue
+            if row.get("time") and item.get("time") and row["time"] != item["time"]:
+                continue
+            for key in ("guide_names", "organizer_names"):
+                if not isinstance(item.get(key), list):
+                    continue
+                names = roles.setdefault(key, set())
+                for name in item[key]:
+                    if not isinstance(name, str):
+                        continue
+                    if key == "organizer_names" and programme:
+                        event_lines = [line.casefold() for line in text.splitlines() if title.casefold() in line.casefold()]
+                        other_guide = any(name.casefold() in line.casefold() and "гид" in line.casefold()
+                                          for line in text.splitlines() if title.casefold() not in line.casefold())
+                        named_here = any(name.casefold() in line and "организ" in line for line in event_lines)
+                        if other_guide and not named_here:
+                            continue
+                    names.add(name.casefold())
+        if not current_price or current_price.casefold() == "по запросу":
+            try:
+                anchor = datetime.fromisoformat(post.get("post_date") or day).replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                continue
+            fare = occurrence_fare(text, title=title, date_iso=day, published=anchor)
+            if fare:
+                fares.add(fare)
+
+    for key, supported in roles.items():
+        names = [n for n in pack.get(key, row.get(key, [])) or [] if isinstance(n, str) and n.casefold() in supported]
+        row[key] = pack[key] = names
+    if roles:
+        row["source_roles_checked"] = True
+        # Frozen editions can already contain resolved portraits. Normal editions resolve them next.
+        if isinstance(row.get("participant_medallions"), list):
+            people = []
+            for person in row["participant_medallions"]:
+                allowed = [role for role in person.get("roles", []) if
+                           (role == "Гид" and person["name"] in row.get("guide_names", [])) or
+                           (role == "Организатор" and person["name"] in row.get("organizer_names", []))]
+                if allowed:
+                    people.append(dict(person, roles=allowed))
+            row["participant_medallions"] = people
+    if len(fares) == 1:
+        current_price = fares.pop()
+    row["price_text"] = pack["price_text"] = current_price
+    if "price_line" in row:
+        row["price_line"] = current_price
 
 
 def _card_description(row: Mapping[str, Any]) -> str:
@@ -1112,7 +1133,7 @@ def render_visual_digest_card(
                 portrait = {"guide_names": [person["name"]], "source_title": person["name"],
                     "source_avatar_path": person.get("path") or ""}
                 _draw_avatar(img, portrait, px, av_y, av_size, palette, accent)
-        else:
+        elif not row.get("source_roles_checked"):
             _draw_avatar(img, row, av_x, av_y, av_size, palette, accent)
         modes = _modes_for(row)
         _draw_icon_badges(img, modes, 42 + 920, av_y + (12 if len(modes) > 1 else 76), palette)
@@ -1187,9 +1208,7 @@ async def _load_transport(conn: aiosqlite.Connection, row: dict[str, Any]) -> No
                             "source_url": first["source_url"], "program_source_url": first["program_source_url"]}
 
 
-async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) -> list[dict[str, Any]]:
-    await ensure_visual_digest_schema(conn)
-    sql = """
+_VISUAL_ROW_QUERY = """
         SELECT
             go.*,
             gs.username AS source_username,
@@ -1209,30 +1228,97 @@ async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) ->
         LEFT JOIN guide_source gs ON gs.id = go.primary_source_id
         LEFT JOIN guide_profile gp ON gp.id = gs.primary_profile_id
         LEFT JOIN guide_digest_issue gdi ON gdi.id = go.published_visual_digest_issue_id
-        WHERE go.digest_eligible = 1
-          AND go.date IS NOT NULL
-          AND go.date GLOB '????-??-??'
-          AND go.date >= ?
-          AND go.date <= ?
-          AND COALESCE(go.status, 'scheduled') != 'cancelled'
-          AND (
-            go.published_visual_digest_issue_id IS NULL
-            OR datetime(go.updated_at) > datetime(COALESCE(gdi.published_at, gdi.created_at, '1970-01-01 00:00:00'))
-          )
-        ORDER BY go.date ASC, COALESCE(go.time, '99:99') ASC, go.updated_at DESC
-        LIMIT ?
-    """
-    cur = await conn.execute(sql, (_visual_start_iso(), _future_cutoff_iso(), int(limit)))
-    rows = await cur.fetchall()
-    out: list[dict[str, Any]] = []
-    for row in rows:
+"""
+
+
+def _shared_departure_identity(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
+    def names(row: Mapping[str, Any], key: str) -> set[str]:
+        values = row.get(key)
+        if values is None:
+            values = _parse_json_array(row.get(f"{key}_json"))
+        return {_plain(name).casefold() for name in values if _plain(name)}
+    guides = names(left, "guide_names")
+    return bool(left.get("date") and left["date"] == right.get("date")
+                and left.get("city") and left["city"] == right.get("city")
+                and guides and guides == names(right, "guide_names")
+                and names(left, "organizer_names").intersection(names(right, "organizer_names")))
+
+
+def _same_visual_departure(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
+    if not _shared_departure_identity(left, right):
+        return False
+    # A schedule may use the public route name in its route field, while a
+    # detailed announcement uses that very name as the main title.
+    title = _plain(left.get("canonical_title")).casefold()
+    other = _plain(right.get("canonical_title")).casefold()
+    if not title or not other:
+        return False
+    linked_urls = {p["url"] for p in left["linked_posts"] if p["url"]}
+    if title == other and any(p["url"] in linked_urls for p in right["linked_posts"]):
+        return True
+    return title == _plain(right.get("route_summary")).casefold() or other == _plain(left.get("route_summary")).casefold()
+
+
+def _conflicting_departure_logistics(rows: Sequence[Mapping[str, Any]]) -> bool:
+    times = [_plain(r.get("time")) for r in rows if _plain(r.get("time"))]
+    spans = {re.sub(r"\s*[-–—]\s*", "-", t) for t in times}
+    starts = {span.split("-")[0] for span in spans}
+    fares = {_plain(r.get("price_text")).casefold() for r in rows}
+    known_fares = sorted(fares - {"", "по запросу"}, key=len)
+    # Preserve the fuller fare ("4000 рублей с человека ...") and a compatible
+    # end time. Incompatible prices or starts could describe two separate offers.
+    return (len(starts) > 1 or len({t for t in spans if "-" in t}) > 1
+            or any(not known_fares[-1].startswith(f + " ") for f in known_fares[:-1]))
+
+
+def _select_documented_departures(requested: Sequence[dict[str, Any]], peers: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    selected = []
+    seen = set()
+    for row in requested:
+        if row["id"] in seen:
+            continue
+        members = [m for m in peers if m["id"] == row["id"] or _same_visual_departure(row, m)]
+        incompatible = (_conflicting_departure_logistics(members)
+                        or any(not _same_visual_departure(a, b) for i, a in enumerate(members) for b in members[i + 1:]))
+        if incompatible or any(m["id"] in seen for m in members):
+            members = [row]
+        source = max(members, key=lambda m: (
+            bool(m.get("time") and _plain(m.get("price_text"))), len(_plain(m.get("time"))),
+            len(_plain(m.get("route_summary"))), -int(m["id"])))
+        representative = dict(source)
+        representative["covered_visual_ids"] = sorted(m["id"] for m in members)
+        representative["linked_posts"] = [post for member in members for post in member["linked_posts"]]
+        representative["visual_selection_reason"] = row.get("visual_selection_reason")
+        seen.update(representative["covered_visual_ids"])
+        selected.append(representative)
+    return selected
+
+
+async def _load_visual_rows(conn: aiosqlite.Connection, records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    if not records:
+        return []
+    ids = [int(row["id"]) for row in records]
+    params = ",".join("?" for _ in ids)
+    cur = await conn.execute(f"""
+        SELECT gos.occurrence_id, gmp.id, gmp.text, gmp.post_date, gmp.source_url AS url, gmp.source_url,
+               gmp.post_kind, gmp.raw_facts_json
+        FROM guide_occurrence_source gos
+        JOIN guide_monitor_post gmp ON gmp.id = gos.post_id
+        WHERE gos.occurrence_id IN ({params})
+        ORDER BY gos.occurrence_id, CASE WHEN gos.role='primary' THEN 0 ELSE 1 END,
+                 gmp.post_date DESC, gmp.id DESC
+    """, tuple(ids))
+    linked: dict[int, list[dict[str, Any]]] = {}
+    for post in await cur.fetchall():
+        linked.setdefault(post["occurrence_id"], []).append(dict(post))
+    out = []
+    for row in records:
         item = dict(row)
         item["guide_names"] = _parse_json_array(item.get("guide_names_json"))
         item["organizer_names"] = _parse_json_array(item.get("organizer_names_json"))
         item["audience_fit"] = _parse_json_array(item.get("audience_fit_json"))
         item["fact_pack"] = _safe_json_object(item.get("fact_pack_json"))
         item["guide_profile_facts"] = _safe_json_object(item.get("guide_profile_facts_rollup_json"))
-        await _load_transport(conn, item)
         for key in (
             "canonical_title",
             "date",
@@ -1257,29 +1343,67 @@ async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) ->
         item["source_flags"] = _safe_json_object(item.get("source_flags_json"))
         state_map = _visual_issue_state_map(item.get("visual_issue_media_items_json"))
         item["published_visual_digest_state"] = state_map.get(str(item.get("id") or ""))
-        post_cur = await conn.execute(
-            """
-            SELECT gmp.text, gmp.source_url, gmp.post_kind, gmp.raw_facts_json
-            FROM guide_occurrence_source gos
-            JOIN guide_monitor_post gmp ON gmp.id = gos.post_id
-            WHERE gos.occurrence_id=?
-            ORDER BY CASE WHEN gos.role='primary' THEN 0 ELSE 1 END, gmp.post_date DESC, gmp.id DESC
-            LIMIT 1
-            """,
-            (int(item.get("id") or 0),),
-        )
-        post_row = await post_cur.fetchone()
-        item["dedup_source_text"] = collapse_ws(str((post_row["text"] if post_row else "") or ""))
-        item["dedup_source_url"] = post_row["source_url"] if post_row else None
-        if post_row:
-            _scope_visual_source(item, post_row)
-        payload_url = item["fact_pack"].get("source_post_url") if isinstance(item["fact_pack"], dict) else None
-        item["source_post_url"] = _source_post_url(payload_url, item["dedup_source_url"] or item.get("channel_url"))
+        posts = linked.get(item["id"], [])
+        item["linked_posts"] = posts
+        primary = posts[0] if posts else {}
+        item["dedup_source_text"] = collapse_ws(primary.get("text") or "")
+        item["dedup_source_url"] = primary.get("url")
+        item["source_post_url"] = _source_post_url(item["fact_pack"].get("source_post_url"),
+                                                  item["dedup_source_url"] or item.get("channel_url"))
+        await _load_transport(conn, item)
+        _apply_published_facts(item, posts)
+        out.append(item)
+    return out
+
+
+async def _include_documented_departures(conn: aiosqlite.Connection, requested: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not requested:
+        return []
+    # Older issues may contain only the programme row even though a detailed
+    # announcement for the same departure has since been imported.
+    days = sorted({row["date"] for row in requested if row.get("date")})
+    if not days:
+        return requested
+    cur = await conn.execute(_VISUAL_ROW_QUERY + f"""
+        WHERE go.date IN ({",".join("?" for _ in days)}) AND go.digest_eligible = 1
+          AND COALESCE(go.status, 'scheduled') != 'cancelled'
+    """, tuple(days))
+    by_id = {row["id"]: row for row in requested}
+    extras = []
+    for record in await cur.fetchall():
+        if record["id"] in by_id:
+            continue
+        peer = dict(record)
+        if any(_shared_departure_identity(row, peer) for row in requested):
+            extras.append(peer)
+    peers = [*requested, *await _load_visual_rows(conn, extras)]
+    return _select_documented_departures(requested, peers)
+
+
+async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) -> list[dict[str, Any]]:
+    await ensure_visual_digest_schema(conn)
+    sql = _VISUAL_ROW_QUERY + """
+        WHERE go.digest_eligible = 1
+          AND go.date IS NOT NULL
+          AND go.date GLOB '????-??-??'
+          AND go.date >= ?
+          AND go.date <= ?
+          AND COALESCE(go.status, 'scheduled') != 'cancelled'
+          AND (
+            go.published_visual_digest_issue_id IS NULL
+            OR datetime(go.updated_at) > datetime(COALESCE(gdi.published_at, gdi.created_at, '1970-01-01 00:00:00'))
+          )
+        ORDER BY go.date ASC, COALESCE(go.time, '99:99') ASC, go.updated_at DESC
+        LIMIT ?
+    """
+    cur = await conn.execute(sql, (_visual_start_iso(), _future_cutoff_iso(), int(limit)))
+    candidates = []
+    for item in await _load_visual_rows(conn, await cur.fetchall()):
         reason = _visual_selection_reason(item)
         if reason:
             item["visual_selection_reason"] = reason
-            out.append(item)
-    return out
+            candidates.append(item)
+    return await _include_documented_departures(conn, candidates)
 
 
 def _is_tg_post_url(url: str | None) -> bool:
@@ -1305,6 +1429,13 @@ async def select_visual_digest_rows(db: Database, *, max_items: int = VISUAL_DIG
         return []
     dedup = await deduplicate_occurrence_rows(rows, family=VISUAL_DIGEST_FAMILY, limit=max(len(rows), int(max_items)))
     display_rows = [dict(row) for row in dedup.display_rows]
+    # The ordinary deduplicator may choose among candidates more broadly. Keep
+    # distinct rows when a single apparent route has conflicting published starts.
+    by_id = {r["id"]: r for r in rows}
+    for canonical_id, member_ids in dedup.coverage_by_display_id.items():
+        group = [by_id[i] for i in member_ids]
+        if len(group) > 1 and _conflicting_departure_logistics(group):
+            display_rows.extend(dict(r) for r in group if r["id"] != canonical_id)
     display_rows.sort(key=lambda r: (str(r.get("date") or ""), str(r.get("time") or "99:99"), int(r.get("id") or 0)))
     return display_rows[: int(max_items)]
 
@@ -1356,66 +1487,9 @@ async def _fetch_rows_by_ids(conn: aiosqlite.Connection, occurrence_ids: Sequenc
     if not ids:
         return []
     placeholders = ",".join("?" for _ in ids)
-    cur = await conn.execute(
-        f"""
-        SELECT
-            go.*,
-            gs.username AS source_username,
-            gs.platform AS source_platform,
-            gs.title AS source_title,
-            gs.source_kind AS source_kind,
-            gs.flags_json AS source_flags_json,
-            gs.about_text AS source_about_text,
-            gs.about_links_json AS source_about_links_json,
-            gs.priority_weight AS priority_weight,
-            gp.display_name AS guide_profile_display_name,
-            gp.marketing_name AS guide_profile_marketing_name,
-            gp.summary_short AS guide_profile_summary,
-            gp.facts_rollup_json AS guide_profile_facts_rollup_json
-        FROM guide_occurrence go
-        LEFT JOIN guide_source gs ON gs.id = go.primary_source_id
-        LEFT JOIN guide_profile gp ON gp.id = gs.primary_profile_id
-        WHERE go.id IN ({placeholders})
-        """,
-        tuple(ids),
-    )
-    rows = await cur.fetchall()
-    by_id: dict[int, dict[str, Any]] = {}
-    for row in rows:
-        item = dict(row)
-        item["guide_names"] = _parse_json_array(item.get("guide_names_json"))
-        item["organizer_names"] = _parse_json_array(item.get("organizer_names_json"))
-        item["audience_fit"] = _parse_json_array(item.get("audience_fit_json"))
-        item["fact_pack"] = _safe_json_object(item.get("fact_pack_json"))
-        item["guide_profile_facts"] = _safe_json_object(item.get("guide_profile_facts_rollup_json"))
-        await _load_transport(conn, item)
-        for key in (
-            "canonical_title", "date", "time", "duration_text", "city", "meeting_point", "route_summary",
-            "price_text", "booking_text", "booking_url", "status", "seats_text", "summary_one_liner",
-            "digest_blurb", "availability_mode", "post_kind", "group_format",
-        ):
-            if not item.get(key) and item["fact_pack"].get(key) is not None:
-                item[key] = item["fact_pack"].get(key)
-        post_cur = await conn.execute(
-            """
-            SELECT gmp.text, gmp.source_url, gmp.post_kind, gmp.raw_facts_json
-            FROM guide_occurrence_source gos
-            JOIN guide_monitor_post gmp ON gmp.id = gos.post_id
-            WHERE gos.occurrence_id=?
-            ORDER BY CASE WHEN gos.role='primary' THEN 0 ELSE 1 END, gmp.post_date DESC, gmp.id DESC
-            LIMIT 1
-            """,
-            (int(item.get("id") or 0),),
-        )
-        post_row = await post_cur.fetchone()
-        item["dedup_source_text"] = collapse_ws(str((post_row["text"] if post_row else "") or ""))
-        item["dedup_source_url"] = post_row["source_url"] if post_row else None
-        if post_row:
-            _scope_visual_source(item, post_row)
-        payload_url = item["fact_pack"].get("source_post_url") if isinstance(item["fact_pack"], dict) else None
-        item["source_post_url"] = _source_post_url(payload_url, item["dedup_source_url"] or item.get("channel_url"))
-        by_id[int(item["id"])] = item
-    return [by_id[i] for i in ids if i in by_id]
+    cur = await conn.execute(_VISUAL_ROW_QUERY + f" WHERE go.id IN ({placeholders})", tuple(ids))
+    by_id = {row["id"]: row for row in await _load_visual_rows(conn, await cur.fetchall())}
+    return await _include_documented_departures(conn, [by_id[i] for i in ids if i in by_id])
 
 
 def _issue_occurrence_ids(items_json: Any) -> list[int]:
@@ -1586,7 +1660,7 @@ async def publish_visual_digest_to_telegram(
         cur = await conn.execute("SELECT published_targets_json FROM guide_digest_issue WHERE id=?", (int(issue_id),))
         saved = await cur.fetchone()
         existing_targets = _json_load(saved[0] if saved else None, {})
-    occurrence_ids = [int(row["id"]) for row in rows if int(row.get("id") or 0) > 0]
+    occurrence_ids = list(dict.fromkeys(i for row in rows for i in row.get("covered_visual_ids", [row["id"]])))
     published_targets: dict[str, dict[str, Any]] = {}
     errors: dict[str, str] = {}
     primary_caption = ""
@@ -2025,13 +2099,20 @@ def _vk_narrative_payload(items: Sequence[Mapping[str, Any]]) -> tuple[dict[str,
             entry["excursions"].append(row_id)
             if owner > 0 and "Гид" in roles:
                 mention_ids[entry["n"]] = (owner, name)
-        source_text = _plain(row.get("excursion_excerpt", row.get("dedup_source_text")))
-        if source_text:
-            source_url = _plain(row.get("dedup_source_url", row.get("source_post_url")))
+        posts = row.get("linked_posts")
+        if posts is None:
+            posts = [{"url": row.get("dedup_source_url", row.get("source_post_url")),
+                      "text": row.get("dedup_source_text")}]
+        for post in posts:
+            source_text = (post.get("text") or "").strip()
+            if not source_text:
+                continue
+            source_url = _plain(post.get("url"))
             source = sources.setdefault((source_url, source_text), {
-                "url": source_url, "text": source_text[:3500], "excursions": [],
+                "url": source_url, "text": source_text, "excursions": [],
             })
-            source["excursions"].append(row_id)
+            if row_id not in source["excursions"]:
+                source["excursions"].append(row_id)
         try:
             weekday = RU_WEEK_FULL[date.fromisoformat(_plain(row.get("date"))).weekday()]
         except ValueError:
@@ -2045,6 +2126,15 @@ def _vk_narrative_payload(items: Sequence[Mapping[str, Any]]) -> tuple[dict[str,
         profile = {"kind": _plain(row.get("source_kind")), "title": _plain(row.get("source_title")),
                    "about": _plain(row.get("source_about_text"))[:600],
                    "summary": _plain(row.get("guide_profile_summary")), "facts": row.get("guide_profile_facts") or {}}
+        if row.get("source_roles_checked") and row.get("source_kind") == "guide_personal":
+            profile_names = {_plain(row.get(k)).casefold() for k in
+                             ("source_title", "guide_profile_display_name", "guide_profile_marketing_name")}
+            profile_owner = (row.get("guide_profile_facts") or {}).get("vk_user_id")
+            matched = any(p.get("roles") and (
+                (profile_owner and str(p.get("owner")) == str(profile_owner))
+                or _plain(p.get("name")).casefold() in profile_names) for p in participants)
+            if not matched:
+                profile = {}
         excursions.append({
             "occurrence_id": row_id, "title": _plain(row.get("canonical_title")),
             "date": _plain(row.get("date")), "time": _plain(row.get("time")), "weekday": weekday,
@@ -2417,7 +2507,7 @@ async def _publish_visual_digest_to_vk_once(
                 logger.warning("guide_visual_digest_story_failed issue_id=%s: %s", issue_id, exc, exc_info=True)
                 story_payload = {"published": False, "reason": str(exc) or type(exc).__name__}
 
-    occurrence_ids = [int(row["id"]) for row in rows if int(row.get("id") or 0) > 0]
+    occurrence_ids = list(dict.fromkeys(i for row in rows for i in row.get("covered_visual_ids", [row["id"]])))
     async with db.raw_conn() as conn:
         await _enable_row_factory(conn)
         await ensure_visual_digest_schema(conn)
