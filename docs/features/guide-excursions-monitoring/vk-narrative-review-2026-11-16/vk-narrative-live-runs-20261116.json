@@ -1,0 +1,2246 @@
+{
+  "as_of_utc": "2026-11-16",
+  "writer_commit": "5939d0086a0b3d3f961d86f2fd100f99e5755ad9",
+  "notes": "Each input_file in this directory contains the verbatim application prompt, structured payload, and SHA-256. Aweak and Astrong use the older payload with the coauthor bio. Other A runs use final sources. Writer acceptance and successful story assembly are separate. compact_fallback_text is the ordinary result if the narrative could not be used. No personal mentions in the offline assembly of the real model responses. VK publication uses the separate daily publisher. Previously verified URLs are shortened offline, new ones remain expanded. A/348–351 vary only the opening angle for the historical issue 349. Native Sol ran through DevCoveer, Google via the GoogleAIClient in the existing production runtime. Native token counts include the executor system context. Durations include waiting in provider retry/fallback paths.",
+  "quota_before_restoration": {
+    "status": "available",
+    "source_method": "account/rateLimits/read",
+    "observed_at": "2026-11-16T17:15:43.875796+00:00",
+    "limits": [
+      {
+        "limit_id": "codex",
+        "windows": [
+          {
+            "window": "primary",
+            "used_percent": 100,
+            "remaining_percent": 0,
+            "duration_minutes": 10080,
+            "resets_at_unix": 1795323709
+          }
+        ],
+        "valid": true,
+        "limit_reached": false
+      }
+    ],
+    "admission": {
+      "eligible": false,
+      "reason": "reserve_or_limit_reached",
+      "reserve_percent": 10,
+      "effective_remaining_percent": 0,
+      "scope": "codex_account_snapshot_only",
+      "separate_owner_approval_required": true,
+      "model_catalog_available": true
+    },
+    "inference_performed": false,
+    "default_profile": {
+      "requested": "gpt-6.1-medium",
+      "model": "gpt-6.1-sol",
+      "reasoning_effort": "medium",
+      "catalog_available": true,
+      "inference_verified": false
+    },
+    "local_tz": "Europe/Kaliningrad",
+    "reset_local": "2026-11-22 07:01:49",
+    "requested_model": "gpt-6.1-sol",
+    "reasoning_effort": "medium",
+    "requests_dispatched": 0
+  },
+  "quota_after_restoration": {
+    "status": "available",
+    "source_method": "account/rateLimits/read",
+    "observed_at": "2026-11-16T17:33:27.932398+00:00",
+    "limits": [
+      {
+        "limit_id": "codex",
+        "windows": [
+          {
+            "window": "primary",
+            "used_percent": 0,
+            "remaining_percent": 100,
+            "duration_minutes": 10080,
+            "resets_at_unix": 1795455207
+          }
+        ],
+        "valid": true,
+        "limit_reached": false
+      }
+    ],
+    "admission": {
+      "eligible": true,
+      "reason": "quota_available",
+      "reserve_percent": 10,
+      "effective_remaining_percent": 100,
+      "scope": "codex_account_snapshot_only",
+      "separate_owner_approval_required": true,
+      "model_catalog_available": true
+    },
+    "inference_performed": false,
+    "default_profile": {
+      "requested": "gpt-6.1-medium",
+      "model": "gpt-6.1-sol",
+      "reasoning_effort": "medium",
+      "catalog_available": true,
+      "inference_verified": false
+    }
+  },
+  "consultation_excluded_from_story_comparison": {
+    "quota": {
+      "status": "available",
+      "source_method": "account/rateLimits/read",
+      "observed_at": "2026-11-16T17:33:27.932398+00:00",
+      "limits": [
+        {
+          "limit_id": "codex",
+          "windows": [
+            {
+              "window": "primary",
+              "used_percent": 0,
+              "remaining_percent": 100,
+              "duration_minutes": 10080,
+              "resets_at_unix": 1795455207
+            }
+          ],
+          "valid": true,
+          "limit_reached": false
+        }
+      ],
+      "admission": {
+        "eligible": true,
+        "reason": "quota_available",
+        "reserve_percent": 10,
+        "effective_remaining_percent": 100,
+        "scope": "codex_account_snapshot_only",
+        "separate_owner_approval_required": true,
+        "model_catalog_available": true
+      },
+      "inference_performed": false,
+      "default_profile": {
+        "requested": "gpt-6.1-medium",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "medium",
+        "catalog_available": true,
+        "inference_verified": false
+      }
+    },
+    "dispatch": {
+      "status": "running",
+      "taskId": "dvt_0a924aeb1995443eb3e56bd9483d080f",
+      "taskReference": "dvt_0a924aeb1995443eb3e56bd9483d080f",
+      "backend": "codex_consult",
+      "provider": "codex",
+      "model": "gpt-6.1-sol",
+      "reasoningEffort": "medium",
+      "purpose": "ideas",
+      "access": "read",
+      "contextMode": "provided_only",
+      "remainingPercent": 100,
+      "advisory": true,
+      "automaticFallback": false,
+      "markdownOnCompletion": true,
+      "content": "Isolated Codex consultation started. Poll taskId with read_task; the model receives only the supplied evidence bundle."
+    },
+    "actual_model": "gpt-6.1-sol",
+    "effort": "medium",
+    "raw": "## Findings\n\n- Достаточно материала для трёх абзацев: `[745, 747]`, `[746]`, `[763]`. Повторные даты одного маршрута объединяются.\n- Для `[746]` подтверждены гид Ноза Усманова и принадлежность к проекту. Рассвет, море и прогулку по побережью из названия выводить нельзя.\n- Ботанические подробности принадлежат `[745, 747]`; общее расписание не переносит их на `[746]`.\n- Биографию Достоевского и историю чёрного дрозда следует исключить: приглашение связывает их с другим названием маршрута, тождество экскурсий данными не установлено.\n\n## Edge cases\n\n- Источники обещают разные напитки: кофе и травяной чай. По правилу разрешения расхождений безопаснее исключить оба.\n- Ограничение мест одновременно подпадает под требование поставить условия участия первым предложением и запрет пересказывать служебные предупреждения. Рекомендую приоритет конкретному требованию об условиях участия.\n- Связь омелы с ботаническим маршрутом обозначена переходом от её истории к приглашению. Однако подробности о друидах и поцелуях прямо программой не названы; надёжнее выбрать платаны или плющ.\n- Для фермы источник подтверждает выращивание икры, приготовление блюд, сведения об осетрах и дегустацию закусок. Состав угощения и транспорт не указаны.\n\n## Recommendation\n\nИспользовать вопрос о сбрасывающих кору платанах как lead. В ботаническом абзаце сохранить маршрут, гинкго, растения старого сада и неспешный темп; сведения о проекте дать один раз. Абзац Нозы оставить одним предложением. Ферму описать только конкретикой источника, без рекламных эпитетов.\n\nИтоговый JSON здесь не формирую: внешнее поручение устанавливает консультативный формат, а вложенное задание служит материалом для анализа.\n\n## Confidence\n\nВысокая по распределению фактов и объединению дат. Средняя по трактовке противоречащих требований об ограничении мест и принадлежности вступления об омеле программе маршрута.",
+    "receipt": {
+      "status": "ok",
+      "path": "/home/dev/.local/share/openai-codex-mcp/model-consultations/dvt_0a924aeb1995443eb3e56bd9483d080f.md",
+      "sha256": "8bab7fe3e2d6f2fc27bfd5c4f55a9d16fc53a6c33d669dca021c090f68d15742",
+      "bytes": 3675,
+      "format": "markdown",
+      "reused": false
+    },
+    "accepted": false,
+    "reason": "advisory-only consult returned critique instead of JSON"
+  },
+  "inputs_by_prompt_sha256": {
+    "2a9c2b3556d8130013e99194c1fcb43eeda4c340c6e57c0d5d31bf71927545eb": {
+      "case": "A",
+      "angle_issue": 348,
+      "file": "vk-fable-input-A-348-prev.json",
+      "source_count": 5
+    },
+    "4aa523d07a98af3c35d9072ae04625e147ddd093de517a07e9ad3f23a0831730": {
+      "case": "A",
+      "angle_issue": 348,
+      "file": "vk-fable-input-A-348.json",
+      "source_count": 5
+    },
+    "da17e59e120c0e41771b8a5bdb21e63a83af3341ada83e46dfa985f78698b2d5": {
+      "case": "A",
+      "angle_issue": 349,
+      "file": "vk-fable-input-A-349.json",
+      "source_count": 5
+    },
+    "fd1370e0aa2004f7151b5ed9e8b19b5d1cb9ef19ee98a392c2ae6e13ec008c2f": {
+      "case": "A",
+      "angle_issue": 350,
+      "file": "vk-fable-input-A-350.json",
+      "source_count": 5
+    },
+    "a2493233ab17b3ea37495799f234299ce277e30514fd6c5980da14930a2b4d60": {
+      "case": "A",
+      "angle_issue": 351,
+      "file": "vk-fable-input-A-351.json",
+      "source_count": 5
+    },
+    "5b8c501c0143a31e70366f578a38ef99719b251626e988e8474e094bcfdfcb5a": {
+      "case": "B",
+      "angle_issue": 350,
+      "file": "vk-fable-input-B-350.json",
+      "source_count": 7
+    },
+    "fdbad97a34ff158e7f4ee91b083d3130adad4e258a06d9d4e2b435e340c910d6": {
+      "case": "C",
+      "angle_issue": 351,
+      "file": "vk-fable-input-C-351.json",
+      "source_count": 5
+    },
+    "94ea57a7338e0abca449ce9597f1a3f6e0feaab9e7a1dea38c75af966074c71b": {
+      "case": "E",
+      "angle_issue": 349,
+      "file": "vk-fable-input-E-349.json",
+      "source_count": 3
+    },
+    "2feadf29e4ecf251a77eeeaa8e760ccee9a6868460b9fc41b961d16d9c87f8bf": {
+      "case": "F",
+      "angle_issue": 349,
+      "file": "vk-fable-input-F-349.json",
+      "source_count": 9
+    }
+  },
+  "runs": [
+    {
+      "case": "A",
+      "angle_issue": 348,
+      "requested_model": "gemini-2.5-flash",
+      "started_at": "2026-11-16T17:26:26.853193+00:00",
+      "input_prompt_sha256": "4aa523d07a98af3c35d9072ae04625e147ddd093de517a07e9ad3f23a0831730",
+      "generation_config": {
+        "temperature": 0.7,
+        "response_mime_type": "application/json",
+        "response_schema": {
+          "type": "object",
+          "properties": {
+            "lead": {
+              "type": "string"
+            },
+            "paragraphs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "details": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "occurrence_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "details",
+                  "occurrence_ids",
+                  "text"
+                ]
+              }
+            },
+            "outro": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "lead",
+            "paragraphs"
+          ]
+        }
+      },
+      "max_output_tokens": 2400,
+      "raw_response": "{\n  \"lead\": \"Зелёные шары омелы в голых кронах деревьев выдают полупаразита, который пьёт воду прямо из ветвей.\",\n  \"paragraphs\": [\n    {\n      \"details\": [\n        \"Количество мест ограничено, обязательна предварительная регистрация\",\n        \"Специальная ноябрьская цена — 500 рублей\",\n        \"Проект «80 ЛЕТ ЕДИНСТВА» от команды гидов, победивших в конкурсах\",\n        \"Место встречи: у скульптуры «Борющиеся зубры»\",\n        \"Маршрут: от Зубров через Хуфен вдоль Паркового ручья в Центральный парк\",\n        \"Длительность: около 2 часов в лёгком темпе с горячим кофе\",\n        \"Камерная группа, истории и необычные ракурсы\",\n        \"Гид — Ольга Рубцова\",\n        \"Омела белая — полупаразит без почвы, пьет воду через гаустории из дерева-хозяина\",\n        \"Кельтские легенды про золотой серп и обереги\",\n        \"Традиция целоваться под омелой из скандинавских мифов\",\n        \"Ягоды с висцином, птицы разносят семена\",\n        \"Почему платаны сбрасывают кору как военный камуфляж\",\n        \"Где растет реликтовое гинкго, пережившее динозавров\",\n        \"Овраг Паркового ручья и тайны Юльхенталя\",\n        \"Кёнигсберг как город-сад\",\n        \"Вековые великаны-хранители берегов от оползней\",\n        \"Плющ и его альпинистский подвиг\",\n        \"Ботанические призраки прошлого от немецких садовников\",\n        \"Тёплый травяной чай из термоса на старом мостике\"\n      ],\n      \"occurrence_ids\": [\n        745,\n        747\n      ],\n      \"text\": \"Количество мест ограничено, поэтому стоит сразу зарегистрироваться на прогулку по специальной ноябрьской цене в пятьсот рублей. [[1|Ольга Рубцова]] проведёт нас от «Борющихся зубров» по старинному Хуфену вдоль Паркового ручья в Центральный парк. Впереди два часа неспешного хода с горячим кофе в термосе среди вековых великанов и ботанических призраков прошлого. Мы разберем, как плющ совершает свой медленный альпинистский подвиг и почему платаны сбрасывают кору, похожую на военный камуфляж. На маршруте нам покажут реликтовое гинкго, пережившее динозавров, и расскажут, какие тайны прячет овраг утраченного парка Юльхенталь.\"\n    },\n    {\n      \"details\": [\n        \"Прогулка «Рассвет над Балтикой»\",\n        \"Гид — Ноза Усманова\",\n        \"Проект «80 ЛЕТ ЕДИНСТВА»\",\n        \"Специальная ноябрьская цена — 500 рублей\",\n        \"Количество мест ограничено, требуется регистрация\"\n      ],\n      \"occurrence_ids\": [\n        746\n      ],\n      \"text\": \"По той же ноябрьской цене можно записаться на прогулку проекта [[2|80 ЛЕТ ЕДИНСТВА]], которую проведёт [[3|Ноза Усманова]]. Из всей программы меня больше всего цепляет этот балтийский маршрут, хотя деталей о нём пока совсем немного.\"\n    },\n    {\n      \"details\": [\n        \"Экскурсия на Осетровую ферму\",\n        \"Узнать всё об осетрах\",\n        \"Попробовать эксклюзивные закуски и дегустация блюд из икры\",\n        \"Место встречи: Осетровая ферма\",\n        \"Телефон для записи: 8 (911) 858-58-49\"\n      ],\n      \"occurrence_ids\": [\n        763\n      ],\n      \"text\": \"Совсем по-другому устроена поездка на Осетровую ферму, куда стоит позвонить по номеру для записи. На месте нам обещают раскрыть всё об осетрах и дать попробовать закуски с дегустацией икры.\"\n    }\n  ],\n  \"outro\": \"А вы пробовали когда-нибудь чай из термоса на старых парковых мостиках?\"\n}",
+      "usage": {
+        "total_tokens": 9426,
+        "input_tokens": 8370,
+        "output_tokens": 1056
+      },
+      "accepted": true,
+      "narrative": {
+        "lead": "Зелёные шары омелы в голых кронах деревьев выдают полупаразита, который пьёт воду прямо из ветвей.",
+        "paragraphs": [
+          {
+            "occurrence_ids": [
+              745,
+              747
+            ],
+            "text": "Количество мест ограничено, поэтому стоит сразу зарегистрироваться на прогулку по специальной ноябрьской цене в пятьсот рублей. [[1|Ольга Рубцова]] проведёт нас от «Борющихся зубров» по старинному Хуфену вдоль Паркового ручья в Центральный парк. Впереди два часа неспешного хода с горячим кофе в термосе среди вековых великанов и ботанических призраков прошлого. Мы разберем, как плющ совершает свой медленный альпинистский подвиг и почему платаны сбрасывают кору, похожую на военный камуфляж. На маршруте нам покажут реликтовое гинкго, пережившее динозавров, и расскажут, какие тайны прячет овраг утраченного парка Юльхенталь."
+          },
+          {
+            "occurrence_ids": [
+              746
+            ],
+            "text": "По той же ноябрьской цене можно записаться на прогулку проекта [[2|80 ЛЕТ ЕДИНСТВА]], которую проведёт [[3|Ноза Усманова]]. Из всей программы меня больше всего цепляет этот балтийский маршрут, хотя деталей о нём пока совсем немного."
+          },
+          {
+            "occurrence_ids": [
+              763
+            ],
+            "text": "Совсем по-другому устроена поездка на Осетровую ферму, куда стоит позвонить по номеру для записи. На месте нам обещают раскрыть всё об осетрах и дать попробовать закуски с дегустацией икры."
+          }
+        ],
+        "outro": "А вы пробовали когда-нибудь чай из термоса на старых парковых мостиках?"
+      },
+      "attempts": [
+        {
+          "ts": "2026-11-16T17:27:15.278223+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-2.5-flash",
+          "provider_model": "gemini-2.5-flash",
+          "requested_model": "gemini-2.5-flash",
+          "duration_ms": 8669
+        },
+        {
+          "ts": "2026-11-16T17:27:15.473610+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:27:15.648512+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:27:17.308981+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-2.5-flash",
+          "provider_model": "gemini-2.5-flash",
+          "requested_model": "gemini-2.5-flash",
+          "duration_ms": 294
+        },
+        {
+          "ts": "2026-11-16T17:27:17.497340+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:27:17.657135+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:27:37.829568+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-2.5-flash",
+          "provider_model": "gemini-2.5-flash",
+          "requested_model": "gemini-2.5-flash",
+          "duration_ms": 274
+        },
+        {
+          "ts": "2026-11-16T17:27:38.001242+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:27:38.167918+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:28:07.934169+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-2.5-flash",
+          "provider_model": "gemini-2.5-flash",
+          "requested_model": "gemini-2.5-flash",
+          "duration_ms": 295
+        },
+        {
+          "ts": "2026-11-16T17:28:11.088409+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "duration_ms": 2691
+        },
+        {
+          "ts": "2026-11-16T17:28:13.261112+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "duration_ms": 1379
+        },
+        {
+          "ts": "2026-11-16T17:28:16.222217+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "duration_ms": 1835
+        },
+        {
+          "ts": "2026-11-16T17:28:16.440998+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:28:33.875449+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-2.5-flash",
+          "provider_model": "gemini-2.5-flash",
+          "requested_model": "gemini-2.5-flash",
+          "duration_ms": 322
+        },
+        {
+          "ts": "2026-11-16T17:28:35.743525+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "duration_ms": 1336
+        },
+        {
+          "ts": "2026-11-16T17:28:39.077391+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "duration_ms": 2528
+        },
+        {
+          "ts": "2026-11-16T17:28:41.673332+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "duration_ms": 1549
+        },
+        {
+          "ts": "2026-11-16T17:28:41.841560+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:28:49.551597+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-2.5-flash",
+          "provider_model": "gemini-2.5-flash",
+          "requested_model": "gemini-2.5-flash",
+          "duration_ms": 283
+        },
+        {
+          "ts": "2026-11-16T17:28:51.303275+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "duration_ms": 1271
+        },
+        {
+          "ts": "2026-11-16T17:28:56.193249+00:00",
+          "event": "google_ai.call_ok",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "duration_ms": 4060,
+          "usage": {
+            "input_tokens": 8370,
+            "output_tokens": 1056,
+            "total_tokens": 9426,
+            "model": "",
+            "thought_tokens": 0,
+            "reserved_tokens": 23768,
+            "finish_reason": "STOP",
+            "provider_response_id": "VD37arHZCoat5NoPpvWYkAk",
+            "provider_request_id": null,
+            "provider_model_version": "gemini-3.5-flash-lite",
+            "input_count_source": "heuristic_fallback"
+          }
+        }
+      ],
+      "actual_model": "gemini-3.5-flash-lite",
+      "elapsed_s": 149.35,
+      "final_text": "ЭКСКУРСИИ 17–22 НОЯБРЯ\nЗелёные шары омелы в голых кронах деревьев выдают полупаразита, который пьёт воду прямо из ветвей.\n\nЗЕЛЁНЫЕ ИСТОРИИ\nКоличество мест ограничено, поэтому стоит сразу зарегистрироваться на прогулку по специальной ноябрьской цене в пятьсот рублей. Ольга Рубцова проведёт нас от «Борющихся зубров» по старинному Хуфену вдоль Паркового ручья в Центральный парк. Впереди два часа неспешного хода с горячим кофе в термосе среди вековых великанов и ботанических призраков прошлого. Мы разберем, как плющ совершает свой медленный альпинистский подвиг и почему платаны сбрасывают кору, похожую на военный камуфляж. На маршруте нам покажут реликтовое гинкго, пережившее динозавров, и расскажут, какие тайны прячет овраг утраченного парка Юльхенталь.\n17 ноября (вт), 14:00 · 21 ноября (сб), 11:00\n💳 500 рублей · 🔗 Запись: vk.cc/d3XqaE\n\nРАССВЕТ НАД БАЛТИКОЙ\nПо той же ноябрьской цене можно записаться на прогулку проекта 80 ЛЕТ ЕДИНСТВА, которую проведёт Ноза Усманова. Из всей программы меня больше всего цепляет этот балтийский маршрут, хотя деталей о нём пока совсем немного.\n20 ноября (пт), 14:00\n💳 500 рублей · 🔗 Запись: vk.cc/d3XqaE\n\nСЕКРЕТЫ ЧЁРНОГО ЗОЛОТА\nСовсем по-другому устроена поездка на Осетровую ферму, куда стоит позвонить по номеру для записи. На месте нам обещают раскрыть всё об осетрах и дать попробовать закуски с дегустацией икры.\n22 ноября (вс)\n☎ Запись по телефону: +7 (911) 858-58-49\n\nА вы пробовали когда-нибудь чай из термоса на старых парковых мостиках?\n\nЭто дайджест экскурсий по Калининградской области от «Ух ты, Калининград!».\n\n#экскурсии #Калининград #УхтыКалининград",
+      "run": "A2",
+      "writer_accepted": true,
+      "story_assembled": true,
+      "input_file": "vk-fable-input-A-348.json"
+    },
+    {
+      "case": "A",
+      "angle_issue": 348,
+      "requested_model": "gemini-3.6-flash",
+      "actual_model": null,
+      "responding_model_for_incomplete_attempt": "gemini-3.6-flash",
+      "started_at": "2026-11-16T17:29:38.674Z",
+      "completed_at": "2026-11-16T17:33:03.988Z",
+      "input_prompt_sha256": "4aa523d07a98af3c35d9072ae04625e147ddd093de517a07e9ad3f23a0831730",
+      "max_output_tokens": 2400,
+      "accepted": false,
+      "raw_response": null,
+      "first_attempt_usage": {
+        "input_tokens": 8370,
+        "output_tokens": 79,
+        "thought_tokens": 2301,
+        "total_tokens": 10750
+      },
+      "attempts": [
+        {
+          "time": "2026-11-16T17:31:00.933002+00:00",
+          "event": "google_ai.model_pool_selected",
+          "model": "gemini-3.6-flash",
+          "attempt_no": 1,
+          "elapsed_ms": null
+        },
+        {
+          "time": "2026-11-16T17:31:01.213348+00:00",
+          "event": "google_ai.reserve_ok",
+          "model": "gemini-3.6-flash",
+          "attempt_no": 1,
+          "elapsed_ms": null
+        },
+        {
+          "time": "2026-11-16T17:32:20.916823+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-3.6-flash",
+          "attempt_no": 1,
+          "elapsed_ms": 78769,
+          "error_type": "output_truncated",
+          "error_code": "MAX_TOKENS",
+          "finish_reason": "MAX_TOKENS",
+          "provider_model_version": "gemini-3.6-flash"
+        },
+        {
+          "time": "2026-11-16T17:32:21.307841+00:00",
+          "event": "google_ai.retry",
+          "model": "gemini-3.6-flash",
+          "attempt_no": 1,
+          "elapsed_ms": null
+        },
+        {
+          "time": "2026-11-16T17:32:21.536754+00:00",
+          "event": "google_ai.model_pool_selected",
+          "model": "gemini-3.6-flash",
+          "attempt_no": 1,
+          "elapsed_ms": null
+        },
+        {
+          "time": "2026-11-16T17:32:21.732106+00:00",
+          "event": "google_ai.reserve_ok",
+          "model": "gemini-3.6-flash",
+          "attempt_no": 2,
+          "elapsed_ms": null
+        }
+      ],
+      "elapsed_s": 205.081,
+      "elapsed_scope": "outer_job_including_startup",
+      "provider_error": "MAX_TOKENS on first attempt; next attempt was reserved before the enclosing job timed out. No complete text returned to client.",
+      "final_text": null,
+      "compact_fallback_text": "Дайджест экскурсий №349\n\nКоротко: 4 будущих экскурсий на 17–22 ноября. Смотрите карточку, а детали и запись — ниже.\n\n1. Зелёные истории — vk.cc/d3XqaE\n2. Рассвет над Балтикой — vk.cc/d3XqaE\n3. Зелёные истории — vk.cc/d3XqaE\n4. Секреты чёрного золота — +7 (911) 858-58-49\n\n#экскурсии #Калининград #УхтыКалининград",
+      "run": "A3",
+      "writer_accepted": false,
+      "story_assembled": false,
+      "input_file": "vk-fable-input-A-348.json"
+    },
+    {
+      "case": "A",
+      "angle_issue": 348,
+      "requested_model": "gemini-3.6-flash",
+      "started_at": "2026-11-16T17:43:31.884084+00:00",
+      "input_prompt_sha256": "4aa523d07a98af3c35d9072ae04625e147ddd093de517a07e9ad3f23a0831730",
+      "generation_config": {
+        "temperature": 0.7,
+        "response_mime_type": "application/json",
+        "response_schema": {
+          "type": "object",
+          "properties": {
+            "lead": {
+              "type": "string"
+            },
+            "paragraphs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "details": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "occurrence_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "details",
+                  "occurrence_ids",
+                  "text"
+                ]
+              }
+            },
+            "outro": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "lead",
+            "paragraphs"
+          ]
+        }
+      },
+      "max_output_tokens": 8192,
+      "raw_response": "{\n  \"lead\": \"Зачем платаны сбрасывают кору, будто сменяют военный камуфляж?\",\n  \"paragraphs\": [\n    {\n      \"details\": [\n        \"Омела белая не касается почвы и остаётся зелёной круглый год.\",\n        \"Платаны сбрасывают кору, а гинкго пережило динозавров.\",\n        \"Маршрут от скульптуры «Борющиеся зубры» через Хуфен вдоль Паркового ручья в Центральный парк.\",\n        \"Овраг Паркового ручья и утраченный парк Юльхенталь со швейцарскими шале.\",\n        \"Камерная группа, неспешный темп с травяным чаем из термоса.\"\n      ],\n      \"occurrence_ids\": [\n        745,\n        747\n      ],\n      \"text\": \"Количество мест в группе ограничено, так что стоит поспешить: на этой пешеходной прогулке [[1|Ольга Рубцова]] покажет гинкго, пережившее динозавров, и объяснит, почему платаны сбрасывают кору. Пройдёмся от скульптуры «Борющиеся зубры» через Хуфен вдоль Паркового ручья до Центрального парка. По дороге заглянем в затерянный овраг Юльхенталь со старыми мостиками и согреемся травяным чаем из термоса. Про изумрудные шапки омелы в кронах я раньше даже не задумывался.\"\n    },\n    {\n      \"details\": [\n        \"Гид — Ноза Усманова.\",\n        \"Маршрут проекта «80 ЛЕТ ЕДИНСТВА».\"\n      ],\n      \"occurrence_ids\": [\n        746\n      ],\n      \"text\": \"Ещё один маршрут проекта «80 ЛЕТ ЕДИНСТВА» ведёт [[3|Ноза Усманова]].\"\n    },\n    {\n      \"details\": [\n        \"Экскурсия на Осетровую ферму.\",\n        \"Рассказ о выращивании осетров и приготовлении икры.\",\n        \"Дегустация закусок.\"\n      ],\n      \"occurrence_ids\": [\n        763\n      ],\n      \"text\": \"Поедем за город на осетровую ферму, чтобы увидеть, как там выращивают осетров и готовят икру. На месте устроят дегустацию закусок. Из всех анонсов меня больше всего цепляет эта возможность рассмотреть фермерское хозяйство вблизи.\"\n    }\n  ],\n  \"outro\": \"А вы замечали зелёные шары омелы на городских деревьях этой осенью?\"\n}",
+      "usage": {
+        "total_tokens": 13763,
+        "input_tokens": 8370,
+        "output_tokens": 628
+      },
+      "accepted": true,
+      "narrative": {
+        "lead": "Зачем платаны сбрасывают кору, будто сменяют военный камуфляж?",
+        "paragraphs": [
+          {
+            "occurrence_ids": [
+              745,
+              747
+            ],
+            "text": "Количество мест в группе ограничено, так что стоит поспешить: на этой пешеходной прогулке [[1|Ольга Рубцова]] покажет гинкго, пережившее динозавров, и объяснит, почему платаны сбрасывают кору. Пройдёмся от скульптуры «Борющиеся зубры» через Хуфен вдоль Паркового ручья до Центрального парка. По дороге заглянем в затерянный овраг Юльхенталь со старыми мостиками и согреемся травяным чаем из термоса. Про изумрудные шапки омелы в кронах я раньше даже не задумывался."
+          },
+          {
+            "occurrence_ids": [
+              746
+            ],
+            "text": "Ещё один маршрут проекта «80 ЛЕТ ЕДИНСТВА» ведёт [[3|Ноза Усманова]]."
+          },
+          {
+            "occurrence_ids": [
+              763
+            ],
+            "text": "Поедем за город на осетровую ферму, чтобы увидеть, как там выращивают осетров и готовят икру. На месте устроят дегустацию закусок. Из всех анонсов меня больше всего цепляет эта возможность рассмотреть фермерское хозяйство вблизи."
+          }
+        ],
+        "outro": "А вы замечали зелёные шары омелы на городских деревьях этой осенью?"
+      },
+      "attempts": [
+        {
+          "ts": "2026-11-16T17:45:04.762950+00:00",
+          "event": "google_ai.call_ok",
+          "model": "gemini-3.6-flash",
+          "provider_model": "gemini-3.6-flash",
+          "requested_model": "gemini-3.6-flash",
+          "duration_ms": 61457,
+          "usage": {
+            "input_tokens": 8370,
+            "output_tokens": 628,
+            "total_tokens": 13763,
+            "model": "",
+            "thought_tokens": 4765,
+            "reserved_tokens": 29560,
+            "finish_reason": "STOP",
+            "provider_response_id": "5ED7arO2N6nDxdIPr8iOuA8",
+            "provider_request_id": null,
+            "provider_model_version": "gemini-3.6-flash",
+            "input_count_source": "heuristic_fallback"
+          }
+        }
+      ],
+      "actual_model": "gemini-3.6-flash",
+      "elapsed_s": 92.9,
+      "experiment": "Test-only generation limit 8192 vs shipping 2400; prompt identical; per-process writer LLM timeout 195s / full 200s. No configuration was persisted.",
+      "final_text": "ЭКСКУРСИИ 17–22 НОЯБРЯ\nЗачем платаны сбрасывают кору, будто сменяют военный камуфляж?\n\nЗЕЛЁНЫЕ ИСТОРИИ\nКоличество мест в группе ограничено, так что стоит поспешить: на этой пешеходной прогулке Ольга Рубцова покажет гинкго, пережившее динозавров, и объяснит, почему платаны сбрасывают кору. Пройдёмся от скульптуры «Борющиеся зубры» через Хуфен вдоль Паркового ручья до Центрального парка. По дороге заглянем в затерянный овраг Юльхенталь со старыми мостиками и согреемся травяным чаем из термоса. Про изумрудные шапки омелы в кронах я раньше даже не задумывался.\n17 ноября (вт), 14:00 · 21 ноября (сб), 11:00\n💳 500 рублей · 🔗 Запись: vk.cc/d3XqaE\n\nРАССВЕТ НАД БАЛТИКОЙ\nЕщё один маршрут проекта «80 ЛЕТ ЕДИНСТВА» ведёт Ноза Усманова.\n20 ноября (пт), 14:00\n💳 500 рублей · 🔗 Запись: vk.cc/d3XqaE\n\nСЕКРЕТЫ ЧЁРНОГО ЗОЛОТА\nПоедем за город на осетровую ферму, чтобы увидеть, как там выращивают осетров и готовят икру. На месте устроят дегустацию закусок. Из всех анонсов меня больше всего цепляет эта возможность рассмотреть фермерское хозяйство вблизи.\n22 ноября (вс)\n☎ Запись по телефону: +7 (911) 858-58-49\n\nА вы замечали зелёные шары омелы на городских деревьях этой осенью?\n\nЭто дайджест экскурсий по Калининградской области от «Ух ты, Калининград!».\n\n#экскурсии #Калининград #УхтыКалининград",
+      "run": "A4",
+      "writer_accepted": true,
+      "story_assembled": true,
+      "input_file": "vk-fable-input-A-348.json"
+    },
+    {
+      "case": "A",
+      "angle_issue": 348,
+      "requested_model": "gemini-3.6-flash",
+      "started_at": "2026-11-16T17:24:31.350714+00:00",
+      "input_prompt_sha256": "2a9c2b3556d8130013e99194c1fcb43eeda4c340c6e57c0d5d31bf71927545eb",
+      "generation_config": {
+        "temperature": 0.7,
+        "response_mime_type": "application/json",
+        "response_schema": {
+          "type": "object",
+          "properties": {
+            "lead": {
+              "type": "string"
+            },
+            "paragraphs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "details": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "occurrence_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "details",
+                  "occurrence_ids",
+                  "text"
+                ]
+              }
+            },
+            "outro": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "lead",
+            "paragraphs"
+          ]
+        }
+      },
+      "max_output_tokens": 2400,
+      "accepted": false,
+      "attempts": [],
+      "actual_model": null,
+      "elapsed_s": 33.15,
+      "provider_error": "Rate limit exceeded: model_pool_no_keys",
+      "final_text": null,
+      "compact_fallback_text": "Дайджест экскурсий №349\n\nКоротко: 4 будущих экскурсий на 17–22 ноября. Смотрите карточку, а детали и запись — ниже.\n\n1. Зелёные истории — vk.cc/d3XqaE\n2. Рассвет над Балтикой — vk.cc/d3XqaE\n3. Зелёные истории — vk.cc/d3XqaE\n4. Секреты чёрного золота — +7 (911) 858-58-49\n\n#экскурсии #Калининград #УхтыКалининград",
+      "run": "Astrong",
+      "writer_accepted": false,
+      "story_assembled": false,
+      "input_file": "vk-fable-input-A-348-prev.json"
+    },
+    {
+      "case": "A",
+      "angle_issue": 348,
+      "requested_model": "gemini-3.5-flash-lite",
+      "started_at": "2026-11-16T17:25:34.553106+00:00",
+      "input_prompt_sha256": "2a9c2b3556d8130013e99194c1fcb43eeda4c340c6e57c0d5d31bf71927545eb",
+      "generation_config": {
+        "temperature": 0.7,
+        "response_mime_type": "application/json",
+        "response_schema": {
+          "type": "object",
+          "properties": {
+            "lead": {
+              "type": "string"
+            },
+            "paragraphs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "details": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "occurrence_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "details",
+                  "occurrence_ids",
+                  "text"
+                ]
+              }
+            },
+            "outro": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "lead",
+            "paragraphs"
+          ]
+        }
+      },
+      "max_output_tokens": 2400,
+      "raw_response": "{\n  \"lead\": \"Почему омела принципиально не касается корнями почвы и как её семена используют природный суперклей?\",\n  \"paragraphs\": [\n    {\n      \"details\": [\n        \"Зеленые шары омелы белой висят в кронах лип, клёнов и тополей в ноябре\",\n        \"Омела полупаразит: фотосинтезирует сама, а воду и минеральные соли пьет из ветвей дерева-хозяина через присоски-гаустории\",\n        \"Ягоды омелы содержат клейкое вещество висцин, с помощью которого дрозды и свиристели прикрепляют семена к коре нового дерева\",\n        \"Маршрут: от скульптуры «Борющиеся зубры» через Хуфен вдоль ручья в Центральный парк\",\n        \"На прогулке узнаем, почему платаны сбрасывают кору, где растет гинкго, какие тайны прячет овраг Паркового ручья и почему Кёнигсберг проектировали как город-сад\",\n        \"Тёплый травяной чай из термоса на старом мостике\",\n        \"Длительность около 2 часов в неспешном темпе\",\n        \"Камерная группа, места ограничены\",\n        \"Проект «80 ЛЕТ ЕДИНСТВА», гид [[1|Ольга Рубцова]]\"\n      ],\n      \"occurrence_ids\": [745, 747],\n      \"text\": \"В ноябре на липах и клёнах высоко в кронах появляются плотные зелёные шары омелы. [[1|Ольга Рубцова]] проведёт нас по пешеходному маршруту от «Борющихся зубров» через Хуфен вдоль Паркового ручья в Центральный парк, где мы узнаем, почему платаны сбрасывают кору, где растет пережившее динозавров гинкго и какие тайны прячет старый овраг. На этой прогулке можно будет сделать атмосферные кадры, а обязательной частью станет тёплый травяной чай из термоса на старом мостике. Мест в камерной группе немного, поэтому стоит поторопиться с записью.\"\n    },\n    {\n      \"details\": [\n        \"Прогулка «Рассвет над Балтикой»\",\n        \"Проект «80 ЛЕТ ЕДИНСТВА», гид [[3|Ноза Усманова]]\"\n      ],\n      \"occurrence_ids\": [746],\n      \"text\": \"В расписании проекта «80 ЛЕТ ЕДИНСТВА» заявлена прогулка [[3|Нозы Усмановой]].\"\n    },\n    {\n      \"details\": [\n        \"Экскурсия на Осетровую ферму\",\n        \"Дегустация закусок\",\n        \"Узнаете всё об осетрах\",\n        \"Место встречи: Осетровая ферма\",\n        \"Гид Мария Морозова\"\n      ],\n      \"occurrence_ids\": [763],\n      \"text\": \"Мы можем отправиться на Осетровую ферму, где аттестованный гид Мария Морозова расскажет всё об осетрах и предложит попробовать закуски.\"\n    }\n  ],\n  \"outro\": \"А вы замечали в ноябре эти зелёные шары омелы на голых ветвях городских деревьев?\"\n}",
+      "usage": {
+        "total_tokens": 9249,
+        "input_tokens": 8461,
+        "output_tokens": 788
+      },
+      "accepted": true,
+      "narrative": {
+        "lead": "Почему омела принципиально не касается корнями почвы и как её семена используют природный суперклей?",
+        "paragraphs": [
+          {
+            "occurrence_ids": [
+              745,
+              747
+            ],
+            "text": "В ноябре на липах и клёнах высоко в кронах появляются плотные зелёные шары омелы. [[1|Ольга Рубцова]] проведёт нас по пешеходному маршруту от «Борющихся зубров» через Хуфен вдоль Паркового ручья в Центральный парк, где мы узнаем, почему платаны сбрасывают кору, где растет пережившее динозавров гинкго и какие тайны прячет старый овраг. На этой прогулке можно будет сделать атмосферные кадры, а обязательной частью станет тёплый травяной чай из термоса на старом мостике. Мест в камерной группе немного, поэтому стоит поторопиться с записью."
+          },
+          {
+            "occurrence_ids": [
+              746
+            ],
+            "text": "В расписании проекта «80 ЛЕТ ЕДИНСТВА» заявлена прогулка [[3|Нозы Усмановой]]."
+          },
+          {
+            "occurrence_ids": [
+              763
+            ],
+            "text": "Мы можем отправиться на Осетровую ферму, где аттестованный гид Мария Морозова расскажет всё об осетрах и предложит попробовать закуски."
+          }
+        ],
+        "outro": "А вы замечали в ноябре эти зелёные шары омелы на голых ветвях городских деревьев?"
+      },
+      "attempts": [
+        {
+          "ts": "2026-11-16T17:26:04.871291+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:26:05.050097+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:26:35.234721+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:26:35.433861+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:27:17.421715+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "duration_ms": 12887
+        },
+        {
+          "ts": "2026-11-16T17:27:17.888857+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:27:18.055340+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:27:37.070388+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:27:37.271976+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:28:08.792358+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "duration_ms": 1362
+        },
+        {
+          "ts": "2026-11-16T17:28:12.491309+00:00",
+          "event": "google_ai.call_ok",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "duration_ms": 2831,
+          "usage": {
+            "input_tokens": 8461,
+            "output_tokens": 788,
+            "total_tokens": 9249,
+            "model": "",
+            "thought_tokens": 0,
+            "reserved_tokens": 23966,
+            "finish_reason": "STOP",
+            "provider_response_id": "KT37aqC4K6rFxdIP09K34AE",
+            "provider_request_id": null,
+            "provider_model_version": "gemini-3.5-flash-lite",
+            "input_count_source": "heuristic_fallback"
+          }
+        }
+      ],
+      "actual_model": "gemini-3.5-flash-lite",
+      "elapsed_s": 157.94,
+      "final_text": "ЭКСКУРСИИ 17–22 НОЯБРЯ\nПочему омела принципиально не касается корнями почвы и как её семена используют природный суперклей?\n\nЗЕЛЁНЫЕ ИСТОРИИ\nВ ноябре на липах и клёнах высоко в кронах появляются плотные зелёные шары омелы. Ольга Рубцова проведёт нас по пешеходному маршруту от «Борющихся зубров» через Хуфен вдоль Паркового ручья в Центральный парк, где мы узнаем, почему платаны сбрасывают кору, где растет пережившее динозавров гинкго и какие тайны прячет старый овраг. На этой прогулке можно будет сделать атмосферные кадры, а обязательной частью станет тёплый травяной чай из термоса на старом мостике. Мест в камерной группе немного, поэтому стоит поторопиться с записью.\n17 ноября (вт), 14:00 · 21 ноября (сб), 11:00\n💳 500 рублей · 🔗 Запись: vk.cc/d3XqaE\n\nРАССВЕТ НАД БАЛТИКОЙ\nВ расписании проекта «80 ЛЕТ ЕДИНСТВА» заявлена прогулка Нозы Усмановой.\n20 ноября (пт), 14:00\n💳 500 рублей · 🔗 Запись: vk.cc/d3XqaE\n\nСЕКРЕТЫ ЧЁРНОГО ЗОЛОТА\nМы можем отправиться на Осетровую ферму, где аттестованный гид Мария Морозова расскажет всё об осетрах и предложит попробовать закуски.\n22 ноября (вс)\n☎ Запись по телефону: +7 (911) 858-58-49\n\nА вы замечали в ноябре эти зелёные шары омелы на голых ветвях городских деревьев?\n\nЭто дайджест экскурсий по Калининградской области от «Ух ты, Калининград!».\n\n#экскурсии #Калининград #УхтыКалининград",
+      "run": "Aweak",
+      "writer_accepted": true,
+      "story_assembled": true,
+      "input_file": "vk-fable-input-A-348-prev.json"
+    },
+    {
+      "case": "B",
+      "angle_issue": 350,
+      "requested_model": "gemini-3.5-flash-lite",
+      "started_at": "2026-11-16T17:32:05.141341+00:00",
+      "input_prompt_sha256": "5b8c501c0143a31e70366f578a38ef99719b251626e988e8474e094bcfdfcb5a",
+      "generation_config": {
+        "temperature": 0.7,
+        "response_mime_type": "application/json",
+        "response_schema": {
+          "type": "object",
+          "properties": {
+            "lead": {
+              "type": "string"
+            },
+            "paragraphs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "details": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "occurrence_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "details",
+                  "occurrence_ids",
+                  "text"
+                ]
+              }
+            },
+            "outro": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "lead",
+            "paragraphs"
+          ]
+        }
+      },
+      "max_output_tokens": 2400,
+      "accepted": false,
+      "attempts": [
+        {
+          "ts": "2026-11-16T17:33:25.168872+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:33:25.376734+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:33:32.336098+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:33:32.515867+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:34:02.594940+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:34:02.865888+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:34:19.312829+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:34:19.533780+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:35:09.141518+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "duration_ms": 10677
+        },
+        {
+          "ts": "2026-11-16T17:35:09.591757+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:35:09.754692+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:35:19.546593+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:35:19.732754+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        }
+      ],
+      "actual_model": null,
+      "elapsed_s": 194.77,
+      "final_text": null,
+      "compact_fallback_text": "Дайджест экскурсий №350\n\nКоротко: 5 будущих экскурсий на 17–22 ноября. Смотрите карточку, а детали и запись — ниже.\n\n1. Зелёные истории — vk.cc/d3XqaE\n2. Экскурсия в Форт № 11 Дёнхофф — https://студтуризм.рф/events/ZhbSOhuGmL\n3. Завод OSQ Group — +7 (962) 255-54-91\n4. Зелёные истории — vk.cc/d3XqaE\n5. Секреты чёрного золота — +7 (911) 858-58-49\n\n#экскурсии #Калининград #УхтыКалининград",
+      "run": "B",
+      "writer_accepted": false,
+      "story_assembled": false,
+      "input_file": "vk-fable-input-B-350.json"
+    },
+    {
+      "case": "C",
+      "angle_issue": 351,
+      "requested_model": "gemini-3.5-flash-lite",
+      "started_at": "2026-11-16T17:30:58.223366+00:00",
+      "input_prompt_sha256": "fdbad97a34ff158e7f4ee91b083d3130adad4e258a06d9d4e2b435e340c910d6",
+      "generation_config": {
+        "temperature": 0.7,
+        "response_mime_type": "application/json",
+        "response_schema": {
+          "type": "object",
+          "properties": {
+            "lead": {
+              "type": "string"
+            },
+            "paragraphs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "details": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "occurrence_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "details",
+                  "occurrence_ids",
+                  "text"
+                ]
+              }
+            },
+            "outro": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "lead",
+            "paragraphs"
+          ]
+        }
+      },
+      "max_output_tokens": 2400,
+      "accepted": false,
+      "attempts": [
+        {
+          "ts": "2026-11-16T17:32:05.978377+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:32:06.218574+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:32:31.313146+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:32:31.531379+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:32:48.483800+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:32:48.693071+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:32:57.138243+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:32:57.403578+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:33:08.551392+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:33:08.743140+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:33:32.375204+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:33:32.837610+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        }
+      ],
+      "actual_model": null,
+      "elapsed_s": 154.83,
+      "final_text": null,
+      "compact_fallback_text": "Дайджест экскурсий №351\n\nКоротко: 2 будущих экскурсий на 21–28 ноября. Смотрите карточку, а детали и запись — ниже.\n\n1. Под сенью ангелов: истории о переселенцах — https://t.me/amber_fringilla/6737\n2. Самбийское кольцо — vk.cc/d3X1ID\n\n#экскурсии #Калининград #УхтыКалининград #Черняховск #Гусев",
+      "run": "C",
+      "writer_accepted": false,
+      "story_assembled": false,
+      "input_file": "vk-fable-input-C-351.json"
+    },
+    {
+      "case": "E",
+      "angle_issue": 349,
+      "requested_model": "gemini-3.5-flash-lite",
+      "started_at": "2026-11-16T17:32:10.353045+00:00",
+      "input_prompt_sha256": "94ea57a7338e0abca449ce9597f1a3f6e0feaab9e7a1dea38c75af966074c71b",
+      "generation_config": {
+        "temperature": 0.7,
+        "response_mime_type": "application/json",
+        "response_schema": {
+          "type": "object",
+          "properties": {
+            "lead": {
+              "type": "string"
+            },
+            "paragraphs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "details": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "occurrence_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "details",
+                  "occurrence_ids",
+                  "text"
+                ]
+              }
+            },
+            "outro": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "lead",
+            "paragraphs"
+          ]
+        }
+      },
+      "max_output_tokens": 2400,
+      "raw_response": "{\n  \"lead\": \"В Полесском районе можно заглянуть в пространства замка Лабиау и увидеть монастырь в Изобильном.\",\n  \"paragraphs\": [\n    {\n      \"details\": [\n        \"прогулка в Южном парке перенесена на 22 ноября по непредвиденным обстоятельствам\"\n      ],\n      \"occurrence_ids\": [\n        739\n      ],\n      \"text\": \"Прогулка в Южном парке перенесена на другую дату по непредвиденным обстоятельствам.\"\n    },\n    {\n      \"details\": [\n        \"посещение завода OSQ Group для организованной группы старшеклассников\",\n        \"знакомство с промышленным оборудованием\",\n        \"производство упаковки для пищевой индустрии\",\n        \"узнаем, какие специалисты стоят за созданием привычных нам вещей\",\n        \"всех ждут сюрпризы\",\n        \"совершенно новая программа\"\n      ],\n      \"occurrence_ids\": [\n        786\n      ],\n      \"text\": \"Для организованной группы старшеклассников подготовлена совершенно новая программа на производство упаковки OSQ Group. Мы заглянем на современный завод, познакомимся с промышленным оборудованием и узнаем, какие специалисты стоят за созданием привычных вещей. Всех участников ждут сюрпризы.\"\n    },\n    {\n      \"details\": [\n        \"поездка в Полесский район\",\n        \"монастырь в Изобильном\",\n        \"замок Лабиау\",\n        \"проект Хобби-Тур\",\n        \"бронирование мест по телефону\"\n      ],\n      \"occurrence_ids\": [\n        785\n      ],\n      \"text\": \"Проект Хобби-Тур зовет в путешествие в Полесский район, где нас ждут красоты монастыря в Изобильном и пространства замка Лабиау.\"\n    }\n  ],\n  \"outro\": \"А вы бывали раньше в замке Лабиау?\"\n}",
+      "usage": {
+        "total_tokens": 4854,
+        "input_tokens": 4393,
+        "output_tokens": 461
+      },
+      "accepted": true,
+      "narrative": {
+        "lead": "В Полесском районе можно заглянуть в пространства замка Лабиау и увидеть монастырь в Изобильном.",
+        "paragraphs": [
+          {
+            "occurrence_ids": [
+              739
+            ],
+            "text": "Прогулка в Южном парке перенесена на другую дату по непредвиденным обстоятельствам."
+          },
+          {
+            "occurrence_ids": [
+              786
+            ],
+            "text": "Для организованной группы старшеклассников подготовлена совершенно новая программа на производство упаковки OSQ Group. Мы заглянем на современный завод, познакомимся с промышленным оборудованием и узнаем, какие специалисты стоят за созданием привычных вещей. Всех участников ждут сюрпризы."
+          },
+          {
+            "occurrence_ids": [
+              785
+            ],
+            "text": "Проект Хобби-Тур зовет в путешествие в Полесский район, где нас ждут красоты монастыря в Изобильном и пространства замка Лабиау."
+          }
+        ],
+        "outro": "А вы бывали раньше в замке Лабиау?"
+      },
+      "attempts": [
+        {
+          "ts": "2026-11-16T17:33:28.530476+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:33:28.712408+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:33:32.284195+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:33:32.475590+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:34:02.579333+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:34:02.794990+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:34:19.319220+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "blocked_reason": "provider_429"
+        },
+        {
+          "ts": "2026-11-16T17:34:19.491288+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-3.1-flash-lite",
+          "provider_model": "gemini-3.1-flash-lite",
+          "requested_model": "gemini-3.1-flash-lite",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:35:10.301467+00:00",
+          "event": "google_ai.call_ok",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "duration_ms": 11762,
+          "usage": {
+            "input_tokens": 4393,
+            "output_tokens": 461,
+            "total_tokens": 4854,
+            "model": "",
+            "thought_tokens": 0,
+            "reserved_tokens": 15426,
+            "finish_reason": "STOP",
+            "provider_response_id": "yz77asvhG9KwytMPk6rFgQI",
+            "provider_request_id": null,
+            "provider_model_version": "gemini-3.5-flash-lite",
+            "input_count_source": "heuristic_fallback"
+          }
+        }
+      ],
+      "actual_model": "gemini-3.5-flash-lite",
+      "elapsed_s": 179.95,
+      "final_text": "ЭКСКУРСИИ 19–28 НОЯБРЯ\nВ Полесском районе можно заглянуть в пространства замка Лабиау и увидеть монастырь в Изобильном.\n\nПРОГУЛКА В ЮЖНОМ ПАРКЕ\nПрогулка в Южном парке перенесена на другую дату по непредвиденным обстоятельствам.\n22 ноября (вс)\n🔗 Подробности: https://t.me/amber_fringilla/6793\n\nЗАВОД OSQ GROUP\nДля организованной группы старшеклассников подготовлена совершенно новая программа на производство упаковки OSQ Group. Мы заглянем на современный завод, познакомимся с промышленным оборудованием и узнаем, какие специалисты стоят за созданием привычных вещей. Всех участников ждут сюрпризы.\n19 ноября (чт)\n☎ Запись по телефону: +7 (962) 255-54-91\n\nПОЕЗДКА В ПОЛЕССКИЙ РАЙОН: МОНАСТЫРЬ В ИЗОБИЛЬНОМ И ЗАМОК ЛАБИАУ\nПроект Хобби-Тур зовет в путешествие в Полесский район, где нас ждут красоты монастыря в Изобильном и пространства замка Лабиау.\n28 ноября (сб)\n🔗 [https://vk.com/wall-73167354_23490|Подробности]\n\nА вы бывали раньше в замке Лабиау?\n\nЭто дайджест экскурсий по Калининградской области от «Ух ты, Калининград!».\n\n#экскурсии #Калининград #УхтыКалининград #Полесск",
+      "run": "E",
+      "writer_accepted": true,
+      "story_assembled": true,
+      "input_file": "vk-fable-input-E-349.json"
+    },
+    {
+      "case": "F",
+      "angle_issue": 349,
+      "requested_model": "gemini-2.5-flash",
+      "started_at": "2026-11-16T17:29:49.784253+00:00",
+      "input_prompt_sha256": "2feadf29e4ecf251a77eeeaa8e760ccee9a6868460b9fc41b961d16d9c87f8bf",
+      "generation_config": {
+        "temperature": 0.7,
+        "response_mime_type": "application/json",
+        "response_schema": {
+          "type": "object",
+          "properties": {
+            "lead": {
+              "type": "string"
+            },
+            "paragraphs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "details": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "occurrence_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "details",
+                  "occurrence_ids",
+                  "text"
+                ]
+              }
+            },
+            "outro": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "lead",
+            "paragraphs"
+          ]
+        }
+      },
+      "max_output_tokens": 2400,
+      "raw_response": "{\n  \"lead\": \"Густые изумрудные шапки омелы белой повисли в голых ноябрьских кронах деревьев. Пойдём разбираться с [[1|Ольгой Рубцовой]], почему этот полупаразит не касается корнями почвы.\",\n  \"paragraphs\": [\n    {\n      \"details\": [\n        \"Омела белая (Viscum album) висит в кронах лип, клёнов и тополей в виде плотных изумрудных шапок\",\n        \"Омела — полупаразит без связи с почвой, пьет воду и соли из ветвей дерева-хозяина через присоски-гаустории\",\n        \"Кельты срезали омелу золотым серпом и ловили в белоснежную ткань, считая оберегом\",\n        \"Традиция целоваться под омелой уходит корнями в скандинавские мифы и законы перемирия\",\n        \"Ягоды омелы содержат клейкий висцин, благодаря которому семена прилипают к клювам дроздов и свиристелей\",\n        \"Маршрут от скульптуры «Борющиеся зубры» через живописный Хуфен вдоль Паркового ручья в Центральный парк\",\n        \"Длительность около 2 часов в лёгком темпе с горячим кофе из термоса на мостике\",\n        \"Камерная группа с ограничением мест\",\n        \"Узнаем, почему платаны сбрасывают кору, где растет реликтовое гинкго и какие тайны прячет овраг Паркового ручья\"\n      ],\n      \"occurrence_ids\": [745],\n      \"text\": \"Плотные изумрудные шапки омелы белой прямо сейчас украшают голые кроны калининградских деревьев. [[1|Ольга Рубцова]] предлагает пройтись от «Борющиеся зубры» через живописный Хуфен вдоль Паркового ручья в Центральный парк. На прогулке мы узнаем, почему платаны сбрасывают кору как военный камуфляж, где растет реликтовое гинкго и какие тайны прячет овраг старого ручья. Растение-полупаразит держится на ветвях без связи с почвой, а его ягоды распространяют птицы с помощью природного суперклея. Из всей этой ботаники меня особенно цепляет история про золотой серп друидов. Два часа пролетят в неспешном темпе, а обязательной частью станет теплый травяной чай из термоса на старом мостике.\"\n    },\n    {\n      \"details\": [\n        \"Гид Ноза Усманова\",\n        \"Организатор 80 ЛЕТ ЕДИНСТВА\"\n      ],\n      \"occurrence_ids\": [746],\n      \"text\": \"Проект [[2|80 ЛЕТ ЕДИНСТВА]] продолжает радовать горожан маршрутами, и [[3|Ноза Усманова]] проведет прогулку, посвященную утренним пейзажам у воды.\"\n    },\n    {\n      \"details\": [\n        \"Автобусное путешествие по востоку Калининградской области\",\n        \"Маршрут охватывает Черняховск, Гусев и слияние рек Анграпы и Писсы\",\n        \"Раскрывает истории переселенцев разных эпох от колонистов Средневековья до советских поселенцев\",\n        \"Продолжительность 10 часов\",\n        \"Стоимость включает сопровождение, поздний завтрак, обед и все входы\",\n        \"Гиды Юлия Гришанова и Владимир Власов\"\n      ],\n      \"occurrence_ids\": [693],\n      \"text\": \"Слияние рек Анграпы и Писсы станет одной из точек большого автобусного путешествия по востоку области. [[4|Юлия Гришанова]] и [[5|Владимир Власов]] собрали десятичасовую программу об истории переселенчества. Мы поедем смотреть на ландшафты Черняховска и Гусева, чтобы понять, почему эти места стали домом для людей от средневековых колонистов до советских переселенцев. В стоимость поездки уже входят поздний завтрак и обед.\"\n    },\n    {\n      \"details\": [\n        \"Путешествие по Самбийскому кольцу на автобусе\",\n        \"Посещение древнего городища Варген\",\n        \"Кирха Куменена с древними росписями в ухоженном парке\",\n        \"Остатки кирхи Гермау в поселке Русское\",\n        \"Музей Вайденен в Шатрово с коллекцией артефактов и восстановленной конюшней от Александра Лопатко\",\n        \"Возрождающаяся кирха Побетена в Романово\",\n        \"Дворянская усадьба Грюнхоф в Рощино и рассказ архитектора Олега Ли\",\n        \"Кирха Рудау в Мельниково\",\n        \"Часть средств идет на уход за историческими руинами\",\n        \"Стоимость включает входные билеты, отдельно оплачивается обед\",\n        \"Гид Эмма Басова\"\n      ],\n      \"occurrence_ids\": [740],\n      \"text\": \"Стены древней кирхи Куменена сохранили старинные росписи, а вокруг нее силами [[7|Хранителей руин]] теперь разбит ухоженный парк. [[6|Эмма Басова]] зовет в автобусную поездку по Самбийскому кольцу через городище Варген, руины Гермау и усадьбу Грюнхоф, где архитектор [[Олег Ли]] расскажет о ее возрождении. В Шатрово мы заглянем в музей «Вайденен», устроенный в старинной конюшне. Часть собранных средств организаторы направят на уход за историческими руинами.\"\n    },\n    {\n      \"details\": [\n        \"Гид Варвара Лалэко\",\n        \"Организатор 80 ЛЕТ ЕДИНСТВА\"\n      ],\n      \"occurrence_ids\": [749],\n      \"text\": \"Команда [[2|80 ЛЕТ ЕДИНСТВА]] предлагает взглянуть на городские истории с другого ракурса, а [[9|Варвара Лалэко]] поможет пройти этот путь.\"\n    }\n  ],\n  \"outro\": \"А вы часто обращаете внимание на необычные растения вроде омелы в городских дворах?\"\n}",
+      "usage": {
+        "total_tokens": 14812,
+        "input_tokens": 13299,
+        "output_tokens": 1513
+      },
+      "accepted": true,
+      "narrative": {
+        "lead": "Густые изумрудные шапки омелы белой повисли в голых ноябрьских кронах деревьев. Пойдём разбираться с [[1|Ольгой Рубцовой]], почему этот полупаразит не касается корнями почвы.",
+        "paragraphs": [
+          {
+            "occurrence_ids": [
+              745
+            ],
+            "text": "Плотные изумрудные шапки омелы белой прямо сейчас украшают голые кроны калининградских деревьев. [[1|Ольга Рубцова]] предлагает пройтись от «Борющиеся зубры» через живописный Хуфен вдоль Паркового ручья в Центральный парк. На прогулке мы узнаем, почему платаны сбрасывают кору как военный камуфляж, где растет реликтовое гинкго и какие тайны прячет овраг старого ручья. Растение-полупаразит держится на ветвях без связи с почвой, а его ягоды распространяют птицы с помощью природного суперклея. Из всей этой ботаники меня особенно цепляет история про золотой серп друидов. Два часа пролетят в неспешном темпе, а обязательной частью станет теплый травяной чай из термоса на старом мостике."
+          },
+          {
+            "occurrence_ids": [
+              746
+            ],
+            "text": "Проект [[2|80 ЛЕТ ЕДИНСТВА]] продолжает радовать горожан маршрутами, и [[3|Ноза Усманова]] проведет прогулку, посвященную утренним пейзажам у воды."
+          },
+          {
+            "occurrence_ids": [
+              693
+            ],
+            "text": "Слияние рек Анграпы и Писсы станет одной из точек большого автобусного путешествия по востоку области. [[4|Юлия Гришанова]] и [[5|Владимир Власов]] собрали десятичасовую программу об истории переселенчества. Мы поедем смотреть на ландшафты Черняховска и Гусева, чтобы понять, почему эти места стали домом для людей от средневековых колонистов до советских переселенцев. В стоимость поездки уже входят поздний завтрак и обед."
+          },
+          {
+            "occurrence_ids": [
+              740
+            ],
+            "text": "Стены древней кирхи Куменена сохранили старинные росписи, а вокруг нее силами [[7|Хранителей руин]] теперь разбит ухоженный парк. [[6|Эмма Басова]] зовет в автобусную поездку по Самбийскому кольцу через городище Варген, руины Гермау и усадьбу Грюнхоф, где архитектор [[Олег Ли]] расскажет о ее возрождении. В Шатрово мы заглянем в музей «Вайденен», устроенный в старинной конюшне. Часть собранных средств организаторы направят на уход за историческими руинами."
+          },
+          {
+            "occurrence_ids": [
+              749
+            ],
+            "text": "Команда [[2|80 ЛЕТ ЕДИНСТВА]] предлагает взглянуть на городские истории с другого ракурса, а [[9|Варвара Лалэко]] поможет пройти этот путь."
+          }
+        ],
+        "outro": "А вы часто обращаете внимание на необычные растения вроде омелы в городских дворах?"
+      },
+      "attempts": [
+        {
+          "ts": "2026-11-16T17:31:10.472998+00:00",
+          "event": "google_ai.model_quota_fallback",
+          "model": "gemini-2.5-flash",
+          "provider_model": "gemini-2.5-flash",
+          "requested_model": "gemini-2.5-flash",
+          "blocked_reason": "rpd"
+        },
+        {
+          "ts": "2026-11-16T17:31:26.859151+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "duration_ms": 15643
+        },
+        {
+          "ts": "2026-11-16T17:31:30.124734+00:00",
+          "event": "google_ai.call_error",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "duration_ms": 2470
+        },
+        {
+          "ts": "2026-11-16T17:31:36.575720+00:00",
+          "event": "google_ai.call_ok",
+          "model": "gemini-3.5-flash-lite",
+          "provider_model": "gemini-3.5-flash-lite",
+          "requested_model": "gemini-3.5-flash-lite",
+          "duration_ms": 5015,
+          "usage": {
+            "input_tokens": 13299,
+            "output_tokens": 1513,
+            "total_tokens": 14812,
+            "model": "",
+            "thought_tokens": 0,
+            "reserved_tokens": 36182,
+            "finish_reason": "STOP",
+            "provider_response_id": "8z37avHCJqrFxdIP09K34AE",
+            "provider_request_id": null,
+            "provider_model_version": "gemini-3.5-flash-lite",
+            "input_count_source": "heuristic_fallback"
+          }
+        }
+      ],
+      "actual_model": "gemini-3.5-flash-lite",
+      "elapsed_s": 106.82,
+      "final_text": null,
+      "compact_fallback_text": "Дайджест экскурсий №349\n\nКоротко: 5 будущих экскурсий на 17–28 ноября. Смотрите карточку, а детали и запись — ниже.\n\n1. Зелёные истории — vk.cc/d3XqaE\n2. Рассвет над Балтикой — vk.cc/d3XqaE\n3. Под сенью ангелов: истории о переселенцах — https://t.me/amber_fringilla/6737\n4. Самбийское кольцо — vk.cc/d3X1ID\n5. Время первых: через тернии к звёздам — vk.cc/d3XqaE\n\n#экскурсии #Калининград #УхтыКалининград #Черняховск #Гусев",
+      "run": "F",
+      "writer_accepted": true,
+      "story_assembled": false,
+      "input_file": "vk-fable-input-F-349.json"
+    },
+    {
+      "case": "A",
+      "angle_issue": 348,
+      "requested_model": "gpt-6.1-sol",
+      "actual_model": "gpt-6.1-sol",
+      "reasoning_effort": "medium",
+      "quota_before": {
+        "status": "available",
+        "source_method": "account/rateLimits/read",
+        "observed_at": "2026-11-16T17:34:46.474210+00:00",
+        "limits": [
+          {
+            "limit_id": "codex",
+            "windows": [
+              {
+                "window": "primary",
+                "used_percent": 0,
+                "remaining_percent": 100,
+                "duration_minutes": 10080,
+                "resets_at_unix": 1795455245
+              }
+            ],
+            "valid": true,
+            "limit_reached": false
+          }
+        ],
+        "admission": {
+          "eligible": true,
+          "reason": "quota_available",
+          "reserve_percent": 10,
+          "effective_remaining_percent": 100,
+          "scope": "codex_account_snapshot_only",
+          "separate_owner_approval_required": true,
+          "model_catalog_available": true
+        },
+        "inference_performed": false,
+        "default_profile": {
+          "requested": "gpt-6.1-medium",
+          "model": "gpt-6.1-sol",
+          "reasoning_effort": "medium",
+          "catalog_available": true,
+          "inference_verified": false
+        }
+      },
+      "input_prompt_sha256": "4aa523d07a98af3c35d9072ae04625e147ddd093de517a07e9ad3f23a0831730",
+      "raw_response": "{\n  \"lead\": \"Как деревья удерживают крутые берега Паркового ручья?\",\n  \"paragraphs\": [\n    {\n      \"details\": [\n        \"гид Ольга Рубцова\",\n        \"Количество мест в группе ограничено!\",\n        \"пешеходную экскурсию\",\n        \"почему платаны сбрасывают кору, как военный камуфляж\",\n        \"где растёт реликтовое гинкго, пережившее динозавров\",\n        \"как овраг Паркового ручья прячет тайны утраченного романтического парка Юльхенталь\",\n        \"почему сто лет назад Кёнигсберг проектировали как идеальный «город-сад»\",\n        \"от скульптуры «Борющиеся зубры» через живописный Хуфен вдоль ручья в Центральный парк\",\n        \"в лёгком, неспешном темпе\",\n        \"камерная группа\",\n        \"необычные ракурсы для осенних фото\",\n        \"вдоль ручья Хуфенфрайграбен (ныне Паркового) вился романтичный променад\",\n        \"на крутых склонах стояли деревянные гостевые дома в стиле швейцарских шале\",\n        \"редких цветов из местного альпинария\",\n        \"Деревянные террасы исчезли\",\n        \"Мы прикоснемся к деревьям, которые держат корнями эти крутые берега, спасая город от оползней\",\n        \"как обыкновенный плющ совершает свой медленный альпинистский подвиг\",\n        \"почему он цветёт только в глубокой старости\",\n        \"почему древние считали его символом бессмертия и верности\",\n        \"В зарослях у ручья до сих пор можно встретить потомков тех самых декоративных растений, которые когда-то высаживали немецкие садовники для украшения альпийских горок и курортных садов\",\n        \"Дома сгорели, а цветы и кустарники продолжают цвести каждую весну и осень\",\n        \"удобная обувь на нескользкой подошве\"\n      ],\n      \"occurrence_ids\": [745, 747],\n      \"text\": \"Мест в группе немного; корни вековых деревьев в долине защищают город от оползней — про такую их работу я раньше не задумывался. Пройдёмся от «Борющихся зубров» через Хуфен вдоль ручья до Центрального парка с [[1|Ольгой Рубцовой]], в неспешном темпе. В зарослях ещё растут потомки декоративных растений, которыми немецкие садовники украшали альпийские горки и сады, а деревянные дома на склонах уже исчезли. Растения пережили постройки. По пути разберёмся, почему плющ цветёт лишь в глубокой старости и зачем платаны сбрасывают кору; обувь нужна с нескользкой подошвой.\"\n    },\n    {\n      \"details\": [\n        \"Количество мест ограничено\",\n        \"гид Ноза Усманова\",\n        \"на экскурсиях проекта\",\n        \"80 ЛЕТ ЕДИНСТВА\"\n      ],\n      \"occurrence_ids\": [746],\n      \"text\": \"Число мест ограничено и на экскурсии [[3|Нозы Усмановой]] в программе проекта «80 ЛЕТ ЕДИНСТВА».\"\n    },\n    {\n      \"details\": [\n        \"экскурсию на Осетровую ферму\",\n        \"увидеть, как выращивают икру\",\n        \"готовят уникальные блюда\",\n        \"Вы узнаете всё об осетрах\",\n        \"попробуете эксклюзивные закуски\"\n      ],\n      \"occurrence_ids\": [763],\n      \"text\": \"На осетровой ферме можно увидеть, как выращивают икру и готовят блюда. Вот на процесс выращивания мне любопытно посмотреть вблизи. Здесь также расскажут об осетрах и дадут попробовать закуски.\"\n    }\n  ],\n  \"outro\": \"Какие растения из старых садов вы замечали у Паркового ручья?\"\n}",
+      "usage": {
+        "inputTokens": 38247,
+        "cachedInputTokens": 12288,
+        "outputTokens": 1761,
+        "reasoningOutputTokens": 828,
+        "totalTokens": 40008
+      },
+      "elapsed_s": 52.745,
+      "accepted": true,
+      "provider": "codex",
+      "route": "explicit_codex_provider",
+      "selection_verified": true,
+      "started_at": 1794850489,
+      "completed_at": 1794850542,
+      "provider_json_valid": true,
+      "narrative": {
+        "lead": "Как деревья удерживают крутые берега Паркового ручья?",
+        "paragraphs": [
+          {
+            "occurrence_ids": [
+              745,
+              747
+            ],
+            "text": "Мест в группе немного; корни вековых деревьев в долине защищают город от оползней — про такую их работу я раньше не задумывался. Пройдёмся от «Борющихся зубров» через Хуфен вдоль ручья до Центрального парка с [[1|Ольгой Рубцовой]], в неспешном темпе. В зарослях ещё растут потомки декоративных растений, которыми немецкие садовники украшали альпийские горки и сады, а деревянные дома на склонах уже исчезли. Растения пережили постройки. По пути разберёмся, почему плющ цветёт лишь в глубокой старости и зачем платаны сбрасывают кору; обувь нужна с нескользкой подошвой."
+          },
+          {
+            "occurrence_ids": [
+              746
+            ],
+            "text": "Число мест ограничено и на экскурсии [[3|Нозы Усмановой]] в программе проекта «80 ЛЕТ ЕДИНСТВА»."
+          },
+          {
+            "occurrence_ids": [
+              763
+            ],
+            "text": "На осетровой ферме можно увидеть, как выращивают икру и готовят блюда. Вот на процесс выращивания мне любопытно посмотреть вблизи. Здесь также расскажут об осетрах и дадут попробовать закуски."
+          }
+        ],
+        "outro": "Какие растения из старых садов вы замечали у Паркового ручья?"
+      },
+      "final_text": "ЭКСКУРСИИ 17–22 НОЯБРЯ\nКак деревья удерживают крутые берега Паркового ручья?\n\nЗЕЛЁНЫЕ ИСТОРИИ\nМест в группе немного; корни вековых деревьев в долине защищают город от оползней — про такую их работу я раньше не задумывался. Пройдёмся от «Борющихся зубров» через Хуфен вдоль ручья до Центрального парка с Ольгой Рубцовой, в неспешном темпе. В зарослях ещё растут потомки декоративных растений, которыми немецкие садовники украшали альпийские горки и сады, а деревянные дома на склонах уже исчезли. Растения пережили постройки. По пути разберёмся, почему плющ цветёт лишь в глубокой старости и зачем платаны сбрасывают кору; обувь нужна с нескользкой подошвой.\n17 ноября (вт), 14:00 · 21 ноября (сб), 11:00\n💳 500 рублей · 🔗 Запись: vk.cc/d3XqaE\n\nРАССВЕТ НАД БАЛТИКОЙ\nЧисло мест ограничено и на экскурсии Нозы Усмановой в программе проекта «80 ЛЕТ ЕДИНСТВА».\n20 ноября (пт), 14:00\n💳 500 рублей · 🔗 Запись: vk.cc/d3XqaE\n\nСЕКРЕТЫ ЧЁРНОГО ЗОЛОТА\nНа осетровой ферме можно увидеть, как выращивают икру и готовят блюда. Вот на процесс выращивания мне любопытно посмотреть вблизи. Здесь также расскажут об осетрах и дадут попробовать закуски.\n22 ноября (вс)\n☎ Запись по телефону: +7 (911) 858-58-49\n\nКакие растения из старых садов вы замечали у Паркового ручья?\n\nЭто дайджест экскурсий по Калининградской области от «Ух ты, Калининград!».\n\n#экскурсии #Калининград #УхтыКалининград",
+      "run": "Sol-A-348",
+      "writer_accepted": true,
+      "story_assembled": true,
+      "input_file": "vk-fable-input-A-348.json"
+    },
+    {
+      "case": "A",
+      "angle_issue": 349,
+      "requested_model": "gpt-6.1-sol",
+      "actual_model": "gpt-6.1-sol",
+      "reasoning_effort": "medium",
+      "quota_before": {
+        "status": "available",
+        "source_method": "account/rateLimits/read",
+        "observed_at": "2026-11-16T17:36:48.528012+00:00",
+        "limits": [
+          {
+            "limit_id": "codex",
+            "windows": [
+              {
+                "window": "primary",
+                "used_percent": 0,
+                "remaining_percent": 100,
+                "duration_minutes": 10080,
+                "resets_at_unix": 1795455245
+              }
+            ],
+            "valid": true,
+            "limit_reached": false
+          }
+        ],
+        "admission": {
+          "eligible": true,
+          "reason": "quota_available",
+          "reserve_percent": 10,
+          "effective_remaining_percent": 100,
+          "scope": "codex_account_snapshot_only",
+          "separate_owner_approval_required": true,
+          "model_catalog_available": true
+        },
+        "inference_performed": false,
+        "default_profile": {
+          "requested": "gpt-6.1-medium",
+          "model": "gpt-6.1-sol",
+          "reasoning_effort": "medium",
+          "catalog_available": true,
+          "inference_verified": false
+        }
+      },
+      "input_prompt_sha256": "da17e59e120c0e41771b8a5bdb21e63a83af3341ada83e46dfa985f78698b2d5",
+      "raw_response": "{\n  \"lead\": \"Омела пьёт воду прямо из ветвей дерева-хозяина — меня цепляет эта жизнь без связи с почвой.\",\n  \"paragraphs\": [\n    {\n      \"details\": [\n        \"Гид — Ольга Рубцова.\",\n        \"Количество мест в группе ограничено!\",\n        \"Омела в кронах — лишь одна из сотен удивительных историй, мимо которых мы проходим каждый день.\",\n        \"Листва с лип, клёнов и тополей уже облетела, а высоко в голых кронах повисли десятки плотных изумрудных «шапок», похожих на птичьи гнёзда или ведьмины мётлы.\",\n        \"это омела белая (Viscum album)\",\n        \"Омела принципиально не касается корнями почвы.\",\n        \"Это полупаразит: фотосинтезирует она сама (поэтому круглый год остаётся зелёной), а вот воду и минеральные соли пьёт прямо из ветвей дерева-хозяина через специальные присоски-гаустории.\",\n        \"Древние кельты считали омелу священным даром богов.\",\n        \"Жрецы срезали её ветви исключительно золотым серпом и ловили в белоснежные ткани — упав на землю, она, по поверьям, теряла магическую силу.\",\n        \"Омелу считали оберегом от молний, ядов и злых духов.\",\n        \"Знаменитая европейская традиция целоваться под омелой родилась из скандинавских мифов и законов перемирия: встретившись под ветвями омелы, даже кровные враги обязаны были сложить оружие на день.\",\n        \"Позже этот обычай превратился в романтический рождественский ритуал.\",\n        \"Белые полупрозрачные ягоды омелы созревают как раз к зиме.\",\n        \"Их мякоть содержит клейкое вещество — висцин.\",\n        \"Дрозды и свиристели лакомятся ягодами и, чтобы очистить липкие клювы, трутся ими о соседние ветви.\",\n        \"Так природный «суперклей» намертво прикрепляет семечко к коре нового дерева.\",\n        \"В Калининграде омелы особенно много\",\n        \"почему платаны сбрасывают кору, как военный камуфляж\",\n        \"где растёт реликтовое гинкго, пережившее динозавров\",\n        \"как овраг Паркового ручья прячет тайны утраченного романтического парка Юльхенталь\",\n        \"и почему сто лет назад Кёнигсберг проектировали как идеальный «город-сад».\",\n        \"Маршрут: от скульптуры «Борющиеся зубры» через живописный Хуфен вдоль ручья в Центральный парк.\",\n        \"в лёгком, неспешном темпе\",\n        \"камерная группа\",\n        \"необычные ракурсы для осенних фото\",\n        \"На нашей неспешной прогулке мы будем не просто слушать историю — мы будем читать ландшафт через растения\",\n        \"Мы прикоснемся к деревьям, которые держат корнями эти крутые берега, спасая город от оползней.\",\n        \"Мы разберёмся, как обыкновенный плющ совершает свой медленный альпинистский подвиг, почему он цветёт только в глубокой старости и почему древние считали его символом бессмертия и верности.\",\n        \"В зарослях у ручья до сих пор можно встретить потомков тех самых декоративных растений, которые когда-то высаживали немецкие садовники для украшения альпийских горок и курортных садов.\",\n        \"Дома сгорели, а цветы и кустарники продолжают цвести каждую весну и осень, храня память о людях.\",\n        \"Форма одежды: удобная обувь на нескользкой подошве\"\n      ],\n      \"occurrence_ids\": [745, 747],\n      \"text\": \"Мест в группе немного: здесь даже расселение растений — история с участием птиц, которые чистят липкие клювы о ветки и оставляют на коре семена. Вот такой способ посева. С [[1|Ольгой Рубцовой]] пройдёмся от скульптуры «Борющиеся зубры» через Хуфен вдоль Паркового ручья в Центральный парк, мимо деревьев, чьи корни удерживают крутые берега от оползней. В зарослях сохранились потомки растений, которыми немецкие садовники украшали альпийские горки и сады. А плющ цветёт только в глубокой старости — про возраст этого привычного растения я раньше не задумывался.\"\n    },\n    {\n      \"details\": [\n        \"гид Ноза Усманова\",\n        \"Всё это — на экскурсиях проекта [club237389053|80 ЛЕТ ЕДИНСТВА] от команды гидов, победивших в международном конкурсе #проводникисмыслов и региональном конкурсе #мывместе.\",\n        \"Пять маршрутов-лучей, пять тем: военная память, созидание, культура, архитектура и природа.\",\n        \"С музыкой, играми, квестами и историями людей\",\n        \"Количество мест ограничено\"\n      ],\n      \"occurrence_ids\": [746],\n      \"text\": \"Мест в группе тоже немного; [[3|Ноза Усманова]] ведёт экскурсию в том же проекте «80 ЛЕТ ЕДИНСТВА», чья команда гидов победила в международном конкурсе «Проводники смыслов» и региональном «Мы вместе».\"\n    },\n    {\n      \"details\": [\n        \"Хотите увидеть, как выращивают икру и готовят уникальные блюда?\",\n        \"Приглашаем на увлекательную экскурсию на Осетровую ферму!\",\n        \"Вы узнаете всё об осетрах и попробуете эксклюзивные закуски.\"\n      ],\n      \"occurrence_ids\": [763],\n      \"text\": \"Как выращивают икру — вот на что мне любопытно посмотреть на Осетровой ферме. Поедем туда ради осетров и приготовления блюд: оба занятия есть в анонсе. Предусмотрена и дегустация закусок.\"\n    }\n  ],\n  \"outro\": \"Вы замечали зелёные шары омелы на голых деревьях — за что принимали их, когда увидели впервые?\"\n}",
+      "usage": {
+        "inputTokens": 38243,
+        "cachedInputTokens": 12288,
+        "outputTokens": 1827,
+        "reasoningOutputTokens": 345,
+        "totalTokens": 40070
+      },
+      "elapsed_s": 41.577,
+      "accepted": true,
+      "provider": "codex",
+      "route": "explicit_codex_provider",
+      "selection_verified": true,
+      "started_at": 1794850611,
+      "completed_at": 1794850652,
+      "provider_json_valid": true,
+      "narrative": {
+        "lead": "Омела пьёт воду прямо из ветвей дерева-хозяина — меня цепляет эта жизнь без связи с почвой.",
+        "paragraphs": [
+          {
+            "occurrence_ids": [
+              745,
+              747
+            ],
+            "text": "Мест в группе немного: здесь даже расселение растений — история с участием птиц, которые чистят липкие клювы о ветки и оставляют на коре семена. Вот такой способ посева. С [[1|Ольгой Рубцовой]] пройдёмся от скульптуры «Борющиеся зубры» через Хуфен вдоль Паркового ручья в Центральный парк, мимо деревьев, чьи корни удерживают крутые берега от оползней. В зарослях сохранились потомки растений, которыми немецкие садовники украшали альпийские горки и сады. А плющ цветёт только в глубокой старости — про возраст этого привычного растения я раньше не задумывался."
+          },
+          {
+            "occurrence_ids": [
+              746
+            ],
+            "text": "Мест в группе тоже немного; [[3|Ноза Усманова]] ведёт экскурсию в том же проекте «80 ЛЕТ ЕДИНСТВА», чья команда гидов победила в международном конкурсе «Проводники смыслов» и региональном «Мы вместе»."
+          },
+          {
+            "occurrence_ids": [
+              763
+            ],
+            "text": "Как выращивают икру — вот на что мне любопытно посмотреть на Осетровой ферме. Поедем туда ради осетров и приготовления блюд: оба занятия есть в анонсе. Предусмотрена и дегустация закусок."
+          }
+        ],
+        "outro": "Вы замечали зелёные шары омелы на голых деревьях — за что принимали их, когда увидели впервые?"
+      },
+      "final_text": "ЭКСКУРСИИ 17–22 НОЯБРЯ\nОмела пьёт воду прямо из ветвей дерева-хозяина — меня цепляет эта жизнь без связи с почвой.\n\nЗЕЛЁНЫЕ ИСТОРИИ\nМест в группе немного: здесь даже расселение растений — история с участием птиц, которые чистят липкие клювы о ветки и оставляют на коре семена. Вот такой способ посева. С Ольгой Рубцовой пройдёмся от скульптуры «Борющиеся зубры» через Хуфен вдоль Паркового ручья в Центральный парк, мимо деревьев, чьи корни удерживают крутые берега от оползней. В зарослях сохранились потомки растений, которыми немецкие садовники украшали альпийские горки и сады. А плющ цветёт только в глубокой старости — про возраст этого привычного растения я раньше не задумывался.\n17 ноября (вт), 14:00 · 21 ноября (сб), 11:00\n💳 500 рублей · 🔗 Запись: vk.cc/d3XqaE\n\nРАССВЕТ НАД БАЛТИКОЙ\nМест в группе тоже немного; Ноза Усманова ведёт экскурсию в том же проекте «80 ЛЕТ ЕДИНСТВА», чья команда гидов победила в международном конкурсе «Проводники смыслов» и региональном «Мы вместе».\n20 ноября (пт), 14:00\n💳 500 рублей · 🔗 Запись: vk.cc/d3XqaE\n\nСЕКРЕТЫ ЧЁРНОГО ЗОЛОТА\nКак выращивают икру — вот на что мне любопытно посмотреть на Осетровой ферме. Поедем туда ради осетров и приготовления блюд: оба занятия есть в анонсе. Предусмотрена и дегустация закусок.\n22 ноября (вс)\n☎ Запись по телефону: +7 (911) 858-58-49\n\nВы замечали зелёные шары омелы на голых деревьях — за что принимали их, когда увидели впервые?\n\nЭто дайджест экскурсий по Калининградской области от «Ух ты, Калининград!».\n\n#экскурсии #Калининград #УхтыКалининград",
+      "run": "Sol-A-349",
+      "writer_accepted": true,
+      "story_assembled": true,
+      "input_file": "vk-fable-input-A-349.json"
+    },
+    {
+      "case": "A",
+      "angle_issue": 350,
+      "requested_model": "gpt-6.1-sol",
+      "actual_model": "gpt-6.1-sol",
+      "reasoning_effort": "medium",
+      "quota_before": {
+        "status": "available",
+        "source_method": "account/rateLimits/read",
+        "observed_at": "2026-11-16T17:37:05.319740+00:00",
+        "limits": [
+          {
+            "limit_id": "codex",
+            "windows": [
+              {
+                "window": "primary",
+                "used_percent": 0,
+                "remaining_percent": 100,
+                "duration_minutes": 10080,
+                "resets_at_unix": 1795455245
+              }
+            ],
+            "valid": true,
+            "limit_reached": false
+          }
+        ],
+        "admission": {
+          "eligible": true,
+          "reason": "quota_available",
+          "reserve_percent": 10,
+          "effective_remaining_percent": 100,
+          "scope": "codex_account_snapshot_only",
+          "separate_owner_approval_required": true,
+          "model_catalog_available": true
+        },
+        "inference_performed": false,
+        "default_profile": {
+          "requested": "gpt-6.1-medium",
+          "model": "gpt-6.1-sol",
+          "reasoning_effort": "medium",
+          "catalog_available": true,
+          "inference_verified": false
+        }
+      },
+      "input_prompt_sha256": "fd1370e0aa2004f7151b5ed9e8b19b5d1cb9ef19ee98a392c2ae6e13ec008c2f",
+      "raw_response": "{\n  \"lead\": \"Зелёные шары в голых кронах Калининграда — омела, которая обходится без почвы. Меня цепляет, как много происходит над головой, пока мы смотрим под ноги.\",\n  \"paragraphs\": [\n    {\n      \"details\": [\n        \"Гид — Ольга Рубцова.\",\n        \"Организатор — «80 ЛЕТ ЕДИНСТВА».\",\n        \"пешеходную экскурсию\",\n        \"Количество мест в группе ограничено!\",\n        \"Место встречи: у Зубров\",\n        \"Продолжительность: около 2 часов\",\n        \"в лёгком, неспешном темпе\",\n        \"камерная группа\",\n        \"необычные ракурсы для осенних фото\",\n        \"удобная обувь на нескользкой подошве\",\n        \"Листва с лип, клёнов и тополей уже облетела, а высоко в голых кронах повисли десятки плотных изумрудных «шапок», похожих на птичьи гнёзда или ведьмины мётлы.\",\n        \"это омела белая (Viscum album)\",\n        \"Это полупаразит: фотосинтезирует она сама (поэтому круглый год остаётся зелёной), а вот воду и минеральные соли пьёт прямо из ветвей дерева-хозяина через специальные присоски-гаустории.\",\n        \"Древние кельты считали омелу священным даром богов.\",\n        \"Жрецы срезали её ветви исключительно золотым серпом и ловили в белоснежные ткани — упав на землю, она, по поверьям, теряла магическую силу.\",\n        \"Омелу считали оберегом от молний, ядов и злых духов.\",\n        \"Знаменитая европейская традиция целоваться под омелой родилась из скандинавских мифов и законов перемирия: встретившись под ветвями омелы, даже кровные враги обязаны были сложить оружие на день.\",\n        \"Позже этот обычай превратился в романтический рождественский ритуал.\",\n        \"Белые полупрозрачные ягоды омелы созревают как раз к зиме.\",\n        \"Их мякоть содержит клейкое вещество — висцин.\",\n        \"Дрозды и свиристели лакомятся ягодами и, чтобы очистить липкие клювы, трутся ими о соседние ветви.\",\n        \"Так природный «суперклей» намертво прикрепляет семечко к коре нового дерева.\",\n        \"В Калининграде омелы особенно много: мягкий морской климат Балтики\",\n        \"Омела в кронах — лишь одна из сотен удивительных историй, мимо которых мы проходим каждый день.\",\n        \"почему платаны сбрасывают кору, как военный камуфляж\",\n        \"где растёт реликтовое гинкго, пережившее динозавров\",\n        \"как овраг Паркового ручья прячет тайны утраченного романтического парка Юльхенталь\",\n        \"почему сто лет назад Кёнигсберг проектировали как идеальный «город-сад»\",\n        \"Маршрут: от скульптуры «Борющиеся зубры» через живописный Хуфен вдоль ручья в Центральный парк.\",\n        \"вдоль ручья Хуфенфрайграбен (ныне Паркового) вился романтичный променад\",\n        \"на крутых склонах стояли деревянные гостевые дома в стиле швейцарских шале\",\n        \"редких цветов из местного альпинария\",\n        \"Деревянные террасы исчезли\",\n        \"Мы прикоснемся к деревьям, которые держат корнями эти крутые берега, спасая город от оползней.\",\n        \"как обыкновенный плющ совершает свой медленный альпинистский подвиг, почему он цветёт только в глубокой старости и почему древние считали его символом бессмертия и верности\",\n        \"В зарослях у ручья до сих пор можно встретить потомков тех самых декоративных растений, которые когда-то высаживали немецкие садовники для украшения альпийских горок и курортных садов.\",\n        \"Дома сгорели, а цветы и кустарники продолжают цвести каждую весну и осень, храня память о людях.\"\n      ],\n      \"occurrence_ids\": [745, 747],\n      \"text\": \"Мест в группе немного: с [[1|Ольгой Рубцовой]] пойдём от «Борющихся зубров» через Хуфен вдоль Паркового ручья в Центральный парк. Воду и минеральные соли растение берёт из ветвей дерева, а фотосинтезом занимается само. Вот такое соседство. По пути будут платаны, сбрасывающие кору, и овраг Юльхенталя, где деревья удерживают склоны корнями, а в зарослях сохранились потомки садовых посадок. Плющ тоже заслуживает внимания: он зацветает лишь в глубокой старости — про это я раньше не задумывался.\"\n    },\n    {\n      \"details\": [\n        \"Гид — Ноза Усманова.\",\n        \"Организатор — «80 ЛЕТ ЕДИНСТВА».\",\n        \"Количество мест ограничено\",\n        \"Всё это — на экскурсиях проекта [club237389053|80 ЛЕТ ЕДИНСТВА] от команды гидов, победивших в международном конкурсе #проводникисмыслов и региональном конкурсе #мывместе.\"\n      ],\n      \"occurrence_ids\": [746],\n      \"text\": \"Места ограничены и на экскурсии [[3|Нозы Усмановой]] в программе проекта «80 ЛЕТ ЕДИНСТВА», чья команда гидов победила в международном конкурсе «Проводники смыслов» и региональном «Мы вместе».\"\n    },\n    {\n      \"details\": [\n        \"экскурсию на Осетровую ферму\",\n        \"увидеть, как выращивают икру\",\n        \"готовят уникальные блюда\",\n        \"Вы узнаете всё об осетрах\",\n        \"попробуете эксклюзивные закуски\"\n      ],\n      \"occurrence_ids\": [763],\n      \"text\": \"Как выращивают икру, можно увидеть на осетровой ферме — меня в этой программе цепляет именно возможность посмотреть на процесс. Есть и кулинарная часть: здесь покажут, как готовят блюда, и предложат попробовать закуски. Не обойдётся без дегустации. Об осетрах тоже расскажут: если вам интересно, как связаны выращивание рыбы и приготовление еды, стоит заглянуть.\"\n    }\n  ],\n  \"outro\": \"Какие растения у Паркового ручья вы замечали — удавалось узнать среди них потомков старых садовых посадок?\"\n}",
+      "usage": {
+        "inputTokens": 38257,
+        "cachedInputTokens": 12288,
+        "outputTokens": 2005,
+        "reasoningOutputTokens": 428,
+        "totalTokens": 40262
+      },
+      "elapsed_s": 42.855,
+      "accepted": true,
+      "provider": "codex",
+      "route": "explicit_codex_provider",
+      "selection_verified": true,
+      "started_at": 1794850629,
+      "completed_at": 1794850672,
+      "provider_json_valid": true,
+      "narrative": {
+        "lead": "Зелёные шары в голых кронах Калининграда — омела, которая обходится без почвы. Меня цепляет, как много происходит над головой, пока мы смотрим под ноги.",
+        "paragraphs": [
+          {
+            "occurrence_ids": [
+              745,
+              747
+            ],
+            "text": "Мест в группе немного: с [[1|Ольгой Рубцовой]] пойдём от «Борющихся зубров» через Хуфен вдоль Паркового ручья в Центральный парк. Воду и минеральные соли растение берёт из ветвей дерева, а фотосинтезом занимается само. Вот такое соседство. По пути будут платаны, сбрасывающие кору, и овраг Юльхенталя, где деревья удерживают склоны корнями, а в зарослях сохранились потомки садовых посадок. Плющ тоже заслуживает внимания: он зацветает лишь в глубокой старости — про это я раньше не задумывался."
+          },
+          {
+            "occurrence_ids": [
+              746
+            ],
+            "text": "Места ограничены и на экскурсии [[3|Нозы Усмановой]] в программе проекта «80 ЛЕТ ЕДИНСТВА», чья команда гидов победила в международном конкурсе «Проводники смыслов» и региональном «Мы вместе»."
+          },
+          {
+            "occurrence_ids": [
+              763
+            ],
+            "text": "Как выращивают икру, можно увидеть на осетровой ферме — меня в этой программе цепляет именно возможность посмотреть на процесс. Есть и кулинарная часть: здесь покажут, как готовят блюда, и предложат попробовать закуски. Не обойдётся без дегустации. Об осетрах тоже расскажут: если вам интересно, как связаны выращивание рыбы и приготовление еды, стоит заглянуть."
+          }
+        ],
+        "outro": "Какие растения у Паркового ручья вы замечали — удавалось узнать среди них потомков старых садовых посадок?"
+      },
+      "final_text": "ЭКСКУРСИИ 17–22 НОЯБРЯ\nЗелёные шары в голых кронах Калининграда — омела, которая обходится без почвы. Меня цепляет, как много происходит над головой, пока мы смотрим под ноги.\n\nЗЕЛЁНЫЕ ИСТОРИИ\nМест в группе немного: с Ольгой Рубцовой пойдём от «Борющихся зубров» через Хуфен вдоль Паркового ручья в Центральный парк. Воду и минеральные соли растение берёт из ветвей дерева, а фотосинтезом занимается само. Вот такое соседство. По пути будут платаны, сбрасывающие кору, и овраг Юльхенталя, где деревья удерживают склоны корнями, а в зарослях сохранились потомки садовых посадок. Плющ тоже заслуживает внимания: он зацветает лишь в глубокой старости — про это я раньше не задумывался.\n17 ноября (вт), 14:00 · 21 ноября (сб), 11:00\n💳 500 рублей · 🔗 Запись: vk.cc/d3XqaE\n\nРАССВЕТ НАД БАЛТИКОЙ\nМеста ограничены и на экскурсии Нозы Усмановой в программе проекта «80 ЛЕТ ЕДИНСТВА», чья команда гидов победила в международном конкурсе «Проводники смыслов» и региональном «Мы вместе».\n20 ноября (пт), 14:00\n💳 500 рублей · 🔗 Запись: vk.cc/d3XqaE\n\nСЕКРЕТЫ ЧЁРНОГО ЗОЛОТА\nКак выращивают икру, можно увидеть на осетровой ферме — меня в этой программе цепляет именно возможность посмотреть на процесс. Есть и кулинарная часть: здесь покажут, как готовят блюда, и предложат попробовать закуски. Не обойдётся без дегустации. Об осетрах тоже расскажут: если вам интересно, как связаны выращивание рыбы и приготовление еды, стоит заглянуть.\n22 ноября (вс)\n☎ Запись по телефону: +7 (911) 858-58-49\n\nКакие растения у Паркового ручья вы замечали — удавалось узнать среди них потомков старых садовых посадок?\n\nЭто дайджест экскурсий по Калининградской области от «Ух ты, Калининград!».\n\n#экскурсии #Калининград #УхтыКалининград",
+      "run": "Sol-A-350",
+      "writer_accepted": true,
+      "story_assembled": true,
+      "input_file": "vk-fable-input-A-350.json"
+    },
+    {
+      "case": "A",
+      "angle_issue": 351,
+      "requested_model": "gpt-6.1-sol",
+      "actual_model": "gpt-6.1-sol",
+      "reasoning_effort": "medium",
+      "quota_before": {
+        "status": "available",
+        "source_method": "account/rateLimits/read",
+        "observed_at": "2026-11-16T17:37:11.778177+00:00",
+        "limits": [
+          {
+            "limit_id": "codex",
+            "windows": [
+              {
+                "window": "primary",
+                "used_percent": 0,
+                "remaining_percent": 100,
+                "duration_minutes": 10080,
+                "resets_at_unix": 1795455245
+              }
+            ],
+            "valid": true,
+            "limit_reached": false
+          }
+        ],
+        "admission": {
+          "eligible": true,
+          "reason": "quota_available",
+          "reserve_percent": 10,
+          "effective_remaining_percent": 100,
+          "scope": "codex_account_snapshot_only",
+          "separate_owner_approval_required": true,
+          "model_catalog_available": true
+        },
+        "inference_performed": false,
+        "default_profile": {
+          "requested": "gpt-6.1-medium",
+          "model": "gpt-6.1-sol",
+          "reasoning_effort": "medium",
+          "catalog_available": true,
+          "inference_verified": false
+        }
+      },
+      "input_prompt_sha256": "a2493233ab17b3ea37495799f234299ce277e30514fd6c5980da14930a2b4d60",
+      "raw_response": "{\n  \"lead\": \"Плющ цветёт только в глубокой старости — про это я раньше не задумывался. В овраге Паркового ручья ему будет повод уделить больше внимания.\",\n  \"paragraphs\": [\n    {\n      \"details\": [\n        \"Гид — Ольга Рубцова.\",\n        \"Калининград\",\n        \"пешком\",\n        \"Количество мест в группе ограничено!\",\n        \"Формат: камерная группа\",\n        \"Маршрут: от скульптуры «Борющиеся зубры» через живописный Хуфен вдоль ручья в Центральный парк.\",\n        \"Длительность: 2 часа в лёгком, неспешном темпе\",\n        \"необычные ракурсы для осенних фото\",\n        \"удобная обувь на нескользкой подошве\",\n        \"Листва с лип, клёнов и тополей уже облетела, а высоко в голых кронах повисли десятки плотных изумрудных «шапок», похожих на птичьи гнёзда или ведьмины мётлы.\",\n        \"это омела белая (Viscum album)\",\n        \"Омела принципиально не касается корнями почвы.\",\n        \"Это полупаразит: фотосинтезирует она сама (поэтому круглый год остаётся зелёной), а вот воду и минеральные соли пьёт прямо из ветвей дерева-хозяина через специальные присоски-гаустории.\",\n        \"Древние кельты считали омелу священным даром богов.\",\n        \"Жрецы срезали её ветви исключительно золотым серпом и ловили в белоснежные ткани — упав на землю, она, по поверьям, теряла магическую силу.\",\n        \"Омелу считали оберегом от молний, ядов и злых духов.\",\n        \"Знаменитая европейская традиция целоваться под омелой родилась из скандинавских мифов и законов перемирия: встретившись под ветвями омелы, даже кровные враги обязаны были сложить оружие на день.\",\n        \"Позже этот обычай превратился в романтический рождественский ритуал.\",\n        \"Белые полупрозрачные ягоды омелы созревают как раз к зиме.\",\n        \"Их мякоть содержит клейкое вещество — висцин.\",\n        \"Дрозды и свиристели лакомятся ягодами и, чтобы очистить липкие клювы, трутся ими о соседние ветви.\",\n        \"Так природный «суперклей» намертво прикрепляет семечко к коре нового дерева.\",\n        \"В Калининграде омелы особенно много\",\n        \"почему платаны сбрасывают кору, как военный камуфляж\",\n        \"где растёт реликтовое гинкго, пережившее динозавров\",\n        \"как овраг Паркового ручья прячет тайны утраченного романтического парка Юльхенталь\",\n        \"почему сто лет назад Кёнигсберг проектировали как идеальный «город-сад»\",\n        \"в нескольких шагах от оживлённого проспекта Мира\",\n        \"вдоль ручья Хуфенфрайграбен (ныне Паркового) вился романтичный променад\",\n        \"на крутых склонах стояли деревянные гостевые дома в стиле швейцарских шале\",\n        \"редких цветов из местного альпинария\",\n        \"Деревянные террасы исчезли\",\n        \"мы будем читать ландшафт через растения\",\n        \"Мы прикоснемся к деревьям, которые держат корнями эти крутые берега, спасая город от оползней.\",\n        \"Мы разберёмся, как обыкновенный плющ совершает свой медленный альпинистский подвиг, почему он цветёт только в глубокой старости и почему древние считали его символом бессмертия и верности.\",\n        \"В зарослях у ручья до сих пор можно встретить потомков тех самых декоративных растений, которые когда-то высаживали немецкие садовники для украшения альпийских горок и курортных садов.\",\n        \"Дома сгорели, а цветы и кустарники продолжают цвести каждую весну и осень, храня память о людях.\"\n      ],\n      \"occurrence_ids\": [745, 747],\n      \"text\": \"Мест в группе немного: с [[1|Ольгой Рубцовой]] пойдём от «Борющихся зубров» через Хуфен вдоль ручья в Центральный парк, читая ландшафт через растения. Темп неспешный. В долине разберёмся, как вечнозелёный сосед деревьев взбирается вверх и почему древние считали его символом верности. Здесь корни удерживают крутые берега от оползней, а в зарослях сохранились потомки декоративных растений немецких садовников. Деревянные шале и террасы Юльхенталя исчезли, но цветы и кустарники продолжают цвести — эту часть истории можно искать прямо у ручья.\"\n    },\n    {\n      \"details\": [\n        \"гид Ноза Усманова\",\n        \"Калининград\",\n        \"Организатор — 80 ЛЕТ ЕДИНСТВА.\",\n        \"Количество мест ограничено\"\n      ],\n      \"occurrence_ids\": [746],\n      \"text\": \"Число мест ограничено и на экскурсии того же проекта «80 ЛЕТ ЕДИНСТВА», которую в Калининграде ведёт [[3|Ноза Усманова]].\"\n    },\n    {\n      \"details\": [\n        \"Калининградская область\",\n        \"Хотите увидеть, как выращивают икру и готовят уникальные блюда?\",\n        \"экскурсию на Осетровую ферму\",\n        \"Вы узнаете всё об осетрах и попробуете эксклюзивные закуски.\"\n      ],\n      \"occurrence_ids\": [763],\n      \"text\": \"Как выращивают икру и готовят блюда, можно увидеть на осетровой ферме в области. Здесь объяснят, как живут осетры, и дадут попробовать закуски. Меня в этом анонсе цепляет именно выращивание икры: интересно, как это выглядит вблизи.\"\n    }\n  ],\n  \"outro\": \"Вы замечали цветущий плющ в Калининграде — где его искать?\"\n}",
+      "usage": {
+        "inputTokens": 38247,
+        "cachedInputTokens": 12288,
+        "outputTokens": 1879,
+        "reasoningOutputTokens": 411,
+        "totalTokens": 40126
+      },
+      "elapsed_s": 46.524,
+      "accepted": true,
+      "provider": "codex",
+      "route": "explicit_codex_provider",
+      "selection_verified": true,
+      "started_at": 1794850634,
+      "completed_at": 1794850681,
+      "provider_json_valid": true,
+      "narrative": {
+        "lead": "Плющ цветёт только в глубокой старости — про это я раньше не задумывался. В овраге Паркового ручья ему будет повод уделить больше внимания.",
+        "paragraphs": [
+          {
+            "occurrence_ids": [
+              745,
+              747
+            ],
+            "text": "Мест в группе немного: с [[1|Ольгой Рубцовой]] пойдём от «Борющихся зубров» через Хуфен вдоль ручья в Центральный парк, читая ландшафт через растения. Темп неспешный. В долине разберёмся, как вечнозелёный сосед деревьев взбирается вверх и почему древние считали его символом верности. Здесь корни удерживают крутые берега от оползней, а в зарослях сохранились потомки декоративных растений немецких садовников. Деревянные шале и террасы Юльхенталя исчезли, но цветы и кустарники продолжают цвести — эту часть истории можно искать прямо у ручья."
+          },
+          {
+            "occurrence_ids": [
+              746
+            ],
+            "text": "Число мест ограничено и на экскурсии того же проекта «80 ЛЕТ ЕДИНСТВА», которую в Калининграде ведёт [[3|Ноза Усманова]]."
+          },
+          {
+            "occurrence_ids": [
+              763
+            ],
+            "text": "Как выращивают икру и готовят блюда, можно увидеть на осетровой ферме в области. Здесь объяснят, как живут осетры, и дадут попробовать закуски. Меня в этом анонсе цепляет именно выращивание икры: интересно, как это выглядит вблизи."
+          }
+        ],
+        "outro": "Вы замечали цветущий плющ в Калининграде — где его искать?"
+      },
+      "final_text": "ЭКСКУРСИИ 17–22 НОЯБРЯ\nПлющ цветёт только в глубокой старости — про это я раньше не задумывался. В овраге Паркового ручья ему будет повод уделить больше внимания.\n\nЗЕЛЁНЫЕ ИСТОРИИ\nМест в группе немного: с Ольгой Рубцовой пойдём от «Борющихся зубров» через Хуфен вдоль ручья в Центральный парк, читая ландшафт через растения. Темп неспешный. В долине разберёмся, как вечнозелёный сосед деревьев взбирается вверх и почему древние считали его символом верности. Здесь корни удерживают крутые берега от оползней, а в зарослях сохранились потомки декоративных растений немецких садовников. Деревянные шале и террасы Юльхенталя исчезли, но цветы и кустарники продолжают цвести — эту часть истории можно искать прямо у ручья.\n17 ноября (вт), 14:00 · 21 ноября (сб), 11:00\n💳 500 рублей · 🔗 Запись: vk.cc/d3XqaE\n\nРАССВЕТ НАД БАЛТИКОЙ\nЧисло мест ограничено и на экскурсии того же проекта «80 ЛЕТ ЕДИНСТВА», которую в Калининграде ведёт Ноза Усманова.\n20 ноября (пт), 14:00\n💳 500 рублей · 🔗 Запись: vk.cc/d3XqaE\n\nСЕКРЕТЫ ЧЁРНОГО ЗОЛОТА\nКак выращивают икру и готовят блюда, можно увидеть на осетровой ферме в области. Здесь объяснят, как живут осетры, и дадут попробовать закуски. Меня в этом анонсе цепляет именно выращивание икры: интересно, как это выглядит вблизи.\n22 ноября (вс)\n☎ Запись по телефону: +7 (911) 858-58-49\n\nВы замечали цветущий плющ в Калининграде — где его искать?\n\nЭто дайджест экскурсий по Калининградской области от «Ух ты, Калининград!».\n\n#экскурсии #Калининград #УхтыКалининград",
+      "run": "Sol-A-351",
+      "writer_accepted": true,
+      "story_assembled": true,
+      "input_file": "vk-fable-input-A-351.json"
+    },
+    {
+      "case": "B",
+      "angle_issue": 350,
+      "requested_model": "gpt-6.1-sol",
+      "actual_model": "gpt-6.1-sol",
+      "reasoning_effort": "medium",
+      "quota_before": {
+        "status": "available",
+        "source_method": "account/rateLimits/read",
+        "observed_at": "2026-11-16T17:40:39.709317+00:00",
+        "limits": [
+          {
+            "limit_id": "codex",
+            "windows": [
+              {
+                "window": "primary",
+                "used_percent": 0,
+                "remaining_percent": 100,
+                "duration_minutes": 10080,
+                "resets_at_unix": 1795455245
+              }
+            ],
+            "valid": true,
+            "limit_reached": false
+          }
+        ],
+        "admission": {
+          "eligible": true,
+          "reason": "quota_available",
+          "reserve_percent": 10,
+          "effective_remaining_percent": 100,
+          "scope": "codex_account_snapshot_only",
+          "separate_owner_approval_required": true,
+          "model_catalog_available": true
+        },
+        "inference_performed": false,
+        "default_profile": {
+          "requested": "gpt-6.1-medium",
+          "model": "gpt-6.1-sol",
+          "reasoning_effort": "medium",
+          "catalog_available": true,
+          "inference_verified": false
+        }
+      },
+      "input_prompt_sha256": "5b8c501c0143a31e70366f578a38ef99719b251626e988e8474e094bcfdfcb5a",
+      "raw_response": "{\n  \"lead\": \"Плющ цветёт только в глубокой старости — про это я раньше не задумывался. В долине Паркового ручья у него своя история.\",\n  \"paragraphs\": [\n    {\n      \"details\": [\n        \"Калининград\",\n        \"пешком\",\n        \"Ольга Рубцова\",\n        \"Количество мест в группе ограничено!\",\n        \"почему платаны сбрасывают кору, как военный камуфляж;\",\n        \"где растёт реликтовое гинкго, пережившее динозавров;\",\n        \"как овраг Паркового ручья прячет тайны утраченного романтического парка Юльхенталь;\",\n        \"и почему сто лет назад Кёнигсберг проектировали как идеальный «город-сад».\",\n        \"Маршрут: от скульптуры «Борющиеся зубры» через живописный Хуфен вдоль ручья в Центральный парк.\",\n        \"в лёгком, неспешном темпе\",\n        \"камерная группа\",\n        \"необычные ракурсы для осенних фото\",\n        \"Сто лет назад это место было культовым уголком отдыха: вдоль ручья Хуфенфрайграбен (ныне Паркового) вился романтичный променад, на крутых склонах стояли деревянные гостевые дома в стиле швейцарских шале, а воздух наполнял аромат редких цветов из местного альпинария.\",\n        \"Деревянные террасы исчезли\",\n        \"Мы прикоснемся к деревьям, которые держат корнями эти крутые берега, спасая город от оползней.\",\n        \"Мы разберёмся, как обыкновенный плющ совершает свой медленный альпинистский подвиг, почему он цветёт только в глубокой старости и почему древние считали его символом бессмертия и верности.\",\n        \"В зарослях у ручья до сих пор можно встретить потомков тех самых декоративных растений, которые когда-то высаживали немецкие садовники для украшения альпийских горок и курортных садов.\",\n        \"Дома сгорели, а цветы и кустарники продолжают цвести каждую весну и осень, храня память о людях.\",\n        \"удобная обувь на нескользкой подошве\"\n      ],\n      \"occurrence_ids\": [745, 747],\n      \"text\": \"К деревьям, которые корнями удерживают склоны от оползней, можно будет прикоснуться; мест в группе немного. С [[1|Ольгой Рубцовой]] пройдёмся от скульптуры «Борющиеся зубры» через Хуфен вдоль Паркового ручья в Центральный парк — неспешно, в обуви на нескользкой подошве. Здесь когда-то стояли деревянные дома в стиле швейцарских шале. Дома сгорели, а потомки садовых растений до сих пор цветут у воды. Плющу тоже достанется внимание: разберёмся, как он взбирается вверх и отчего древние связывали его с бессмертием и верностью.\"\n    },\n    {\n      \"details\": [\n        \"СТУДТУР | БФУ им. И. Канта\",\n        \"вечернюю экскурсию в Форт № 11 Дёнхофф\",\n        \"При свете фонарей эти мощные стены выглядят совершенно иначе.\",\n        \"услышим истории о его строителях и поймем, почему его называли неприступным\",\n        \"Они живут на территории форта и свободно гуляют по комплексу\",\n        \"регистрируйся на сайте Студтуризм.рф\",\n        \"А также заполняй форму\",\n        \"Мы отправим приглашения тем, с кем разделим этот день (в случае не обнаружения заявки на сайте, мы вынуждены будем отказать в участии)\",\n        \"Выезд\",\n        \"Мероприятие реализуется в рамках грантового проекта «Путешествия со смыслом 2.0: от памяти к действию»\"\n      ],\n      \"occurrence_ids\": [776],\n      \"text\": \"Кроликов, свободно гуляющих по территории форта, можно увидеть на вечерней экскурсии по приглашениям: нужны заявка на сайте «Студтуризм.рф» и заполненная форма. Поедем к укреплению, стены которого будут освещены фонарями; в программе — истории строителей и объяснение, почему форт называли неприступным. Меня цепляет это соседство укреплений и кроликов. Поездку организует «СтудТур» БФУ им. И. Канта в рамках проекта «Путешествия со смыслом 2.0: от памяти к действию».\"\n    },\n    {\n      \"details\": [\n        \"Профи-тур\",\n        \"для организованной группы старшеклассников\",\n        \"современное производство упаковки\",\n        \"познакомимся с промышленным оборудованием\",\n        \"узнаем, какие специалисты стоят за созданием привычных нам вещей\",\n        \"всех ждут сюрпризы\",\n        \"Это совершенно новая       программа и вы будете     первыми!\"\n      ],\n      \"occurrence_ids\": [786],\n      \"text\": \"Промышленное оборудование, на котором делают упаковку, покажут организованной группе старшеклассников — это условие участия. «Профи-тур» организует экскурсию на современное производство: за привычными вещами здесь можно будет разглядеть работу конкретных специалистов. Программа новая, группа станет её первыми участниками. В анонсе обещаны и сюрпризы, но какие именно — не сказано.\"\n    },\n    {\n      \"details\": [\n        \"Калининградская область\",\n        \"Хотите увидеть, как выращивают икру и готовят уникальные блюда?\",\n        \"экскурсию на Осетровую ферму\",\n        \"Вы узнаете всё об осетрах и попробуете эксклюзивные закуски.\"\n      ],\n      \"occurrence_ids\": [763],\n      \"text\": \"Как выращивают икру, на осетровой ферме предлагают увидеть своими глазами; заодно покажут, как готовят блюда. Меня в этой программе цепляет именно возможность посмотреть на выращивание икры: интересно, как это выглядит вблизи. Поедем на ферму в области, где экскурсия включает рассказ об осетрах и дегустацию закусок. Их состав в анонсе не раскрыт.\"\n    }\n  ],\n  \"outro\": \"Вы замечали у Паркового ручья садовые цветы среди зарослей — какие удавалось узнать?\"\n}",
+      "usage": {
+        "inputTokens": 39622,
+        "cachedInputTokens": 12288,
+        "outputTokens": 2004,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 41626
+      },
+      "elapsed_s": 47.101,
+      "accepted": false,
+      "provider": "codex",
+      "route": "explicit_codex_provider",
+      "selection_verified": true,
+      "started_at": 1794850842,
+      "completed_at": 1794850889,
+      "provider_json_valid": true,
+      "narrative": null,
+      "final_text": null,
+      "compact_fallback_text": "Дайджест экскурсий №350\n\nКоротко: 5 будущих экскурсий на 17–22 ноября. Смотрите карточку, а детали и запись — ниже.\n\n1. Зелёные истории — vk.cc/d3XqaE\n2. Экскурсия в Форт № 11 Дёнхофф — https://студтуризм.рф/events/ZhbSOhuGmL\n3. Завод OSQ Group — +7 (962) 255-54-91\n4. Зелёные истории — vk.cc/d3XqaE\n5. Секреты чёрного золота — +7 (911) 858-58-49\n\n#экскурсии #Калининград #УхтыКалининград",
+      "run": "Sol-B-350",
+      "writer_accepted": false,
+      "story_assembled": false,
+      "input_file": "vk-fable-input-B-350.json"
+    },
+    {
+      "case": "C",
+      "angle_issue": 351,
+      "requested_model": "gpt-6.1-sol",
+      "actual_model": "gpt-6.1-sol",
+      "reasoning_effort": "medium",
+      "quota_before": {
+        "status": "available",
+        "source_method": "account/rateLimits/read",
+        "observed_at": "2026-11-16T17:38:59.292484+00:00",
+        "limits": [
+          {
+            "limit_id": "codex",
+            "windows": [
+              {
+                "window": "primary",
+                "used_percent": 0,
+                "remaining_percent": 100,
+                "duration_minutes": 10080,
+                "resets_at_unix": 1795455245
+              }
+            ],
+            "valid": true,
+            "limit_reached": false
+          }
+        ],
+        "admission": {
+          "eligible": true,
+          "reason": "quota_available",
+          "reserve_percent": 10,
+          "effective_remaining_percent": 100,
+          "scope": "codex_account_snapshot_only",
+          "separate_owner_approval_required": true,
+          "model_catalog_available": true
+        },
+        "inference_performed": false,
+        "default_profile": {
+          "requested": "gpt-6.1-medium",
+          "model": "gpt-6.1-sol",
+          "reasoning_effort": "medium",
+          "catalog_available": true,
+          "inference_verified": false
+        }
+      },
+      "input_prompt_sha256": "fdbad97a34ff158e7f4ee91b083d3130adad4e258a06d9d4e2b435e340c910d6",
+      "raw_response": "{\n  \"lead\": \"Бывшая конюшня в Шатрове становится музеем повседневной жизни Самбии — здание восстанавливают, а коллекцию собирают по крупицам.\",\n  \"paragraphs\": [\n    {\n      \"details\": [\n        \"Юлия Гришанова (@Yulia_Grishanova - личный контакт), орнитолог, аккредитованный гид по Калининградской области.\",\n        \"Преподаватель БФУ им.И. Канта.\",\n        \"Гиды: Владимир Власов, Юлия Гришанова\",\n        \"Осеннее путешествие по ландшафтам востока Калининградской области с остановками в Черняховске и Гусеве, а также посмотрим на слияние рек Анграпы и Писсы.\",\n        \"В пути нас ждет история и истории переселенчества: Почему наша Родина стала домом для многих и многих переселенцев от колонистов Средневековья до советских поселенцев прошлого века?\",\n        \"Какие причины вынуждали людей оставлять место своего рождения и искать новую родину?\",\n        \"Продолжительность 10 часов.\",\n        \"сопровождение, поздний завтрак, обед, все входы\"\n      ],\n      \"occurrence_ids\": [\n        693\n      ],\n      \"text\": \"Орнитолог и преподаватель БФУ [[1|Юлия Гришанова]] вместе с [[2|Владимиром Власовым]] ведут маршрут об истории переселенчества — от средневековых колонистов до советских поселенцев. Меня здесь цепляет вопрос: что заставляло людей оставлять место рождения и искать новую родину? За ним — разные человеческие судьбы. Поедем по востоку области через Черняховск и Гусев к слиянию Анграпы и Писсы; в программе есть и поздний завтрак, и обед.\"\n    },\n    {\n      \"details\": [\n        \"Эмма — гид-экскурсовод и координатор совершенно прекрасного проекта «Историк 39»!\",\n        \"Вместе с культовым калининградским режиссером Евгением Морозовым и великолепным оператором Евгением Спиваковым Эмма участвовала в создании 65 фильмов в рамках проекта «История. Люди. Память» об истории области, объехала регион вдоль и поперек, и ей точно есть чем поделиться!\",\n        \"Истории из прошлого Самбии от Эммы Басовой, инсайды о создании знаковых документальных фильмов\",\n        \"Начнем изучение Самбии с древнего городища Варген — одного из самых мощных и живописных укреплений пруссов в здешних местах.\",\n        \"Осмотрим средневековую кирху Куменена в Кумачево, сохранившую древние росписи на стенах.\",\n        \"В этом году «Хранители руин» вместе с Татьяной Суншуровой превратили когда-то заброшенную территорию в ухоженный парк.\",\n        \"В поселке Русское увидим один из первых в области примеров эстетики руин — остатки кирхи Гермау, которая в стародавние времена была замком!\",\n        \"В поселке Шатрово посетим новый музей «Вайденен», посвященный повседневной жизни жителей этого уголка Самбии, и познакомимся с Александром Лопатко, который по крупицам собирает коллекцию артефактов и бережно восстанавливает старинное здание бывшей конюшни.\",\n        \"В Романово мы осмотрим возрождающуюся кирху Побетена, которая когда-то считалась одной из самых красивых церквей в Самбии, а сегодня активно восстанавливается Русской Православной Церковью!\",\n        \"В местечке Рощино узнаем о возрождении и истории красивой дворянской усадьбы Грюнхоф от архитектора Олега Ли.\",\n        \"Посетим кирху Рудау в Мельниково, в далеком прошлом представлявшую собой орденский замок.\",\n        \"В прошлом году территория была открыта для посетителей как исторический парк, а уже скоро в восстановленном здании кирхи будет работать полноценный музей!\",\n        \"все входные билеты включены в стоимость, дополнительно оплачивается обед\",\n        \"Часть собранных средств отправится на развитие нашего движения и регулярный уход за историческими руинами\",\n        \"Совместное путешествие «Хранителей руин» и проекта «История. Люди. Память».\"\n      ],\n      \"occurrence_ids\": [\n        740\n      ],\n      \"text\": \"[[3|Эмма Басова]] участвовала в создании 65 фильмов об области для проекта «История. Люди. Память» и поделится историями съёмок в поездке по Самбии. Это мне любопытно. Поедем от прусского укрепления Варген к средневековой кирхе Куменена с сохранившимися настенными росписями, а в «Вайденене» познакомимся с Александром Лопатко — он собирает артефакты и возвращает старому зданию жизнь. Меня здесь привлекает возможность поговорить с человеком, который сам создаёт коллекцию. Часть средств от поездки пойдёт на развитие «Хранителей руин» и уход за историческими руинами.\"\n    }\n  ],\n  \"outro\": \"Какая обыденная вещь из прошлого вашей семьи, по-вашему, заслуживает места в музее повседневной жизни?\"\n}",
+      "usage": {
+        "inputTokens": 38173,
+        "cachedInputTokens": 12288,
+        "outputTokens": 1700,
+        "reasoningOutputTokens": 441,
+        "totalTokens": 39873
+      },
+      "elapsed_s": 40.337,
+      "accepted": true,
+      "provider": "codex",
+      "route": "explicit_codex_provider",
+      "selection_verified": true,
+      "started_at": 1794850836,
+      "completed_at": 1794850876,
+      "provider_json_valid": true,
+      "narrative": {
+        "lead": "Бывшая конюшня в Шатрове становится музеем повседневной жизни Самбии — здание восстанавливают, а коллекцию собирают по крупицам.",
+        "paragraphs": [
+          {
+            "occurrence_ids": [
+              693
+            ],
+            "text": "Орнитолог и преподаватель БФУ [[1|Юлия Гришанова]] вместе с [[2|Владимиром Власовым]] ведут маршрут об истории переселенчества — от средневековых колонистов до советских поселенцев. Меня здесь цепляет вопрос: что заставляло людей оставлять место рождения и искать новую родину? За ним — разные человеческие судьбы. Поедем по востоку области через Черняховск и Гусев к слиянию Анграпы и Писсы; в программе есть и поздний завтрак, и обед."
+          },
+          {
+            "occurrence_ids": [
+              740
+            ],
+            "text": "[[3|Эмма Басова]] участвовала в создании 65 фильмов об области для проекта «История. Люди. Память» и поделится историями съёмок в поездке по Самбии. Это мне любопытно. Поедем от прусского укрепления Варген к средневековой кирхе Куменена с сохранившимися настенными росписями, а в «Вайденене» познакомимся с Александром Лопатко — он собирает артефакты и возвращает старому зданию жизнь. Меня здесь привлекает возможность поговорить с человеком, который сам создаёт коллекцию. Часть средств от поездки пойдёт на развитие «Хранителей руин» и уход за историческими руинами."
+          }
+        ],
+        "outro": "Какая обыденная вещь из прошлого вашей семьи, по-вашему, заслуживает места в музее повседневной жизни?"
+      },
+      "final_text": "ЭКСКУРСИИ 21–28 НОЯБРЯ\nБывшая конюшня в Шатрове становится музеем повседневной жизни Самбии — здание восстанавливают, а коллекцию собирают по крупицам.\n\nПОД СЕНЬЮ АНГЕЛОВ: ИСТОРИИ О ПЕРЕСЕЛЕНЦАХ\nОрнитолог и преподаватель БФУ Юлия Гришанова вместе с Владимиром Власовым ведут маршрут об истории переселенчества — от средневековых колонистов до советских поселенцев. Меня здесь цепляет вопрос: что заставляло людей оставлять место рождения и искать новую родину? За ним — разные человеческие судьбы. Поедем по востоку области через Черняховск и Гусев к слиянию Анграпы и Писсы; в программе есть и поздний завтрак, и обед.\n21 ноября (сб)\n💳 4800 руб (сопровождение, поздний завтрак, обед, все входы) · 🔗 Подробности: https://t.me/amber_fringilla/6737\n\nСАМБИЙСКОЕ КОЛЬЦО\nЭмма Басова участвовала в создании 65 фильмов об области для проекта «История. Люди. Память» и поделится историями съёмок в поездке по Самбии. Это мне любопытно. Поедем от прусского укрепления Варген к средневековой кирхе Куменена с сохранившимися настенными росписями, а в «Вайденене» познакомимся с Александром Лопатко — он собирает артефакты и возвращает старому зданию жизнь. Меня здесь привлекает возможность поговорить с человеком, который сам создаёт коллекцию. Часть средств от поездки пойдёт на развитие «Хранителей руин» и уход за историческими руинами.\n28 ноября (сб), 09:00-18:00\n💳 4000 рублей с человека (входные билеты включены, обед оплачивается отдельно — 600 рублей) · 🔗 Подробности: vk.cc/d3X1ID\n\nКакая обыденная вещь из прошлого вашей семьи, по-вашему, заслуживает места в музее повседневной жизни?\n\nЭто дайджест экскурсий по Калининградской области от «Ух ты, Калининград!».\n\n#экскурсии #Калининград #УхтыКалининград #Черняховск #Гусев",
+      "run": "Sol-C-351",
+      "writer_accepted": true,
+      "story_assembled": true,
+      "input_file": "vk-fable-input-C-351.json"
+    },
+    {
+      "case": "F",
+      "angle_issue": 349,
+      "requested_model": "gpt-6.1-sol",
+      "actual_model": "gpt-6.1-sol",
+      "reasoning_effort": "medium",
+      "quota_before": {
+        "status": "available",
+        "source_method": "account/rateLimits/read",
+        "observed_at": "2026-11-16T17:36:44.082759+00:00",
+        "limits": [
+          {
+            "limit_id": "codex",
+            "windows": [
+              {
+                "window": "primary",
+                "used_percent": 0,
+                "remaining_percent": 100,
+                "duration_minutes": 10080,
+                "resets_at_unix": 1795455245
+              }
+            ],
+            "valid": true,
+            "limit_reached": false
+          }
+        ],
+        "admission": {
+          "eligible": true,
+          "reason": "quota_available",
+          "reserve_percent": 10,
+          "effective_remaining_percent": 100,
+          "scope": "codex_account_snapshot_only",
+          "separate_owner_approval_required": true,
+          "model_catalog_available": true
+        },
+        "inference_performed": false,
+        "default_profile": {
+          "requested": "gpt-6.1-medium",
+          "model": "gpt-6.1-sol",
+          "reasoning_effort": "medium",
+          "catalog_available": true,
+          "inference_verified": false
+        }
+      },
+      "input_prompt_sha256": "2feadf29e4ecf251a77eeeaa8e760ccee9a6868460b9fc41b961d16d9c87f8bf",
+      "raw_response": "{\n  \"lead\": \"Деревья у Паркового ручья держат крутые берега корнями и спасают город от оползней — я раньше не задумывался об этой их работе.\",\n  \"paragraphs\": [\n    {\n      \"details\": [\n        \"гид Ольга Рубцова\",\n        \"Количество мест в группе ограничено!\",\n        \"Маршрут: от скульптуры «Борющиеся зубры» через живописный Хуфен вдоль ручья в Центральный парк.\",\n        \"Длительность: 2 часа в лёгком, неспешном темпе\",\n        \"камерная группа\",\n        \"необычные ракурсы для осенних фото\",\n        \"почему платаны сбрасывают кору, как военный камуфляж\",\n        \"где растёт реликтовое гинкго, пережившее динозавров\",\n        \"как овраг Паркового ручья прячет тайны утраченного романтического парка Юльхенталь\",\n        \"почему сто лет назад Кёнигсберг проектировали как идеальный «город-сад»\",\n        \"Омела в кронах — лишь одна из сотен удивительных историй, мимо которых мы проходим каждый день.\",\n        \"Это полупаразит: фотосинтезирует она сама (поэтому круглый год остаётся зелёной), а вот воду и минеральные соли пьёт прямо из ветвей дерева-хозяина через специальные присоски-гаустории.\",\n        \"Жрецы срезали её ветви исключительно золотым серпом и ловили в белоснежные ткани — упав на землю, она, по поверьям, теряла магическую силу.\",\n        \"Омелу считали оберегом от молний, ядов и злых духов.\",\n        \"встретившись под ветвями омелы, даже кровные враги обязаны были сложить оружие на день\",\n        \"Белые полупрозрачные ягоды омелы созревают как раз к зиме.\",\n        \"Их мякоть содержит клейкое вещество — висцин.\",\n        \"Дрозды и свиристели лакомятся ягодами и, чтобы очистить липкие клювы, трутся ими о соседние ветви.\",\n        \"Так природный «суперклей» намертво прикрепляет семечко к коре нового дерева.\",\n        \"вдоль ручья Хуфенфрайграбен (ныне Паркового) вился романтичный променад, на крутых склонах стояли деревянные гостевые дома в стиле швейцарских шале\",\n        \"Деревянные террасы исчезли\",\n        \"Мы прикоснемся к деревьям, которые держат корнями эти крутые берега, спасая город от оползней.\",\n        \"Мы разберёмся, как обыкновенный плющ совершает свой медленный альпинистский подвиг, почему он цветёт только в глубокой старости и почему древние считали его символом бессмертия и верности.\",\n        \"В зарослях у ручья до сих пор можно встретить потомков тех самых декоративных растений, которые когда-то высаживали немецкие садовники для украшения альпийских горок и курортных садов.\",\n        \"Дома сгорели, а цветы и кустарники продолжают цвести каждую весну и осень, храня память о людях.\",\n        \"Форма одежды: удобная обувь на нескользкой подошве\"\n      ],\n      \"occurrence_ids\": [745],\n      \"text\": \"Мест в группе немного: с [[1|Ольгой Рубцовой]] пройдёмся от «Борющихся зубров» через Хуфен вдоль ручья до Центрального парка. Можно будет прикоснуться к этим защитникам склонов. По пути — платаны, сбрасывающие кору, и гинкго; в овраге Юльхенталя сохранились потомки декоративных растений, которые высаживали немецкие садовники. Гостевые дома и деревянные террасы исчезли, а цветы и кустарники продолжают цвести — меня цепляет именно эта живая память о садах. Темп неспешный, но обувь нужна с нескользкой подошвой.\"\n    },\n    {\n      \"details\": [\n        \"гид Ноза Усманова\",\n        \"Количество мест ограничено\",\n        \"Всё это — на экскурсиях проекта [club237389053|80 ЛЕТ ЕДИНСТВА] от команды гидов, победивших в международном конкурсе #проводникисмыслов и региональном конкурсе #мывместе.\"\n      ],\n      \"occurrence_ids\": [746],\n      \"text\": \"Мест немного; ведёт [[3|Ноза Усманова]], а организует экскурсию проект «80 ЛЕТ ЕДИНСТВА», команда гидов которого победила в конкурсах «Проводники смыслов» и «Мы вместе».\"\n    },\n    {\n      \"details\": [\n        \"Автобусное путешествие по востоку Калининградской области\",\n        \"Осеннее путешествие по ландшафтам востока Калининградской области с остановками в Черняховске и Гусеве, а также посмотрим на слияние рек Анграпы и Писсы.\",\n        \"Почему наша Родина стала домом для многих и многих переселенцев от колонистов Средневековья до советских поселенцев прошлого века?\",\n        \"Какие причины вынуждали людей оставлять место своего рождения и искать новую родину?\",\n        \"Продолжительность 10 часов.\",\n        \"сопровождение, поздний завтрак, обед, все входы\",\n        \"Гиды: Владимир Власов, Юлия Гришанова\",\n        \"3 места\",\n        \"Юлия Гришанова (@Yulia_Grishanova - личный контакт), орнитолог, аккредитованный гид по Калининградской области.\",\n        \"Преподаватель БФУ им.И. Канта.\"\n      ],\n      \"occurrence_ids\": [693],\n      \"text\": \"В автобусной группе осталось три места: поедем на восток области разбираться, почему люди от средневековых колонистов до советских поселенцев оставляли родные места и начинали жизнь здесь. Меня в этой теме занимает причина отъезда. С [[4|Юлией Гришановой]], орнитологом и преподавателем БФУ, и [[5|Владимиром Власовым]] сделаем остановки в Черняховске и Гусеве, а ещё посмотрим, где сходятся Анграпа и Писса. На дорогу и остановки отведён целый день; поздний завтрак и обед включены в программу.\"\n    },\n    {\n      \"details\": [\n        \"Совместное путешествие «Хранителей руин» и проекта «История. Люди. Память».\",\n        \"Эмма — гид-экскурсовод и координатор совершенно прекрасного проекта «Историк 39»!\",\n        \"Эмма участвовала в создании 65 фильмов в рамках проекта «История. Люди. Память» об истории области\",\n        \"Истории из прошлого Самбии от Эммы Басовой, инсайды о создании знаковых документальных фильмов\",\n        \"Начнем изучение Самбии с древнего городища Варген\",\n        \"Осмотрим средневековую кирху Куменена в Кумачево, сохранившую древние росписи на стенах.\",\n        \"В этом году «Хранители руин» вместе с Татьяной Суншуровой превратили когда-то заброшенную территорию в ухоженный парк.\",\n        \"В поселке Русское увидим один из первых в области примеров эстетики руин — остатки кирхи Гермау, которая в стародавние времена была замком!\",\n        \"В поселке Шатрово посетим новый музей «Вайденен», посвященный повседневной жизни жителей этого уголка Самбии\",\n        \"познакомимся с Александром Лопатко, который по крупицам собирает коллекцию артефактов и бережно восстанавливает старинное здание бывшей конюшни\",\n        \"В Романово мы осмотрим возрождающуюся кирху Побетена\",\n        \"сегодня активно восстанавливается Русской Православной Церковью\",\n        \"В местечке Рощино узнаем о возрождении и истории красивой дворянской усадьбы Грюнхоф от архитектора Олега Ли.\",\n        \"Посетим кирху Рудау в Мельниково, в далеком прошлом представлявшую собой орденский замок.\",\n        \"В прошлом году территория была открыта для посетителей как исторический парк\",\n        \"уже скоро в восстановленном здании кирхи будет работать полноценный музей\",\n        \"все входные билеты включены в стоимость\",\n        \"дополнительно оплачивается обед\",\n        \"Часть собранных средств отправится на развитие нашего движения и регулярный уход за историческими руинами\"\n      ],\n      \"occurrence_ids\": [740],\n      \"text\": \"Древние росписи в кирхе Куменена соседствуют с парком, который «Хранители руин» обустроили на прежде заброшенной территории. В следующую субботу поедем по Самбии: от городища Варген — к этому храму, затем к музею «Вайденен», где собирают вещи из повседневной жизни края и восстанавливают бывшую конюшню. Мне интересно, какие предметы попали в коллекцию. Ведёт [[6|Эмма Басова]], участница создания 65 фильмов об области; в дороге будут и истории о документальных съёмках. Поездку организуют «Хранители руин» и «История. Люди. Память», часть средств направят на уход за руинами.\"\n    },\n    {\n      \"details\": [\n        \"гид Варвара Лалэко\",\n        \"Количество мест ограничено\"\n      ],\n      \"occurrence_ids\": [749],\n      \"text\": \"Число мест ограничено; в тот же день экскурсию в Калининграде ведёт [[9|Варвара Лалэко]].\"\n    }\n  ],\n  \"outro\": \"Какие растения в Калининграде вы помните ещё с детства — и растут ли они до сих пор на том же месте?\"\n}",
+      "usage": {
+        "inputTokens": 43148,
+        "cachedInputTokens": 12288,
+        "outputTokens": 2859,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 46007
+      },
+      "elapsed_s": 60.962,
+      "accepted": true,
+      "provider": "codex",
+      "route": "explicit_codex_provider",
+      "selection_verified": true,
+      "started_at": 1794850606,
+      "completed_at": 1794850667,
+      "provider_json_valid": true,
+      "narrative": {
+        "lead": "Деревья у Паркового ручья держат крутые берега корнями и спасают город от оползней — я раньше не задумывался об этой их работе.",
+        "paragraphs": [
+          {
+            "occurrence_ids": [
+              745
+            ],
+            "text": "Мест в группе немного: с [[1|Ольгой Рубцовой]] пройдёмся от «Борющихся зубров» через Хуфен вдоль ручья до Центрального парка. Можно будет прикоснуться к этим защитникам склонов. По пути — платаны, сбрасывающие кору, и гинкго; в овраге Юльхенталя сохранились потомки декоративных растений, которые высаживали немецкие садовники. Гостевые дома и деревянные террасы исчезли, а цветы и кустарники продолжают цвести — меня цепляет именно эта живая память о садах. Темп неспешный, но обувь нужна с нескользкой подошвой."
+          },
+          {
+            "occurrence_ids": [
+              746
+            ],
+            "text": "Мест немного; ведёт [[3|Ноза Усманова]], а организует экскурсию проект «80 ЛЕТ ЕДИНСТВА», команда гидов которого победила в конкурсах «Проводники смыслов» и «Мы вместе»."
+          },
+          {
+            "occurrence_ids": [
+              693
+            ],
+            "text": "В автобусной группе осталось три места: поедем на восток области разбираться, почему люди от средневековых колонистов до советских поселенцев оставляли родные места и начинали жизнь здесь. Меня в этой теме занимает причина отъезда. С [[4|Юлией Гришановой]], орнитологом и преподавателем БФУ, и [[5|Владимиром Власовым]] сделаем остановки в Черняховске и Гусеве, а ещё посмотрим, где сходятся Анграпа и Писса. На дорогу и остановки отведён целый день; поздний завтрак и обед включены в программу."
+          },
+          {
+            "occurrence_ids": [
+              740
+            ],
+            "text": "Древние росписи в кирхе Куменена соседствуют с парком, который «Хранители руин» обустроили на прежде заброшенной территории. В следующую субботу поедем по Самбии: от городища Варген — к этому храму, затем к музею «Вайденен», где собирают вещи из повседневной жизни края и восстанавливают бывшую конюшню. Мне интересно, какие предметы попали в коллекцию. Ведёт [[6|Эмма Басова]], участница создания 65 фильмов об области; в дороге будут и истории о документальных съёмках. Поездку организуют «Хранители руин» и «История. Люди. Память», часть средств направят на уход за руинами."
+          },
+          {
+            "occurrence_ids": [
+              749
+            ],
+            "text": "Число мест ограничено; в тот же день экскурсию в Калининграде ведёт [[9|Варвара Лалэко]]."
+          }
+        ],
+        "outro": "Какие растения в Калининграде вы помните ещё с детства — и растут ли они до сих пор на том же месте?"
+      },
+      "final_text": "ЭКСКУРСИИ 17–28 НОЯБРЯ\nДеревья у Паркового ручья держат крутые берега корнями и спасают город от оползней — я раньше не задумывался об этой их работе.\n\nЗЕЛЁНЫЕ ИСТОРИИ\nМест в группе немного: с Ольгой Рубцовой пройдёмся от «Борющихся зубров» через Хуфен вдоль ручья до Центрального парка. Можно будет прикоснуться к этим защитникам склонов. По пути — платаны, сбрасывающие кору, и гинкго; в овраге Юльхенталя сохранились потомки декоративных растений, которые высаживали немецкие садовники. Гостевые дома и деревянные террасы исчезли, а цветы и кустарники продолжают цвести — меня цепляет именно эта живая память о садах. Темп неспешный, но обувь нужна с нескользкой подошвой.\n17 ноября (вт), 14:00\n💳 500 рублей · 🔗 Запись: vk.cc/d3XqaE\n\nРАССВЕТ НАД БАЛТИКОЙ\nМест немного; ведёт Ноза Усманова, а организует экскурсию проект «80 ЛЕТ ЕДИНСТВА», команда гидов которого победила в конкурсах «Проводники смыслов» и «Мы вместе».\n20 ноября (пт), 14:00\n💳 500 рублей · 🔗 Запись: vk.cc/d3XqaE\n\nПОД СЕНЬЮ АНГЕЛОВ: ИСТОРИИ О ПЕРЕСЕЛЕНЦАХ\nВ автобусной группе осталось три места: поедем на восток области разбираться, почему люди от средневековых колонистов до советских поселенцев оставляли родные места и начинали жизнь здесь. Меня в этой теме занимает причина отъезда. С Юлией Гришановой, орнитологом и преподавателем БФУ, и Владимиром Власовым сделаем остановки в Черняховске и Гусеве, а ещё посмотрим, где сходятся Анграпа и Писса. На дорогу и остановки отведён целый день; поздний завтрак и обед включены в программу.\n21 ноября (сб)\n💳 4800 руб (сопровождение, поздний завтрак, обед, все входы) · 🔗 Подробности: https://t.me/amber_fringilla/6737\n\nСАМБИЙСКОЕ КОЛЬЦО\nДревние росписи в кирхе Куменена соседствуют с парком, который «Хранители руин» обустроили на прежде заброшенной территории. В следующую субботу поедем по Самбии: от городища Варген — к этому храму, затем к музею «Вайденен», где собирают вещи из повседневной жизни края и восстанавливают бывшую конюшню. Мне интересно, какие предметы попали в коллекцию. Ведёт Эмма Басова, участница создания 65 фильмов об области; в дороге будут и истории о документальных съёмках. Поездку организуют «Хранители руин» и «История. Люди. Память», часть средств направят на уход за руинами.\n28 ноября (сб), 09:00-18:00\n💳 4000 рублей с человека (входные билеты включены, обед оплачивается отдельно — 600 рублей) · 🔗 Подробности: vk.cc/d3X1ID\n\nВРЕМЯ ПЕРВЫХ: ЧЕРЕЗ ТЕРНИИ К ЗВЁЗДАМ\nЧисло мест ограничено; в тот же день экскурсию в Калининграде ведёт Варвара Лалэко.\n28 ноября (сб), 11:00\n💳 500 рублей · 🔗 Запись: vk.cc/d3XqaE\n\nКакие растения в Калининграде вы помните ещё с детства — и растут ли они до сих пор на том же месте?\n\nЭто дайджест экскурсий по Калининградской области от «Ух ты, Калининград!».\n\n#экскурсии #Калининград #УхтыКалининград #Черняховск #Гусев",
+      "run": "Sol-F-349",
+      "writer_accepted": true,
+      "story_assembled": true,
+      "input_file": "vk-fable-input-F-349.json"
+    }
+  ]
+}
