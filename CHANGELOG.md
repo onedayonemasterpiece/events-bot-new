@@ -10,6 +10,9 @@
 
 ## [Unreleased]
 
+- Clarify the existing Smart Update merge-gate comparison unit as the selected, source-grounded event rather than its carrier width or a new speaker/exhibitor focus. Guards, models and runtime routing are unchanged; semantic acceptance remains open.
+
+
 ### Fixed
 - Guide Kaggle pushes saved JSON/media results directly into the existing HTTP receiver and durable importer, including partial/error outcomes and late delivery after a dead waiter; repeated delivery reuses the accepted run receipt.
 
