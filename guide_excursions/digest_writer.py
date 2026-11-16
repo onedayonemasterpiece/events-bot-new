@@ -775,6 +775,7 @@ _VK_NARRATIVE_ANGLES = (
     "зачин-деталь — начни с одной зримой детали (предмет, место, сцена) самой любопытной экскурсии",
     "зачин-человек — начни с гида и того, как он смотрит на свою тему",
 )
+_VK_ACTIVE_TEXT_RE = re.compile(r"[@*][\w.-]+|\b(?:[\w-]+\.)+(?:ru|com|org|net|cc|me|рф)\b", re.I)
 _VK_NARRATIVE_SCHEMA = {
     "type": "object",
     "properties": {
@@ -856,8 +857,9 @@ def _vk_narrative_prompt(payload: Mapping[str, Any], *, issue_id: int) -> str:
         + ".\n"
         "17. Не повторяй одну мысль разными словами.\n\n"
         "Имена\n"
-        "18. В people перечислены люди и проекты выпуска с номерами. Называя кого-то из них, пиши имя в нужном падеже "
-        "внутри разметки [[номер|имя]], например [[2|Анны Ивановой]]. Гида назови так хотя бы раз в абзаце его экскурсии. "
+        "18. В people перечислены люди и проекты выпуска с номерами. Для отметки используй точное имя из people "
+        "в именительном падеже внутри [[номер|имя]]. Если предложение требует другого падежа, пиши обычным текстом. "
+        "При известном гиде назови его хотя бы раз в абзаце его экскурсии. "
         "Других квадратных скобок в тексте быть не должно.\n\n"
         "Верни только JSON по схеме.\n"
         f"JSON schema: {json.dumps(_VK_NARRATIVE_SCHEMA, ensure_ascii=False)}\n\n"
@@ -867,7 +869,8 @@ def _vk_narrative_prompt(payload: Mapping[str, Any], *, issue_id: int) -> str:
 
 async def ask_vk_narrative(payload: Mapping[str, Any], *, issue_id: int) -> dict[str, Any] | None:
     """One editorial request for the whole VK edition; None means "use the compact text"."""
-    expected = sorted(int(item["occurrence_id"]) for item in payload.get("excursions") or [])
+    excursions = {item["occurrence_id"]: item for item in payload.get("excursions") or []}
+    expected = sorted(excursions)
     if not GUIDE_DIGEST_WRITER_ENABLED or not expected:
         return None
     client, candidate_key_ids = _get_digest_writer_runtime()
@@ -887,19 +890,30 @@ async def ask_vk_narrative(payload: Mapping[str, Any], *, issue_id: int) -> dict
     except Exception as exc:
         logger.warning("guide_vk_narrative issue_id=%s outcome=failed error_type=%s", issue_id, type(exc).__name__)
         return None
+    if not isinstance(data, dict) or not isinstance(data.get("paragraphs"), list):
+        return None
+    if not isinstance(data.get("lead"), str) or not isinstance(data.get("outro", ""), str):
+        return None
     paragraphs: list[dict[str, Any]] = []
-    for raw in (data or {}).get("paragraphs") or []:
-        if not isinstance(raw, Mapping):
-            continue
-        ids = [int(x) for x in raw.get("occurrence_ids") or [] if str(x).lstrip("-").isdigit()]
-        text = collapse_ws(raw.get("text"))
-        if ids and text:
-            paragraphs.append({"occurrence_ids": ids, "text": text})
-    lead = collapse_ws((data or {}).get("lead"))
-    outro = collapse_ws((data or {}).get("outro"))
+    for raw in data["paragraphs"]:
+        if not isinstance(raw, dict) or not isinstance(raw.get("text"), str):
+            return None
+        ids = raw.get("occurrence_ids")
+        text = collapse_ws(raw["text"])
+        if not text or not isinstance(ids, list) or not ids or any(type(i) is not int or i not in excursions for i in ids):
+            return None
+        if len(ids) > 1:
+            entries = [excursions[i] for i in ids]
+            identity = {(collapse_ws(x["title"]).casefold(), frozenset(x["guides"])) for x in entries}
+            if len(identity) != 1 or not entries[0]["guides"] or not entries[0]["title"]:
+                logger.warning("guide_vk_narrative issue_id=%s outcome=rejected reason=mixed_excursions", issue_id)
+                return None
+        paragraphs.append({"occurrence_ids": ids, "text": text})
+    lead = collapse_ws(data["lead"])
+    outro = collapse_ws(data.get("outro"))
     covered = sorted(x for paragraph in paragraphs for x in paragraph["occurrence_ids"])
     prose = " ".join([lead, outro, *(paragraph["text"] for paragraph in paragraphs)])
-    if not lead or covered != expected or _URLISH_RE.search(prose):
+    if not lead or covered != expected or _URLISH_RE.search(prose) or _VK_ACTIVE_TEXT_RE.search(prose):
         logger.warning(
             "guide_vk_narrative issue_id=%s outcome=rejected expected=%s covered=%s lead=%s",
             issue_id, expected, covered, bool(lead),

@@ -361,17 +361,19 @@ async def test_vk_text_wraps_written_story_with_exact_dates_contacts_and_plain_n
 @pytest.mark.asyncio
 async def test_vk_text_mentions_only_guides_with_personal_vk_id_when_enabled(monkeypatch):
     async def writer(payload, *, issue_id):
-        # The outro puts guide 1's number on another person's name: no mention for it.
-        return dict(NARRATIVE_349, outro="Или пойти с [[1|Нозой Усмановой]]?")
+        return dict(NARRATIVE_349, lead="[[1|Ольга Рубцова]] ведёт прогулку.",
+                    outro="[[1|Ольга Рубина]] тоже здесь?")
 
     monkeypatch.setattr(vd, "ask_vk_narrative", writer)
     monkeypatch.setattr(vd, "VISUAL_DIGEST_VK_MENTIONS_ENABLED", True)
     text = await build_visual_digest_vk_text(EDITION_349, issue_id=349, vk_api_fn=_fake_shortener)
 
-    assert "с [id41501067|Ольгой Рубцовой]." in text
-    assert "У [id408521495|Нозы Усмановой] другая" in text
+    assert "[id41501067|Ольга Рубцова] ведёт" in text
+    assert "с Ольгой Рубцовой." in text
+    assert "У Нозы Усмановой другая" in text
     assert "с Марией Морозовой." in text  # no confirmed personal id: plain name
-    assert "Или пойти с Нозой Усмановой?" in text
+    assert "Ольга Рубина тоже здесь?" in text
+    assert text.count("[id") == 1
 
 
 @pytest.mark.asyncio
@@ -391,11 +393,13 @@ async def test_vk_text_keeps_compact_list_when_story_is_missing_or_has_stray_mar
 async def test_writer_rejects_story_that_drops_or_invents_an_excursion(monkeypatch):
     from guide_excursions import digest_writer as dw
 
-    payload = {"excursions": [{"occurrence_id": 745}, {"occurrence_id": 746}]}
+    payload, _ = vd._vk_narrative_payload(EDITION_349[:2])
     answers = iter([
         {"lead": "Хук", "paragraphs": [{"occurrence_ids": [745], "text": "Один абзац."}]},
         {"lead": "Хук", "paragraphs": [{"occurrence_ids": [745, 746, 999], "text": "Лишний id."}]},
         {"lead": "Хук", "paragraphs": [{"occurrence_ids": [745, 746], "text": "Оба на месте."}]},
+        {"lead": "Хук", "paragraphs": [{"occurrence_ids": [745], "text": "Один."},
+                                       {"occurrence_ids": [746], "text": "Другой."}]},
     ])
 
     async def generate(*_args, **_kwargs):
@@ -405,4 +409,59 @@ async def test_writer_rejects_story_that_drops_or_invents_an_excursion(monkeypat
     monkeypatch.setattr(dw, "_generate_json", generate)
     assert await dw.ask_vk_narrative(payload, issue_id=1) is None
     assert await dw.ask_vk_narrative(payload, issue_id=1) is None
-    assert (await dw.ask_vk_narrative(payload, issue_id=1))["paragraphs"][0]["occurrence_ids"] == [745, 746]
+    assert await dw.ask_vk_narrative(payload, issue_id=1) is None
+    assert len((await dw.ask_vk_narrative(payload, issue_id=1))["paragraphs"]) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("injection", ["@id41501067(Гид)", "*varja39", "vk.cc/example"])
+async def test_writer_rejects_active_vk_text_from_model(monkeypatch, injection):
+    from guide_excursions import digest_writer as dw
+
+    async def generate(*args, **kwargs):
+        return dict(NARRATIVE_349, outro=injection)
+
+    monkeypatch.setattr(dw, "_get_digest_writer_runtime", lambda: (object(), None))
+    monkeypatch.setattr(dw, "_generate_json", generate)
+    payload, _ = vd._vk_narrative_payload(EDITION_349)
+    assert await dw.ask_vk_narrative(payload, issue_id=349) is None
+
+
+def test_writer_uses_same_roles_as_visual_and_sees_time():
+    row = dict(EDITION_349[0], guide_names=["Старое имя"])
+    payload, _ = vd._vk_narrative_payload([row])
+    assert payload["excursions"][0]["guides"] == ["Ольга Рубцова"]
+    assert payload["excursions"][0]["time"] == "14:00"
+    row.pop("participant_medallions")
+    row["fact_pack"] = {"guide_names": []}
+    payload, _ = vd._vk_narrative_payload([row])
+    assert payload["excursions"][0]["guides"] == []
+
+
+@pytest.mark.asyncio
+async def test_test_publication_uses_real_writer_and_card_but_only_notifies_test_recipient(monkeypatch):
+    async def writer(payload, *, issue_id):
+        return dict(NARRATIVE_349, lead="[[1|Ольга Рубцова]] ведёт прогулку.")
+
+    async def issue(*args):
+        return {"items": EDITION_349}
+
+    async def upload(group, payload, *args, **kwargs):
+        assert group == "243343951" and payload.startswith(b"\x89PNG")
+        return "photo-243343951_1"
+
+    async def post(group, text, *args, **kwargs):
+        assert group == "243343951"
+        assert "Ольга Рубцова ведёт прогулку" in text
+        assert re.findall(r"\[id(\d+)\|", text) == ["1134828279"]
+        assert kwargs["attachments"] == ["photo-243343951_1"]
+        return "https://vk.ru/wall-243343951_123"
+
+    import re
+    monkeypatch.setattr(vd, "ask_vk_narrative", writer)
+    monkeypatch.setattr(vd, "load_visual_digest_issue", issue)
+    monkeypatch.setattr(vd, "VISUAL_DIGEST_VK_MENTIONS_ENABLED", True)
+    result = await vd._publish_visual_digest_to_vk_once(
+        object(), issue_id=349, group_id=243343951, test_mention=1134828279, publish_date=0,
+        vk_api_fn=_fake_shortener, upload_vk_photo_bytes_fn=upload, post_to_vk_fn=post)
+    assert result["url"].endswith("_123")

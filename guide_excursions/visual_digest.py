@@ -1953,12 +1953,18 @@ def _vk_narrative_payload(items: Sequence[Mapping[str, Any]]) -> tuple[dict[str,
         if not isinstance(participants, list):
             participants = [{"name": name, "roles": [role]} for field, role in
                             (("guide_names", "Гид"), ("organizer_names", "Организатор"))
-                            for name in (row.get(field) or [])]
+                            for name in ((row.get("fact_pack") or {}).get(field, row.get(field)) or [])]
+        guides = []
+        organizers = []
         for person in participants:
             roles = [role for role in person.get("roles") or [] if role != "Источник"]
             name = _plain(person.get("name"))
             if not roles or not name:
                 continue
+            if "Гид" in roles:
+                guides.append(name)
+            if "Организатор" in roles:
+                organizers.append(name)
             owner = int(person.get("owner") or 0)
             entry = people.setdefault(f"vk:{owner}" if owner else name.casefold(),
                                       {"n": len(people) + 1, "name": name, "roles": [], "excursions": []})
@@ -1983,10 +1989,10 @@ def _vk_narrative_payload(items: Sequence[Mapping[str, Any]]) -> tuple[dict[str,
                    "summary": _plain(row.get("guide_profile_summary")), "facts": row.get("guide_profile_facts") or {}}
         excursions.append({
             "occurrence_id": row_id, "title": _plain(row.get("canonical_title")),
-            "date": _plain(row.get("date")), "weekday": weekday, "city": _plain(row.get("city")),
+            "date": _plain(row.get("date")), "time": _plain(row.get("time")), "weekday": weekday,
+            "city": _plain(row.get("city")),
             "movement": [_VK_MOVEMENT[mode] for mode in _modes_for(row) if mode in _VK_MOVEMENT],
-            "guides": [_plain(x) for x in row.get("guide_names") or []],
-            "organizers": [_plain(x) for x in row.get("organizer_names") or []],
+            "guides": guides, "organizers": organizers,
             "facts": facts, "source_profile": {key: value for key, value in profile.items() if value},
         })
     return {"excursions": excursions, "people": list(people.values()), "sources": list(sources.values())}, mention_ids
@@ -1998,6 +2004,7 @@ async def _assemble_vk_narrative(
     *,
     period: str,
     mention_ids: Mapping[int, tuple[int, str]],
+    mentions_enabled: bool,
     shorten: Callable[[str], Awaitable[str]],
 ) -> str | None:
     """Wrap the written prose with exact titles, dates, prices, contacts and hashtags from the rows."""
@@ -2005,14 +2012,11 @@ async def _assemble_vk_narrative(
         plain = _VK_NAME_MARK_RE.sub(lambda m: m[2], text)
         if "[" in plain or "]" in plain:
             return None  # unpaired writer markup would become broken VK markup
-        if not VISUAL_DIGEST_VK_MENTIONS_ENABLED:
+        if not mentions_enabled:
             return plain
         def mention(m: re.Match[str]) -> str:
             owner, name = mention_ids.get(int(m[1]), (0, ""))
-            label = m[2].casefold()
-            # A notification must reach the person the label names: every word of the stored
-            # name has to open a word of the inflected label, else the name stays plain text.
-            same = owner and all(any(w.startswith(part[:3]) for w in label.split()) for part in name.casefold().split())
+            same = owner and collapse_ws(m[2]).casefold() == name.casefold()
             return f"[id{owner}|{m[2]}]" if same else m[2]
 
         return _VK_NAME_MARK_RE.sub(mention, text)
@@ -2064,6 +2068,7 @@ async def build_visual_digest_vk_text(
     db: Database | None = None,
     bot: Any | None = None,
     vk_api_fn: Callable[..., Awaitable[Any]] | None = None,
+    test_mention: int | None = None,
 ) -> str:
     items = [dict(r) for r in rows]
     period = _period_of(items)
@@ -2078,10 +2083,18 @@ async def build_visual_digest_vk_text(
     payload, mention_ids = _vk_narrative_payload(items)
     narrative = await ask_vk_narrative(payload, issue_id=int(issue_id)) if items else None
     if narrative:
-        text = await _assemble_vk_narrative(items, narrative, period=period, mention_ids=mention_ids, shorten=shorten)
+        text = await _assemble_vk_narrative(items, narrative, period=period, mention_ids=mention_ids,
+                                            mentions_enabled=VISUAL_DIGEST_VK_MENTIONS_ENABLED and test_mention is None,
+                                            shorten=shorten)
         if text:
+            if test_mention is not None:
+                if re.search(r"[\[\]@]|\*[\w.-]+", text):
+                    raise ValueError("Unexpected VK mention markup in test digest")
+                return f"{text}\n\nПроверка уведомления: [id{test_mention}|тестовый получатель]"
             return text
         logger.warning("guide_vk_narrative issue_id=%s outcome=rejected reason=stray_markup", issue_id)
+    if test_mention is not None:
+        raise ValueError("No narrative was generated for the requested test post")
     lines = [
         f"Дайджест экскурсий №{int(issue_id)}",
         "",
@@ -2164,8 +2177,13 @@ async def publish_visual_digest_to_vk(
     post_to_vk_fn: Callable[..., Awaitable[str | None]] | None = None,
     upload_vk_photo_bytes_fn: Callable[..., Awaitable[str | None]] | None = None,
     publish_stories: bool = False,
+    test_mention: int | None = None,
 ) -> dict[str, Any]:
     from .max_delivery import run_legacy_delivery
+    if test_mention is not None and (
+        str(group_id).lstrip("-") != "243343951" or test_mention not in (858363572, 1134828279)
+    ):
+        raise ValueError("Choose the review community and one of the two approved test recipients")
     if issue_id is None:
         built = await build_visual_digest_issue(db, max_cards=max_cards)
         issue_id = int(built["issue_id"])
@@ -2180,7 +2198,7 @@ async def publish_visual_digest_to_vk(
         return await _publish_visual_digest_to_vk_once(
             db, bot, issue_id=issue_id, max_cards=max_cards, group_id=group, target=target,
             publish_date=publish_date, vk_api_fn=vk_api_fn, post_to_vk_fn=post_to_vk_fn,
-            upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn, publish_stories=publish_stories)
+            upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn, publish_stories=publish_stories, test_mention=test_mention)
     return await run_legacy_delivery(db, issue_id=issue_id, provider="vk", target_id=str(group), send=send_one)
 
 
@@ -2197,6 +2215,7 @@ async def _publish_visual_digest_to_vk_once(
     post_to_vk_fn: Callable[..., Awaitable[str | None]] | None = None,
     upload_vk_photo_bytes_fn: Callable[..., Awaitable[str | None]] | None = None,
     publish_stories: bool = False,
+    test_mention: int | None = None,
 ) -> dict[str, Any]:
     if vk_api_fn is None:
         import main
@@ -2225,7 +2244,8 @@ async def _publish_visual_digest_to_vk_once(
 
     rows = rows[: max(1, min(int(max_cards), 10)) * VISUAL_DIGEST_CARD_LIMIT]
     group = await _resolve_vk_group_id(db=db, bot=bot, group_id=group_id, target=target, vk_api_fn=vk_api_fn)
-    text = await build_visual_digest_vk_text(rows, issue_id=int(issue_id), db=db, bot=bot, vk_api_fn=vk_api_fn)
+    text = await build_visual_digest_vk_text(rows, issue_id=int(issue_id), db=db, bot=bot, vk_api_fn=vk_api_fn,
+                                            test_mention=test_mention)
     card_bytes = render_visual_digest_cards(rows, issue_id=int(issue_id))
     attachments: list[str] = []
     for idx, payload in enumerate(card_bytes, start=1):
@@ -2243,6 +2263,12 @@ async def _publish_visual_digest_to_vk_once(
     url = await post_to_vk_fn(str(group), text, db, bot, attachments=attachments, carousel=True, publish_date=publish_date)
     if not url:
         raise RuntimeError("Guide visual digest VK wall.post failed")
+
+    if test_mention is not None:
+        # The existing delivery record already covers this group. Only a regular
+        # publication should consume the excursions for the daily selection.
+        return {"published": True, "issue_id": issue_id, "url": url, "group_id": group,
+                "text": text, "cards_count": len(card_bytes), "attachments_count": len(attachments)}
 
     post_id = _extract_wall_post_id(url)
     target_key = _vk_public_target_key(group_id=group, target=target or VISUAL_DIGEST_VK_TARGET)

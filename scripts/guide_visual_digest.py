@@ -123,6 +123,7 @@ async def _publish(args: argparse.Namespace) -> int:
             target=args.target,
             publish_date=publish_date,
             publish_stories=bool(args.stories),
+            test_mention=args.test_mention,
         )
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0 if result.get("published") else 1
@@ -200,6 +201,7 @@ def main() -> int:
     publish.add_argument("--issue-id", type=int)
     publish.add_argument("--max-cards", type=int, default=1)
     publish.add_argument("--group-id")
+    publish.add_argument("--test-mention", type=int, help="Recipient of the single test mention in the owner's review group")
     publish.add_argument("--target")
     publish.add_argument("--publish-date", type=int, help="Unix timestamp; use 0 for immediate")
     publish.add_argument("--review-delay-days", type=int, default=3, help="Schedule to postponed queue this many days ahead")
