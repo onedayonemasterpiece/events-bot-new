@@ -623,3 +623,15 @@ def test_price_stays_with_its_dated_outing_and_deposit_policy_is_not_a_fare():
     assert row["price_text"] == "4800 руб (завтрак и обед)"
     vd._apply_published_facts(row := dict(row, fact_pack={}, price_text="Предоплату мы не берём"), [])
     assert not row["price_text"]
+
+
+def test_visual_booking_skips_dotted_telegram_usernames_and_keeps_valid_links():
+    source = "https://t.me/amber_fringilla/6737"
+    row = {"id": 693, "source_post_url": source, "booking_text": "свяжитесь с организатором"}
+    for invalid in ("https://t.me/vladimir.tour", "telegram.me/vladimir.tour/?profile"):
+        assert vd._primary_link(dict(row, booking_url=invalid)) == (source, False)
+    for valid in ("https://t.me/Yulia_Grishanova", "https://telegram.me/amber_fringilla/6737",
+                  "https://t.me/+invite", "https://t.me/c/123/4", "https://t.me/test_bot?start=a.b",
+                  "https://t.me/share/url?url=https://example.com", "tg://resolve?domain=test_bot",
+                  "https://example.com/vladimir.tour"):
+        assert vd._primary_link(dict(row, booking_url=valid)) == (valid, False)

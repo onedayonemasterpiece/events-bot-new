@@ -1806,6 +1806,10 @@ def _visual_booking_url(row: Mapping[str, Any]) -> str:
     booking_url = _plain(row.get("booking_url"))
     if not booking_url:
         return ""
+    # Bare Telegram usernames cannot contain a dot. Keep post, invite and deep links.
+    if re.fullmatch(r"(?:https?://)?(?:t\.me|telegram\.me)/[a-z0-9_]+(?:\.[a-z0-9_]+)+/?(?:[?#].*)?",
+                    booking_url, re.I):
+        return ""
     source = _plain(row.get("source_post_url") or row.get("channel_url"))
     booking_ref = _vk_wall_ref(booking_url)
     source_ref = _vk_wall_ref(source)
