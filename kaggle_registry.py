@@ -470,12 +470,15 @@ async def promote_launch_intent(
             raise KaggleRegistryError("Kaggle launch intent promotion did not persist job")
 
 
-async def remove_job(job_type: str, kernel_ref: str) -> None:
+async def remove_job(job_type: str, kernel_ref: str, *, run_id: str | None = None) -> None:
     job_id = _job_id(job_type, kernel_ref)
     async with _LOCK:
         data = _load_registry()
         jobs = [j for j in data.get("jobs", []) if isinstance(j, dict)]
-        jobs = [j for j in jobs if j.get("id") != job_id]
+        jobs = [j for j in jobs if not (
+            j.get("id") == job_id
+            and (run_id is None or j.get("meta", {}).get("run_id") == run_id)
+        )]
         data["jobs"] = jobs
         _save_registry(data)
 

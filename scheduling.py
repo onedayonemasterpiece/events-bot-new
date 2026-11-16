@@ -4088,6 +4088,14 @@ def schedule_event_batch(
 # APScheduler wrapper used by the main application
 
 _scheduler: AsyncIOScheduler | None = None
+
+
+def request_guide_result_import() -> None:
+    """Wake the existing durable consumer after Kaggle has delivered files."""
+    if _scheduler is not None and _scheduler.get_job("kaggle_recovery"):
+        _scheduler.modify_job("kaggle_recovery", next_run_time=datetime.now(timezone.utc))
+
+
 _run_meta: dict[str, tuple[str, float]] = {}
 _heavy_job_lock = asyncio.Lock()
 _VIDEO_TOMORROW_EXISTING_SESSION_STATUSES: set[str] = {
