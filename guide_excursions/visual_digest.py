@@ -661,8 +661,18 @@ def _modes_for(row: Mapping[str, Any]) -> list[str]:
     if isinstance(transport, Mapping) and "modes" in transport:
         return [mode for mode in transport["modes"] if mode in _ICON_FILES][:2]
     legacy = _plain(_fact(row, "group_format") or row.get("group_format")).casefold()
-    return {"walking_tour": ["walk"], "walking": ["walk"], "bus": ["bus"],
-            "bus_tour": ["bus"], "tram": ["tram"], "boat": ["boat"]}.get(legacy, [])
+    legacy = " ".join(re.sub(r"[_-]+", " ", legacy).split())
+    # Explicit types already stored by older imports; never infer from a title.
+    return {
+        **dict.fromkeys(("walking", "walking tour", "guided walk", "guided walking tour",
+                         "пешком", "пешеходная", "пешеходная экскурсия",
+                         "пешеходная прогулка экскурсия", "пешая прогулка"), ["walk"]),
+        **dict.fromkeys(("bus", "bus tour", "автобус", "автобусная",
+                         "автобусная экскурсия", "автобусная группа"), ["bus"]),
+        "автобусно пешеходная": ["bus", "walk"],
+        "джип тур": ["route"], "автомобильный выезд": ["route"],
+        "tram": ["tram"], "boat": ["boat"],
+    }.get(legacy, [])
 
 
 def _seats_text(row: Mapping[str, Any]) -> str:

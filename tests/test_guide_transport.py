@@ -74,3 +74,17 @@ async def test_grounded_modes_survive_sparse_imports_without_crossing_routes(tmp
         assert _modes_for(legacy) == ["walk"]
     finally:
         await db.close()
+
+
+@pytest.mark.parametrize('legacy,expected', [
+    ('walking tour', ['walk']), ('guided walking tour', ['walk']),
+    ('guided_walk', ['walk']), ('Пешеходная', ['walk']),
+    ('Пешеходная экскурсия', ['walk']), ('пешеходная прогулка-экскурсия', ['walk']),
+    ('пешая прогулка', ['walk']), ('bus tour', ['bus']),
+    ('автобусная', ['bus']), ('автобусная экскурсия', ['bus']),
+    ('автобусно-пешеходная', ['bus', 'walk']), ('джип-тур', ['route']),
+    ('автомобильный выезд', ['route']), ('small_group', []), ('поездка', []),
+])
+def test_explicit_legacy_transport_values_keep_their_icons(legacy, expected):
+    # Actual production claim values; geography in titles remains insufficient.
+    assert _modes_for({'group_format': legacy, 'canonical_title': 'Ферма на улице Школьной'}) == expected
