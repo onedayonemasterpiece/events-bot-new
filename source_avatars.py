@@ -17,6 +17,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import aiosqlite
 from PIL import Image, ImageOps
 
 logger = logging.getLogger(__name__)
@@ -95,8 +96,65 @@ async def ensure_vk_avatar(owner: int) -> Path | None:
         return path
 
 
-async def prepare_guide_avatars(rows: list[dict[str, Any]]) -> None:
+def _identity_names(profile: dict[str, Any]) -> set[str]:
+    names = set()
+    for value in (profile.get("display_name"), profile.get("marketing_name")):
+        value = str(value or "").split(" — ")[0].strip()
+        variants = [value, re.sub(r"\s*\([^)]*\)", "", value)]
+        if match := re.fullmatch(r"\S+\s+\(([^)]+)\)(.*)", value):
+            variants.append(match[1] + match[2])
+        names.update(" ".join(x.casefold().replace("ё", "е").split()) for x in variants if x)
+    return names
+
+
+def guide_participants(row: dict[str, Any], profiles: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Bind already extracted roles to explicit public profile identities, never surnames."""
+    from guide_excursions.visual_digest import _AVATAR_DIR, _AVATAR_FILES
+    result: dict[str, dict[str, Any]] = {}
+    facts = row.get("fact_pack") or {}
+    for field, role in (("guide_names", "Гид"), ("organizer_names", "Организатор")):
+        # The latest extracted facts supersede older role metadata left by upsert.
+        names = facts.get(field, row.get(field, []))
+        for name in names if isinstance(names, list) else []:
+            key = " ".join(str(name).casefold().replace("ё", "е").split())
+            matches = [p for p in profiles if key in _identity_names(p)]
+            owners = set()
+            paths = set()
+            for profile in matches:
+                rollup = json.loads(profile.get("facts_rollup_json") or "{}")
+                if uid := rollup.get("vk_user_id"):
+                    owners.add(int(uid))
+                for url in json.loads(profile.get("source_links_json") or "[]"):
+                    if not uid and (m := re.fullmatch(r"https?://(?:www\.)?vk\.(?:com|ru)/(id|club|public)(\d+)/?", url)):
+                        owners.add(int(m[2]) * (1 if m[1] == "id" else -1))
+                    if m := re.fullmatch(r"https?://t\.me/([\w]+)/?", url):
+                        if filename := _AVATAR_FILES.get(m[1]):
+                            paths.add(str(_AVATAR_DIR / filename))
+            owner = next(iter(owners)) if len(owners) == 1 else None
+            path = next(iter(paths)) if len(paths) == 1 else None
+            identity = f"vk:{owner}" if owner else key
+            if identity in result:
+                if role not in result[identity]["roles"]:
+                    result[identity]["roles"].append(role)
+                continue
+            result[identity] = {"name": name, "roles": [role], "owner": owner, "path": path}
+    return list(result.values())
+
+
+async def prepare_guide_avatars(rows: list[dict[str, Any]], db: Any = None) -> None:
+    profiles = []
+    if db is not None:
+        async with db.raw_conn() as conn:
+            conn.row_factory = aiosqlite.Row
+            profiles = [dict(p) for p in await (await conn.execute(
+                "SELECT display_name,marketing_name,source_links_json,facts_rollup_json FROM guide_profile"
+            )).fetchall()]
     for row in rows:
+        participants = guide_participants(row, profiles)
+        for person in participants:
+            if person["owner"] and (path := await ensure_vk_avatar(person["owner"])):
+                person["path"] = str(path)
+        row["participant_medallions"] = participants
         if row.get("source_platform") != "vk":
             continue
         flags = json.loads(row.get("source_flags_json") or "{}")
@@ -114,6 +172,13 @@ async def prepare_guide_avatars(rows: list[dict[str, Any]]) -> None:
         row["source_avatar_owner"] = owner
         if path := await ensure_vk_avatar(owner):
             row["source_avatar_path"] = str(path)
+            public_name = avatar_metadata(owner).get("name") or ""
+            for person in participants:
+                if not person.get("owner") and _identity_names({"display_name": person["name"]}) & _identity_names({"display_name": public_name}):
+                    person.update(owner=owner, path=str(path))
+            if not any(p.get("owner") == owner for p in participants):
+                participants.append({"name": public_name or row.get("source_title"),
+                    "roles": ["Источник"], "owner": owner, "path": str(path)})
 
 
 def source_medallions(urls: Any, *, index: dict[str, Any] | None = None) -> list[dict[str, Any]]:

@@ -547,6 +547,7 @@ def _is_katya_kostyugova(row: Mapping[str, Any]) -> bool:
 
 
 def _source_name(row: Mapping[str, Any]) -> str:
+    row = {**row, **{k: v for k, v in (row.get("fact_pack") or {}).items() if k in ("guide_names", "organizer_names")}}
     guides = [_plain(x) for x in (row.get("guide_names") or []) if _plain(x)] if isinstance(row.get("guide_names"), list) else []
     orgs = [_plain(x) for x in (row.get("organizer_names") or []) if _plain(x)] if isinstance(row.get("organizer_names"), list) else []
     if guides and _is_katya_kostyugova(row):
@@ -849,6 +850,30 @@ def _draw_avatar(draw_img: Image.Image, row: Mapping[str, Any], x: int, y: int, 
     draw_img.alpha_composite(layer)
 
 
+def _draw_participant_medallions(img: Image.Image, row: Mapping[str, Any], x: int, y: int,
+        width: int, height: int, pal: VisualPalette, accent: str) -> None:
+    people = row.get("participant_medallions") or []
+    if not people:
+        _draw_avatar(img, row, x, y + (height - width) // 2, width, pal, accent)
+        return
+    columns = 1 if len(people) <= 2 else 2
+    lines = math.ceil(len(people) / columns)
+    size = min(100, width // columns - 6, (height - 16) // lines - 22)
+    start_y = y + (height - lines * (size + 22)) // 2
+    draw = ImageDraw.Draw(img)
+    for idx, person in enumerate(people):
+        cx = x + (idx % columns) * (width // columns) + (width // columns - size) // 2
+        cy = start_y + (idx // columns) * (size + 22)
+        # An unresolved person gets their own initials, never the source's portrait.
+        portrait_row = {"guide_names": [person["name"]], "source_title": person["name"],
+            "source_avatar_path": person.get("path") or ""}
+        _draw_avatar(img, portrait_row, cx, cy, size, pal, accent)
+        font = _font(_MAIN_FONT, 13 if columns > 1 else 16)
+        for role_idx, role in enumerate(person["roles"]):
+            draw.text((cx + size / 2, cy + size + 4 + role_idx * 18), role,
+                font=font, fill=_hex(pal.guide), anchor="mt")
+
+
 def _draw_icon_badges(img: Image.Image, modes: Sequence[str], x: int, y: int, pal: VisualPalette) -> None:
     layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
@@ -1022,7 +1047,7 @@ def render_visual_digest_card(
         if focus:
             rd.text((tx, ty + 2), "".join(_wrap_by_width(rd, focus, focus_font, 515, 1)), font=focus_font, fill=_hex(palette.focus))
             ty += 27 if expanded else 23
-        description = _plain(row.get("digest_blurb") or row.get("summary_one_liner"))
+        description = _plain(_fact(row, "main_hook") or row.get("digest_blurb") or row.get("summary_one_liner"))
         description_font = _font(_MAIN_FONT, 21 if expanded else 18)
         line_h = 25 if expanded else 22
         available_lines = max(0, min(2, (row_h - ty - 12) // line_h))
@@ -1037,7 +1062,7 @@ def render_visual_digest_card(
         av_size = 140
         av_x = 42 + 778
         av_y = y + round((row_h - av_size) / 2)
-        _draw_avatar(img, row, av_x, av_y, av_size, palette, accent)
+        _draw_participant_medallions(img, row, av_x, y, av_size, row_h, palette, accent)
         modes = _modes_for(row)
         _draw_icon_badges(img, modes, 42 + 920, av_y + (12 if len(modes) > 1 else 76), palette)
 
@@ -1191,7 +1216,7 @@ async def build_visual_digest_issue(
     max_items = max(1, min(int(max_cards), 10)) * max(1, int(card_limit))
     rows = await select_visual_digest_rows(db, max_items=max_items)
     from source_avatars import prepare_guide_avatars
-    await prepare_guide_avatars(rows)
+    await prepare_guide_avatars(rows, db)
     media_payload = {
         "kind": "visual_schedule_card",
         "card_limit": int(card_limit),
@@ -1321,7 +1346,7 @@ async def load_visual_digest_issue(db: Database, issue_id: int | None = None) ->
         rows = await _fetch_rows_by_ids(conn, ids)
     payload = dict(issue)
     from source_avatars import prepare_guide_avatars
-    await prepare_guide_avatars(rows)
+    await prepare_guide_avatars(rows, db)
     payload["items"] = rows
     return payload
 

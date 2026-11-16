@@ -613,3 +613,19 @@ No separate scheduler, model request, source-registration list or DB table is ad
 normal analysis/enrichment path. Expanded cards display the existing blurb
 within the free text rectangle, with at most two fitting lines. Five-row
 cards and full rows retain their geometry; no extra LLM step generates text.
+
+### Несколько участников на визуальной карточке
+
+Карточка сохраняет отдельные роли из `guide_names` и `organizer_names`:
+несколько гидов, организатор-проект или человек в обеих ролях. Портреты
+связываются с точными публичными именами и VK ID существующих `guide_profile`;
+объявленные в имени скобочные варианты также являются алиасами. Совпадение
+одной фамилии не используется. Совпавшие роли одного VK ID объединяются в один
+медальон с обеими подписями. Доступные прежние Telegram portraits сохраняются.
+
+Аватар страницы сам по себе не доказывает организатора: без явной роли он
+подписан «Источник». Последние роли из `fact_pack` имеют приоритет над старым
+остатком occurrence metadata. Обычная схема извлечения объясняет обе роли
+модели в существующем запросе; дополнительного LLM этапа нет. Для описания
+используется уже извлечённый `fact_pack.main_hook`, затем готовые `digest_blurb`
+и `summary_one_liner`, только если осталось место.

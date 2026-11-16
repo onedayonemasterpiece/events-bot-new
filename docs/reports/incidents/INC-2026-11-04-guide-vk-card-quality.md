@@ -202,3 +202,34 @@ reuse the downloaded file; missing images retain the current fallback; card
 geometry and source identity stay correct; no unsolicited public post is made.
 Focused tests and production delivery evidence are recorded in the task state.
 Deployment and live visual acceptance have not yet run for this change.
+
+### 2026-11-16 — Preserve co-guide and organizer medallions
+
+Read the actual historical VK cards 301/339 and 319/365. Their captions retain
+multiple names while the universal schedule renderer paints one portrait. The
+existing promo renderer already accepts several avatars; this fix restores the
+same participant distinction in schedule cards rather than reducing a tour to
+its source page. Owner explicitly identified this as existing behavior.
+
+The shared portrait preparation binds extracted names to exact registered public
+identities, including explicit parenthesized name variants, and retains legacy
+Telegram portrait assets. Co-guides and organizers receive separate medallions;
+the same public VK identity in both roles receives one portrait and both labels.
+A page without an extracted participant role remains labelled source. Empty
+latest fact-pack roles override older occurrence metadata left by an upsert.
+Existing main_hook provides the optional description before older short blurbs.
+
+The existing Tier-1 schema now describes the two role fields. A before/after
+probe on real source posts found the old extractor omitted the explicitly named
+80 ЛЕТ ЕДИНСТВА project; the revised schema returned it for all seven schedule
+blocks and retained both guides on joint tours. An initial probe also invented a
+farm guide from the source title; the guide description was tightened to forbid
+that inference, and the repeated real-source negative case returned no invented guide or organizer for all three farm dates. No new LLM
+step, credential, model, database table, worker or publisher was introduced.
+
+23 focused portrait/card/schema checks passed. Real portraits for Olga Rubtsova,
+Noza Usmanova, Yulia Grishanova and Tatyana Udovenko were fetched through the
+normal VK reader; local rendered roles were inspected. Retained probe logs and
+images are in the managed 20261104T093210Z-guide-digest-vk-quality-20261104
+directory. This entry records implementation evidence; deployment and public
+product acceptance are recorded separately after they happen.
