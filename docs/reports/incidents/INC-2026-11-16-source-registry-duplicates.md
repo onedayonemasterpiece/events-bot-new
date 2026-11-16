@@ -1,10 +1,10 @@
 # INC-2026-11-16 Duplicate source registry identities
 
-Status: open
+Status: resolved
 Severity: sev3
 Service: Events Bot source registries
 Opened: 2026-11-16
-Closed: —
+Closed: 2026-11-16
 Related registry: inc_57638126a2445b9d11e88b69
 
 ## Impact and detection
@@ -65,13 +65,36 @@ complete variants were retained in the existing raw-facts list; no semantic choi
 or public tour field was changed. Independent affected-row comparison verified
 entity fields, source text/URLs, raw outputs and occurrence links.
 
-The constraint change is not yet applied to the live DB. Delivery is DB-only:
-extract the two index literals from exact merged main, apply transactionally with
-a durable intent, then check duplicate rejection with rolled-back SAVEPOINTs,
-health and ordinary source registration. No image build or restart is required.
-The actual running image passed initialized network-none migration controls and
-repeated seed preservation, including a wrong-SHA rejection before initialization.
-Those offline controls do not establish a later ordinary import result.
+The DB-only prevention was delivered at 11:02:27 UTC from merged main
+`a6e7679cf43219b1561ee642f16ae1b427f5a6ac` after all four latest-head required
+CI checks passed. Both exact index literals were applied in one transaction.
+Real same-owner attempts were rejected by the respective unique indexes inside
+rolled-back SAVEPOINTs; no synthetic rows remained. Health was ready, DB healthy,
+settings and Kotopogoda unchanged. No application build or restart was needed.
+
+Ordinary post-delivery acceptance at 12:29 UTC:
+- Three real event sources registered through the existing saturation workflow:
+  5285 (personal wall146294125), 5286 (community214375155) and5290
+  (personal wall168798170). Both registries still have zero duplicate resolved
+  VK-owner groups. No new guide registry row was added during this interval.
+- Scheduled LIGHT run495d0491c019 started at11:20, survived an independent
+  container update through existing recovery, and materialized as operation12385
+  SUCCESS at12:15:27:192 sources,173 posts,51 successful parses,zero model errors.
+- All four retained canonical handles were scanned successfully. All25 occurrence
+  changes have exact source-post/occurrence links and matching stored dates.
+  This is an ordinary source-path result, not a replay of the repair or test data.
+
+The guard covers event owner/sign identities and guide VK owners with resolved
+IDs. Different platforms and personal/community owners remain distinct. It does
+not infer an unresolved vanity handle's owner or merge people or tour semantics.
+Independent source registration and future import monitoring remain normal
+operations; the source-duplicate incident's repair and prevention are complete.
+
+Receipts: `guide-pairs-receipt.json`, `guide-preservation-verification.json`,
+`unique-indexes-receipt.json`, `normal-process-verification.json` in the retained
+task directory below. Isolated fixture caveats remain: a partial FK-disabled
+excerpt was used for local repair contrasts, not full semantic import acceptance.
+Actual repair enabled foreign keys and actual ordinary source links were checked.
 
 Retained evidence:
 `/home/dev/artifacts/events-bot-new/20261116T093430Z-source-registry-dedup-20261116/`
