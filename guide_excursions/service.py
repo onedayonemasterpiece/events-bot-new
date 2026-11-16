@@ -65,6 +65,7 @@ from .parser import (
 from .public_identity import resolve_public_guide_names
 from .scanner import GuideScannedPost, scan_source_posts
 from .seed import seed_guide_sources
+from .result_delivery import serialized_guide_process
 from .telethon_client import create_telethon_runtime_client
 
 logger = logging.getLogger(__name__)
@@ -3537,6 +3538,7 @@ def _guide_monitor_completion_lines(
     return lines
 
 
+@serialized_guide_process
 async def run_guide_import_from_results(
     db: Database,
     *,
@@ -3673,6 +3675,7 @@ async def run_guide_import_from_results(
     )
 
 
+@serialized_guide_process
 async def run_guide_monitor(
     db: Database,
     bot: Bot | None,
@@ -3973,9 +3976,14 @@ async def resume_guide_monitor_jobs(
         logger.debug("guide_monitor.recovery_deferred active_local_run scheduler_run_id=%s", run_id)
         return 0
     async with _RUN_LOCK:
-        return await _resume_guide_monitor_jobs(db, bot, chat_id=chat_id)
+        try:
+            return await _resume_guide_monitor_jobs(db, bot, chat_id=chat_id)
+        except BlockingIOError:
+            logger.info("guide_monitor.recovery_deferred other_process=true")
+            return 0
 
 
+@serialized_guide_process
 async def _resume_guide_monitor_jobs(
     db: Database,
     bot: Bot | None,

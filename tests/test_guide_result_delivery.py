@@ -166,3 +166,21 @@ async def test_real_kaggle_sender_pushes_partial_json_and_binary_media(tmp_path,
         assert Path(jobs[0]['meta']['results_path']).exists()
     finally:
         await client.close(); await db.close()
+
+
+@pytest.mark.asyncio
+async def test_live_other_process_blocks_import_and_death_releases_it(tmp_path, monkeypatch):
+    import fcntl
+    db = Database(str(tmp_path / 'db.sqlite')); await db.init()
+    monkeypatch.setattr(kaggle_registry, '_REGISTRY_PATH', tmp_path / 'jobs.json')
+    try:
+        with open(str(Path(db.path).resolve()) + '.guide-import.lock', 'a') as other_process:
+            fcntl.flock(other_process, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            assert await service.resume_guide_monitor_jobs(db, None) == 0
+            with pytest.raises(BlockingIOError):
+                await service.run_guide_import_from_results(db, results_path='unused', bot=None,
+                    chat_id=None, run_id='same', trigger='callback')
+        # Closing a dead process descriptor automatically unlocks it; no lease/timer reset.
+        assert await service.resume_guide_monitor_jobs(db, None) == 0
+    finally:
+        await db.close()

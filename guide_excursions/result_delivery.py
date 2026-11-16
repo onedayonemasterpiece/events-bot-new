@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import errno
+import fcntl
+import functools
 import json
 import logging
 import os
@@ -17,6 +19,25 @@ from kaggle_status import _fresh_status_write_transaction, utc_now_iso, validate
 from . import kaggle_service
 
 logger = logging.getLogger(__name__)
+_PROCESS_LOCK_OWNER = None
+
+
+def serialized_guide_process(function):
+    """Share one OS lock between web recovery and standalone normal launchers."""
+    @functools.wraps(function)
+    async def wrapped(db, *args, **kwargs):
+        global _PROCESS_LOCK_OWNER
+        task = asyncio.current_task()
+        if _PROCESS_LOCK_OWNER is task:
+            return await function(db, *args, **kwargs)
+        with open(str(Path(db.path).resolve()) + ".guide-import.lock", "a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            _PROCESS_LOCK_OWNER = task
+            try:
+                return await function(db, *args, **kwargs)
+            finally:
+                _PROCESS_LOCK_OWNER = None
+    return wrapped
 
 
 def acknowledge_import(run_id: str) -> None:

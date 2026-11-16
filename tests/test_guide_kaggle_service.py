@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import requests
@@ -382,7 +383,7 @@ async def test_resume_guide_monitor_jobs_uses_output_when_status_lookup_fails(
     async def no_delivered_jobs(_db):
         return []
     monkeypatch.setattr("guide_excursions.result_delivery.pending_result_jobs", no_delivered_jobs)
-    recovered = await guide_service.resume_guide_monitor_jobs(object(), None, chat_id=123)
+    recovered = await guide_service.resume_guide_monitor_jobs(SimpleNamespace(path=str(tmp_path / "db.sqlite")), None, chat_id=123)
 
     assert recovered == 1
     assert len(imported) == 1
