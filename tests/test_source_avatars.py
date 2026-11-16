@@ -36,11 +36,15 @@ async def test_vk_portrait_reaches_both_consumers_and_reuses_download(tmp_path, 
     path = await avatars.ensure_vk_avatar(owner)
     assert await avatars.ensure_vk_avatar(owner) == path
     assert len(calls) == 1 and calls[0][0] == method
+    portrait = Image.open(path).convert('RGBA')
+    assert portrait.getpixel((0, 0))[3] == 0
+    assert portrait.getpixel((160, 160))[3] == 255
     url = f'https://vk.com/wall{owner}_1'
     assert avatars.source_medallions([url])[0]['owner_id'] == owner
     assert not avatars.source_medallions([f'https://vk.com/wall{-owner}_1'])
-    event = SimpleNamespace(source_vk_post_url=url)
-    assert any(x.get('source_owner') == owner for x in resolve_event_graphic_medallions(event))
+    Image.new('RGB', (320, 320), 'blue').save(tmp_path / '-999.webp')
+    event = SimpleNamespace(source_post_url=url, source_vk_post_url='https://vk.com/wall-999_1')
+    assert [x.get('source_owner') for x in resolve_event_graphic_medallions(event)] == [owner]
     image = Image.new('RGBA', (180, 180))
     _draw_avatar(image, {'source_avatar_path': str(path)}, 10, 10, 140, PALETTES[0], '#000000')
     pixel = image.getpixel((80, 80))
@@ -110,3 +114,39 @@ async def test_source_matching_an_explicit_organizer_gets_that_role_once(tmp_pat
     people = row['participant_medallions']
     assert len(people) == 2
     assert people[1]['owner'] == -237389053 and people[1]['roles'] == ['Организатор']
+
+
+@pytest.mark.parametrize('original_cached', [False, True])
+def test_publisher_avatar_is_not_an_original_source_fallback(tmp_path, monkeypatch, original_cached):
+    from tg_graphic_medallions import resolve_event_graphic_medallions
+    portrait = tmp_path / 'avatar.webp'
+    Image.new('RGB', (80, 80), 'red').save(portrait)
+    monkeypatch.setattr(avatars, 'avatar_path', lambda owner: portrait if owner == -999 or (owner == -123 and original_cached) else None)
+    event = SimpleNamespace(source_post_url='https://vk.com/wall-123_1', source_vk_post_url='https://vk.com/wall-999_2')
+    assert [item['source_owner'] for item in resolve_event_graphic_medallions(event)] == ([-123] if original_cached else [])
+    assert avatars.round_avatar_image(Image.new('RGBA', (80, 80), (255, 0, 0, 100))).getpixel((40, 40))[3] == 100
+
+
+@pytest.mark.asyncio
+async def test_site_medallion_uses_original_while_source_links_keep_publication(tmp_path, monkeypatch):
+    import importlib.util
+    import sqlite3
+    from pathlib import Path
+    import main
+    spec = importlib.util.spec_from_file_location('avatar_site_export', Path(__file__).resolve().parents[1] / 'site/scripts/export-production-preview-data.py')
+    exporter = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(exporter)
+    monkeypatch.setattr(exporter, '_SOURCE_AVATARS', {'-123': {'owner_id': -123, 'image_url': '/original.webp'}, '-999': {'owner_id': -999, 'image_url': '/publisher.webp'}})
+    db = main.Database(str(tmp_path / 'site.sqlite'))
+    await db.init()
+    try:
+        async with db.get_session() as session:
+            session.add(main.Event(id=1, title='Викторина', date='2099-01-01', time='19:00', location_name='', description='', source_text='', source_post_url='https://vk.com/wall-123_1', source_vk_post_url='https://vk.com/wall-999_2'))
+            await session.commit()
+        with sqlite3.connect(db.path) as con:
+            con.row_factory = sqlite3.Row
+            event = exporter.build_event(con, con.execute('select * from event where id=1').fetchone(), '2098-12-01')
+        assert event['source_urls'][:2] == ['https://vk.com/wall-123_1', 'https://vk.com/wall-999_2']
+        assert [item['owner_id'] for item in event['source_medallions']] == [-123]
+    finally:
+        await db.close()
