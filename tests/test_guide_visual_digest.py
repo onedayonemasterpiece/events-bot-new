@@ -498,7 +498,7 @@ def test_same_trip_prefers_complete_announcement_and_keeps_conflicting_sessions(
     date_row = dict(date="2026-11-28", city="Калининградская область", guide_names=["Эмма Басова"],
                     organizer_names=["Хранители руин"])
     brief = dict(date_row, id=705, canonical_title="Большое путешествие по Самбийскому кольцу",
-                 route_summary="Самбийское кольцо", time=None, price_text=None,
+                 route_summary="Самбийское кольцо", time=None, price_text=None, transport={"modes": ["bus"]},
                  linked_posts=[{"url": "https://vk.ru/wall-10_10", "text": "Сводная афиша"}])
     full = dict(date_row, id=740, canonical_title="Самбийское кольцо", route_summary="Музей Вайденен, усадьба Грюнхоф",
                 time="09:00-18:00", price_text="4000 рублей с человека",
@@ -506,8 +506,16 @@ def test_same_trip_prefers_complete_announcement_and_keeps_conflicting_sessions(
     together = dict(full, id=741, time="09:00", price_text="4000 рублей")
     # The previous issue may refer to the sparse schedule row only.
     single, = vd._select_documented_departures([brief], [brief, full, together])
+    states = vd._visual_publication_states([single])
+    assert set(states) == {"705", "740", "741"}
+    assert states["705"] == vd._visual_item_state(brief)
+    alias = dict(brief, published_visual_digest_issue_id=350, published_visual_digest_state=states["705"],
+                 updated_at="2026-11-18")
+    assert vd._visual_selection_reason(alias) == ""
+    assert vd._visual_selection_reason(dict(alias, time="11:00")) == "changed_time"
     assert single["id"] == 740 and single["covered_visual_ids"] == [705, 740, 741]
     assert single["time"] == "09:00-18:00"
+    assert single["transport"]["modes"] == ["bus"]
     assert {p["text"] for p in single["linked_posts"]} == {"Сводная афиша", "Полный маршрут"}
     for other in (dict(together, time="11:00"), dict(together, time="09:00-17:00"),
                   dict(together, price_text="8000 рублей"), dict(together, guide_names=["Другой гид"])):

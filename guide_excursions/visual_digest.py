@@ -810,6 +810,15 @@ def _visual_item_state(row: Mapping[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in state.items() if value not in ("", None, False)}
 
 
+def _visual_publication_states(rows: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+    states = {}
+    for row in rows:
+        states.update(row.get("covered_visual_states") or {})
+        if row.get("id"):
+            states.setdefault(str(row["id"]), _visual_item_state(row))
+    return states
+
+
 def _visual_issue_state_map(media_items_json: Any) -> dict[str, dict[str, Any]]:
     media = _safe_json_object(media_items_json)
     raw = media.get("item_states")
@@ -1286,6 +1295,26 @@ def _select_documented_departures(requested: Sequence[dict[str, Any]], peers: Se
             bool(m.get("time") and _plain(m.get("price_text"))), len(_plain(m.get("time"))),
             len(_plain(m.get("route_summary"))), -int(m["id"])))
         representative = dict(source)
+        if len(members) > 1:
+            representative["fact_pack"] = dict(source.get("fact_pack") or {})
+            for role in ("guide_names", "organizer_names"):
+                names = list(dict.fromkeys(n for m in [source, *members] for n in m.get(role) or []))
+                representative[role] = representative["fact_pack"][role] = names
+            transport = [m["transport"] for m in members if (m.get("transport") or {}).get("modes")]
+            if not representative.get("transport") and len({tuple(t["modes"]) for t in transport}) == 1:
+                representative["transport"] = transport[0]
+            # Portraits already computed by an older caller belong to only one
+            # row. Normal loading resolves portraits after the group is chosen.
+            if "participant_medallions" in representative:
+                people = {}
+                for member in [source, *members]:
+                    for person in member.get("participant_medallions") or []:
+                        key = (person.get("owner"), person["name"])
+                        merged = people.setdefault(key, dict(person))
+                        merged["roles"] = list(dict.fromkeys([*merged["roles"], *person["roles"]]))
+                representative["participant_medallions"] = list(people.values())
+        if len(members) > 1:
+            representative["covered_visual_states"] = {str(m["id"]): _visual_item_state(m) for m in members}
         representative["covered_visual_ids"] = sorted(m["id"] for m in members)
         representative["linked_posts"] = [post for member in members for post in member["linked_posts"]]
         representative["visual_selection_reason"] = row.get("visual_selection_reason")
@@ -1454,7 +1483,7 @@ async def build_visual_digest_issue(
     media_payload = {
         "kind": "visual_schedule_card",
         "card_limit": int(card_limit),
-        "item_states": {str(int(row["id"])): _visual_item_state(row) for row in rows if int(row.get("id") or 0) > 0},
+        "item_states": _visual_publication_states(rows),
         "selection_reasons": {str(int(row["id"])): _plain(row.get("visual_selection_reason")) for row in rows if int(row.get("id") or 0) > 0},
     }
     async with db.raw_conn() as conn:
@@ -2533,7 +2562,7 @@ async def _publish_visual_digest_to_vk_once(
             {
                 "kind": "visual_schedule_card",
                 "card_limit": VISUAL_DIGEST_CARD_LIMIT,
-                "item_states": {str(int(row["id"])): _visual_item_state(row) for row in rows if int(row.get("id") or 0) > 0},
+                "item_states": _visual_publication_states(rows),
                 "selection_reasons": {str(int(row["id"])): _plain(row.get("visual_selection_reason")) for row in rows if int(row.get("id") or 0) > 0},
             }
         )
