@@ -869,3 +869,34 @@ def test_same_departure_preserves_sources_and_reports_only_agreed_lunch_terms():
     assert {src["text"] for src in payload["sources"]} == {f"Стоимость: {row['price_text']}."}
     changed = dict(rows[1], price_text="5000 рублей")
     assert len(vd._select_documented_departures([rows[0], changed], [rows[0], changed])) == 2
+
+
+def test_documented_posts_unite_transitive_aliases_with_different_titles_and_city_scope():
+    common = dict(date="2026-11-28", time="09:00", city="Область", guide_names=["Эмма Басова"],
+                  organizer_names=["Хранители"], price_text="4000 рублей", route_summary="")
+    def raw(url):
+        return {"url": url, "text": "Маршрут", "post_date": "2026-11-11"}
+    a = dict(common, id=1, canonical_title="Самбийское кольцо", linked_posts=[raw("tg1")])
+    b = dict(a, id=2, linked_posts=[raw("tg1"), raw("vk2")], time="09:00-18:00")
+    c = dict(a, id=3, canonical_title="Путешествие по «Самбийскому кольцу»", city="Калининград",
+             linked_posts=[raw("vk2")], organizer_names=["Хранители", "Партнёр"])
+    for requested in (a, b, c):
+        display, = vd._select_documented_departures([requested], [a, b, c])
+        assert display["covered_visual_ids"] == [1, 2, 3]
+    assert not vd._same_visual_departure(b, dict(c, guide_names=["Другой гид"]))
+    assert not vd._same_visual_departure(b, dict(c, date="2026-11-29"))
+
+
+def test_reposts_share_booking_phones_landmark_and_day_but_only_one_has_the_tariff():
+    date_row = dict(date="2026-11-28", guide_names=[], organizer_names=[], price_text=None, route_summary="")
+    booking = "Бронируйте места по телефону 52-42-52 и 555-022 у Татьяны."
+    tariff = "4000 руб. для взрослого, дети от 5 до 14 лет - 3500 руб"
+    full = dict(date_row, id=10, time="09:00", canonical_title="Поездка в Ушаково и замок Лабиау",
+                linked_posts=[{"url": "vk1", "text": f"28 ноября поедем в замок Лабиау.\n{booking}\nСтоимость - {tariff}."}])
+    short = dict(date_row, id=20, canonical_title="Полесск: монастырь в Изобильном и замок Лабиау",
+                 linked_posts=[{"url":"vk2", "text": f"Едем 28 ноября в замок Лабиау.\n{booking}"}])
+    display, = vd._select_documented_departures([short, full], [short, full])
+    assert display["id"] == 10 and display["covered_visual_ids"] == [10, 20]
+    assert display["price_text"] == tariff
+    assert not vd._same_visual_departure(full, dict(short, canonical_title="Поездка в замок Бранденбург"))
+    assert not vd._same_visual_departure(full, dict(short, linked_posts=[{"url":"vk2", "text": "Бронь 555-022."}]))

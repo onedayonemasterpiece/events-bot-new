@@ -1162,7 +1162,10 @@ def render_visual_digest_card(
         text_width = min(515, av_x - 42 - tx - 22)
         ty = (18 if len(participants) >= 3 else 24) if len(participants) > 1 else (42 if expanded else 28)
         row_title_font = _font(_MAIN_FONT, 30) if len(participants) >= 3 else title_font
-        title_lines = _wrap_by_width(rd, _plain(row.get("canonical_title")) or "Экскурсия", row_title_font, text_width, 3 if len(participants) >= 3 else 2)
+        title_text = _plain(row.get("canonical_title")) or "Экскурсия"
+        if "№" in title_text:
+            row_title_font = _fallback_font(_DEJAVU_BOLD, row_title_font.size)
+        title_lines = _wrap_by_width(rd, title_text, row_title_font, text_width, 3 if len(participants) >= 3 else 2)
         for line in title_lines:
             rd.text((tx, ty), line, font=row_title_font, fill=_hex(palette.text))
             ty += 34 if len(participants) >= 3 else (40 if expanded else 34)
@@ -1182,6 +1185,8 @@ def render_visual_digest_card(
             ty += 34 if expanded else 26
         description = _card_description(row) or _focus_line(row)
         description_font = _font(_MAIN_FONT, 21 if expanded else 18)
+        if "№" in description:
+            description_font = _fallback_font(_DEJAVU_BOLD, description_font.size)
         line_h = 25 if expanded else 22
         available_lines = max(0, min(2, (row_h - ty - (54 if _seats_text(row) else 12)) // line_h))
         for line in _wrap_by_width(rd, description, description_font, text_width, available_lines) if description and available_lines else []:
@@ -1310,7 +1315,7 @@ def _shared_departure_identity(left: Mapping[str, Any], right: Mapping[str, Any]
 
 
 def _same_visual_departure(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
-    if not _shared_departure_identity(left, right):
+    if not left.get("date") or left["date"] != right.get("date"):
         return False
     # A schedule may use the public route name in its route field, while a
     # detailed announcement uses that very name as the main title.
@@ -1319,9 +1324,62 @@ def _same_visual_departure(left: Mapping[str, Any], right: Mapping[str, Any]) ->
     if not title or not other:
         return False
     linked_urls = {p["url"] for p in left["linked_posts"] if p["url"]}
-    if title == other and any(p["url"] in linked_urls for p in right["linked_posts"]):
+    same_post = any(p["url"] in linked_urls for p in right["linked_posts"])
+    guides, other_guides = set(left.get("guide_names") or ()), set(right.get("guide_names") or ())
+    same_organizers = set(left.get("organizer_names") or ()) & set(right.get("organizer_names") or ())
+    start = _plain(left.get("time")).split("-")[0].strip()
+    other_start = _plain(right.get("time")).split("-")[0].strip()
+    same_slot = bool(start and start == other_start and same_organizers
+                     and (not guides or not other_guides or guides & other_guides))
+    if same_post and (_shared_departure_identity(left, right) or same_slot) and (
+        title == other or _place_phrase(title).search(other) or _place_phrase(other).search(title)
+    ):
         return True
-    return title == _plain(right.get("route_summary")).casefold() or other == _plain(left.get("route_summary")).casefold()
+    if _shared_departure_identity(left, right) and (
+        title == _plain(right.get("route_summary")).casefold() or other == _plain(left.get("route_summary")).casefold()
+    ):
+        return True
+    # Reposts can have no extracted guide, a different city scope, and different
+    # titles. Two identical reservation phones and the same named landmark identify
+    # the offer without treating a shared operator alone as a match.
+    phones, places = _departure_booking_evidence(left)
+    other_phones, other_places = _departure_booking_evidence(right)
+    return len(phones & other_phones) >= 2 and bool(places & other_places)
+
+
+def _departure_booking_evidence(row: Mapping[str, Any]) -> tuple[set[str], set[str]]:
+    sources = [str(p.get("text") or "") for p in row.get("linked_posts") or []]
+    booking = "\n".join([str(row.get("booking_text") or ""), *(line for text in sources for line in text.splitlines()
+                           if re.search(r"брон|телефон|запис", line, re.I))])
+    phones = {re.sub(r"\D", "", m) for m in re.findall(r"(?<!\d)(?:\d{2}-\d{2}-\d{2}|\d{3}-\d{3})(?!\d)", booking)}
+    route = " ".join(_plain(row.get(key)) for key in ("canonical_title", "route_summary"))
+    places = {m.group().casefold() for m in re.finditer(
+        r"\b(?i:замок|монастырь|кирха|усадьба|музей|городище|парк)\s+[«“\"]?[А-ЯЁ][А-Яа-яЁё-]{2,}\b", route)}
+    return phones, places
+
+
+def _crosspost_fare(rows: Sequence[Mapping[str, Any]]) -> str:
+    """Recover the full labelled tariff of one jointly advertised, dated departure."""
+    terms = set()
+    for row in rows:
+        phones, places = _departure_booking_evidence(row)
+        if len(phones) < 2 or not places:
+            continue
+        for post in row.get("linked_posts") or []:
+            text = str(post.get("text") or "")
+            try:
+                anchor = datetime.fromisoformat(str(post.get("post_date") or row["date"]))
+            except ValueError:
+                continue
+            lines = text.splitlines()
+            dates = {day for line in lines if (day := extract_date_iso(line, post_date=anchor))}
+            if dates != {row["date"]} or not any(place in text.casefold() for place in places):
+                continue
+            for line in lines:
+                price = re.search(r"(?:^|[.!?]\s+)[^\w\n]*(?:стоимость|цена)(?:\s+(?:участия|поездки))?\s*[:—–-]\s*(\d[^\n]+)", line, re.I)
+                if price and re.search(r"руб|₽", price[1], re.I):
+                    terms.add(price[1].strip().rstrip("."))
+    return terms.pop() if len(terms) == 1 else ""
 
 
 _FARE_LINE = re.compile(r"^\s*(?:стоимость|цена)(?: участия)?\s*:\s*(\d[^.!?\n]+)", re.I | re.M)
@@ -1384,10 +1442,17 @@ def _select_documented_departures(requested: Sequence[dict[str, Any]], peers: Se
     for row in requested:
         if row["id"] in seen:
             continue
-        members = [m for m in peers if m["id"] == row["id"] or _same_visual_departure(row, m)]
+        # A detailed announcement may connect two source rows through a third
+        # row that carries both original post links.
+        members = [row]
+        member_ids = {row["id"]}
+        for member in members:
+            for peer in peers:
+                if peer["id"] not in member_ids and _same_visual_departure(member, peer):
+                    member_ids.add(peer["id"])
+                    members.append(peer)
         agreed_fare = _agreed_base_fare(members)
-        incompatible = (_conflicting_departure_logistics(members, agreed_fare=agreed_fare)
-                        or any(not _same_visual_departure(a, b) for i, a in enumerate(members) for b in members[i + 1:]))
+        incompatible = _conflicting_departure_logistics(members, agreed_fare=agreed_fare)
         if incompatible or any(m["id"] in seen for m in members):
             members = [row]
             agreed_fare = _agreed_base_fare(members)
@@ -1397,6 +1462,9 @@ def _select_documented_departures(requested: Sequence[dict[str, Any]], peers: Se
         representative = dict(source)
         if len(members) > 1:
             representative["fact_pack"] = dict(source.get("fact_pack") or {})
+            if _plain(price_for_publication(representative.get("price_text"))).casefold() in ("", "по запросу"):
+                if tariff := _crosspost_fare(members):
+                    representative["price_line"] = representative["price_text"] = representative["fact_pack"]["price_text"] = tariff
             for role in ("guide_names", "organizer_names"):
                 names = list(dict.fromkeys(n for m in [source, *members] for n in m.get(role) or []))
                 representative[role] = representative["fact_pack"][role] = names
@@ -1555,13 +1623,9 @@ async def _include_documented_departures(conn: aiosqlite.Connection, requested: 
           AND COALESCE(go.status, 'scheduled') != 'cancelled'
     """, tuple(days))
     by_id = {row["id"]: row for row in requested}
-    extras = []
-    for record in await cur.fetchall():
-        if record["id"] in by_id:
-            continue
-        peer = dict(record)
-        if any(_shared_departure_identity(row, peer) for row in requested):
-            extras.append(peer)
+    # A secondary VK announcement need not contain the same extracted city or
+    # personal name. Hydrate its actual dated source evidence before comparison.
+    extras = [dict(record) for record in await cur.fetchall() if record["id"] not in by_id]
     peers = [*requested, *await _load_visual_rows(conn, extras)]
     return _select_documented_departures(requested, peers)
 
@@ -1621,6 +1685,8 @@ async def select_visual_digest_rows(db: Database, *, max_items: int = VISUAL_DIG
             # Compare today's candidates with yesterday's departures using the
             # normal deduplicator, even when a prior row has since been marked.
             previous = await _fetch_rows_by_ids(conn, previous_ids)
+            previous_ids = tuple(set(previous_ids).union(
+                i for row in previous for i in row.get("covered_visual_ids", [row["id"]])))
             rows.extend(row for row in previous if row["id"] not in candidates)
     if not rows:
         return []
@@ -2413,6 +2479,27 @@ def _same_person(label: str, name: str) -> bool:
         word[:max(3, len(part) - 2)] == part[:max(3, len(part) - 2)] for word, part in zip(words, parts))
 
 
+def _vk_time_label(row: Mapping[str, Any]) -> str:
+    clock = _plain(row.get("time"))
+    if not re.fullmatch(r"\d{1,2}:\d{2}", clock):
+        return clock
+    day = _plain(row.get("date"))
+    primary = row.get("source_post_url") or row.get("dedup_source_url")
+    for post in row.get("linked_posts") or []:
+        if not primary or (post.get("url") or post.get("source_url")) != primary:
+            continue
+        text = post.get("text") or ""
+        if not re.search(r"\bвыезд\s+(?:в\s+)?" + re.escape(clock) + r"(?!\d)", text, re.I):
+            continue
+        try:
+            published = datetime.fromisoformat(str(post.get("post_date") or day))
+        except ValueError:
+            continue
+        if len(split_occurrence_blocks(text, post_date=published)) == 1 and extract_date_iso(text, post_date=published) == day:
+            return f"выезд в {clock}"
+    return clock
+
+
 async def _assemble_vk_narrative(
     items: Sequence[Mapping[str, Any]],
     narrative: Mapping[str, Any],
@@ -2463,9 +2550,17 @@ async def _assemble_vk_narrative(
                 when = f"{day.day} {RU_MONTH_GEN.get(day.month, '')} ({RU_WEEK_SHORT[day.weekday()]})"
             except ValueError:
                 when = ""
-            if _plain(row.get("time")):
-                when = f"{when}, {_plain(row.get('time'))}".strip(", ")
+            if clock := _vk_time_label(row):
+                when = f"{when}, {clock}".strip(", ")
             link, is_phone = _primary_link(row)
+            source_url = _plain(row.get("source_post_url"))
+            booking_note = _plain(row.get("booking_text") or _fact(row, "booking_text"))
+            two_steps = source_url and re.search(
+                r"регистраци\w*\s+на\s+сайте\b[^\n]*?\s+и\s+заполн\w+\s+(?:форм\w*|анкет\w*)",
+                booking_note, re.I,
+            )
+            if two_steps:
+                link, is_phone = source_url, False
             destination = ""
             if link and is_phone:
                 destination = _normalize_phone(link) or _plain(link)
@@ -2473,6 +2568,8 @@ async def _assemble_vk_narrative(
             elif link:
                 is_booking = _plain(link) != _plain(row.get("source_post_url") or row.get("channel_url"))
                 label = "Запись" if is_booking else "Подробности"
+                if two_steps:
+                    label = booking_note
                 url = link if _is_vk_url(link) else await shorten(link)
                 destination = url
                 if re.fullmatch(r"(?:https?://)?(?:m\.)?vk\.(?:com|ru)/wall-?\d+_\d+/?", url, re.I):
