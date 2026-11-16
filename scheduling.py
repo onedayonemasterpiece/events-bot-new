@@ -5920,8 +5920,11 @@ def startup(
         logging.info("SCHED skipping telegraph_cache_sanitize (ENABLE_TELEGRAPH_CACHE_SANITIZER!=1)")
 
     enable_kaggle_recovery = _env_enabled("ENABLE_KAGGLE_RECOVERY", default=is_prod)
-    if enable_kaggle_recovery:
-        from kaggle_recovery import kaggle_recovery_scheduler
+    if enable_kaggle_recovery or _guide_monitoring_schedule_settings()[0]:
+        if enable_kaggle_recovery:
+            from kaggle_recovery import kaggle_recovery_scheduler
+        else:
+            from guide_excursions.service import resume_guide_monitor_jobs as kaggle_recovery_scheduler
         interval_raw = os.getenv("KAGGLE_RECOVERY_INTERVAL_MINUTES", "5").strip()
         try:
             interval_min = max(1, int(interval_raw))

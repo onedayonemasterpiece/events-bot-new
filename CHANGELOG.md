@@ -1,3 +1,7 @@
+## 2026-11-16
+
+- VK relation cards accept shared source-avatar paths from the persistent data mount, preserving first-publication carousels.
+
 # Changelog
 
 - VK source avatars are fetched through the existing reader and reused by tour cards and event source medallions; tour cards use their existing description when space permits. No extra LLM generation step.
@@ -9,6 +13,8 @@
 - VK event galleries keep the existing grid/carousel selection when recommendation cards are present, with source photos before other dates and related events in both formats. Existing posts are not rewritten to change their layout.
 
 ### Fixed
+
+- Guide scans resume and materialize their saved remote result after a process restart even when broad Kaggle recovery is disabled. Failed imports retain their registry entry; accepted imports reuse their receipt and release the exact completed session lease.
 
 - Guide schedule cards use source-anchored travel modes for the tour, including mixed itineraries. Sparse announcements can reuse an explicitly linked route or monthly program.
 

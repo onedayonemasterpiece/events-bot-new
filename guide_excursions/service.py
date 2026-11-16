@@ -24,8 +24,8 @@ from aiogram.types import BufferedInputFile
 from admin_chat import resolve_superadmin_chat_id
 from db import Database
 from heavy_ops import heavy_operation
-from kaggle_registry import list_jobs, remove_job
-from kaggle_status import enrich_kaggle_status_from_ledger
+from kaggle_registry import list_jobs, remove_job, update_job_meta
+from kaggle_status import enrich_kaggle_status_from_ledger, reconcile_kaggle_run_terminal_from_host
 from ops_run import finish_ops_run, start_ops_run
 from remote_telegram_session import (
     RemoteTelegramSessionBusyError,
@@ -3392,6 +3392,11 @@ async def _import_results_file(
             reason="after_results_import",
         )
     summary["media_retention"] = retention_runs
+    if summary.get("run_id"):
+        await reconcile_kaggle_run_terminal_from_host(
+            db, run_id=f"guide_monitor:{summary['run_id']}",
+            message="Guide result materialized through ordinary importer",
+        )
     return metrics, errors, summary
 
 
@@ -3550,6 +3555,28 @@ async def run_guide_import_from_results(
     send_progress: bool = False,
     kaggle_meta: dict[str, Any] | None = None,
 ) -> GuideMonitorResult:
+    async with db.raw_conn() as conn:
+        await _enable_row_factory(conn)
+        cur = await conn.execute(
+            "SELECT id, metrics_json, details_json FROM ops_run "
+            "WHERE kind='guide_monitoring' AND status IN ('success','partial') "
+            "AND json_extract(details_json, '$.run_id')=? "
+            "AND json_type(details_json, '$.import_summary')='object' "
+            "ORDER BY id DESC LIMIT 1", (run_id,),
+        )
+        accepted = await cur.fetchone()
+    if accepted:
+        details = _safe_json_object(accepted["details_json"])
+        await reconcile_kaggle_run_terminal_from_host(
+            db, run_id=f"guide_monitor:{run_id}", message="Guide import already accepted",
+        )
+        logger.info("guide_monitor.import_already_accepted run_id=%s ops_run_id=%s", run_id, accepted["id"])
+        return GuideMonitorResult(
+            run_id=run_id, ops_run_id=int(accepted["id"]), trigger=trigger, mode=mode,
+            metrics=_safe_json_object(accepted["metrics_json"]),
+            errors=list(details.get("errors") or []), warnings=list(details.get("warnings") or []),
+            import_completed=True,
+        )
     started_monotonic = time.monotonic()
     import_completed = False
     metrics = {
@@ -3935,6 +3962,20 @@ async def resume_guide_monitor_jobs(
     bot: Bot | None,
     *,
     chat_id: int | None = None,
+    run_id: str | None = None,
+) -> int:
+    if _RUN_LOCK.locked():
+        logger.debug("guide_monitor.recovery_deferred active_local_run scheduler_run_id=%s", run_id)
+        return 0
+    async with _RUN_LOCK:
+        return await _resume_guide_monitor_jobs(db, bot, chat_id=chat_id)
+
+
+async def _resume_guide_monitor_jobs(
+    db: Database,
+    bot: Bot | None,
+    *,
+    chat_id: int | None = None,
 ) -> int:
     jobs = await list_jobs("guide_monitoring")
     if not jobs:
@@ -3953,10 +3994,6 @@ async def resume_guide_monitor_jobs(
         _GUIDE_MONITOR_RECOVERY_ACTIVE.add(kernel_ref)
         try:
             meta = job.get("meta") if isinstance(job.get("meta"), dict) else {}
-            owner_pid = meta.get("pid")
-            if owner_pid == os.getpid():
-                continue
-
             run_id = str(meta.get("run_id") or "").strip() or uuid.uuid4().hex[:12]
             mode = collapse_ws(meta.get("mode")) or "full"
             results_path_raw = collapse_ws(meta.get("results_path"))
@@ -4015,6 +4052,11 @@ async def resume_guide_monitor_jobs(
 
                     results_path = await download_guide_results(client, kernel_ref, run_id)
 
+            if results_path_raw != str(results_path):
+                await update_job_meta(
+                    "guide_monitoring", kernel_ref,
+                    meta_updates={"results_path": str(results_path)},
+                )
             import_result = await run_guide_import_from_results(
                 db,
                 results_path=str(results_path),
@@ -4032,6 +4074,12 @@ async def resume_guide_monitor_jobs(
                     "status_data": status or {},
                 },
             )
+            if not import_result.import_completed:
+                logger.warning(
+                    "guide_monitor.recovery_import_incomplete kernel=%s run_id=%s ops_run_id=%s registry_retained=true",
+                    kernel_ref, run_id, import_result.ops_run_id,
+                )
+                continue
             keep_recovery_job = False
             if auto_publish_after_import and not import_result.errors:
                 if bot is None:
