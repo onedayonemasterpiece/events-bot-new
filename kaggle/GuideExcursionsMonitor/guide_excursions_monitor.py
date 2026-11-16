@@ -3064,6 +3064,7 @@ def deliver_guide_results() -> None:
             if attempt < 2:
                 time.sleep(10 * (attempt + 1))
     print("[guide_result] Files retained in Kaggle output for ordinary recovery", flush=True)
+    archive.unlink(missing_ok=True)  # Raw JSON/media already remain in provider output.
 
 
 async def main() -> None:

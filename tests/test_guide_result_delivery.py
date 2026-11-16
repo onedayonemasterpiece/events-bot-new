@@ -113,7 +113,7 @@ def test_kaggle_keeps_all_outputs_when_receiver_is_unavailable(tmp_path, monkeyp
     monkeypatch.setattr(scope['time'], 'sleep', sleeps.append)
     scope['deliver_guide_results']()
     assert len(attempts) == 3 and sleeps == [10,20]
-    assert result.exists() and (tmp_path / 'guide_results_delivery.zip').exists()
+    assert result.exists() and not (tmp_path / 'guide_results_delivery.zip').exists()
 
 
 def runner_functions():
