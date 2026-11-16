@@ -40,7 +40,7 @@ fields. No semantic identity or text decision is changed.
 
 Treat this as a regression guard when changing source insertion, metadata seeding,
 owner signs, aliases or database initialization. No new state, retry, worker,
-model call or crawling mechanism was added. Net production change: +18 lines,
+model call or crawling mechanism was added. Net production change: +12 lines,
 within the 20-line budget.
 
 ## Data reconciliation and live acceptance
