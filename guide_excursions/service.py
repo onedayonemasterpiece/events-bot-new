@@ -2431,11 +2431,11 @@ async def _upsert_occurrence(
                 title_normalized=?,
                 participant_profiles_json=?,
                 guide_names_json=CASE
-                    WHEN ? != '' THEN ?
+                    WHEN ? != '' OR ? THEN ?
                     ELSE guide_names_json
                 END,
                 organizer_names_json=CASE
-                    WHEN ? != '' THEN ?
+                    WHEN ? != '' OR ? THEN ?
                     ELSE organizer_names_json
                 END,
                 digest_eligible=?,
@@ -2482,8 +2482,10 @@ async def _upsert_occurrence(
                 parsed.title_normalized,
                 guide_names_json,
                 collapse_ws(",".join(parsed.guide_names)),
+                isinstance((fact_pack or {}).get("guide_names"), list),
                 guide_names_json,
                 collapse_ws(",".join(parsed.organizer_names)),
+                isinstance((fact_pack or {}).get("organizer_names"), list),
                 organizer_names_json,
                 1 if parsed.digest_eligible else 0,
                 parsed.digest_eligibility_reason,

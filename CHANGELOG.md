@@ -10,6 +10,8 @@
 
 ### Fixed
 
+- Tour cards keep separate medallions for co-guides and organizers, resolve existing public profile identities, and label an unassigned source as source. Existing extraction now describes both roles explicitly.
+
 - A single source poster with recommendation cards retains its navigation cue in VK grids as well as carousels; existing layout selection and multi-photo grids stay unchanged.
 
 - Static builds interrupted while their remote ledger is only `created` return to exact adoption after the existing short window; unavailable handoffs reconcile their original run before replacement.
