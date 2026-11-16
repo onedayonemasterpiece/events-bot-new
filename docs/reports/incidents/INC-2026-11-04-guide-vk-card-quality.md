@@ -242,3 +242,28 @@ list; sparse status updates still preserve roles. The distinguishing test uses
 the ordinary results importer twice, fails before the change with the old
 organizer still present, and passes after it. This fixes the stored data path,
 not only its portrait rendering.
+
+
+### 2026-11-16: durable guide recovery after a container restart
+
+The owner requested a permanent fix for a remote scan whose local poller dies
+at deployment. Live run8a5351821148/version17 continued while ops12367 became
+crashed. Production has ENABLE_KAGGLE_RECOVERY=0 intentionally; consequently
+neither its broad periodic sweep nor startup sweep handled guide results.
+Do not enable the other product recoveries to repair this narrow failure.
+
+The existing recovery interval now selects the guide-only handler when guide
+scheduling is enabled and the broad switch remains off. It uses the existing
+run lock instead of a PID comparison that fails after Docker reuses PID1.
+Downloaded exact results are recorded in existing registry metadata before
+import. Failed materialization retains that job for a later ordinary tick.
+An accepted ops_run import_summary receipt is reused rather than materialized
+again if the process exits before registry settlement. The common importer
+reconciles the exact completed Kaggle ledger and its owned session lease.
+No new table, scheduler, model, scan, queue or general recovery switch.
+
+Baseline regressions failed for missing periodic registration, reused PID and
+repeated accepted import. Focused guide/scheduler checks pass. Full relevant
+scheduler/guide/video/session regression run is recorded in task evidence.
+Production deployment and automatic acceptance of17 are separate live checks;
+this entry does not claim they have completed. Visual rendering is unchanged.
