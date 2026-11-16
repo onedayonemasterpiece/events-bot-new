@@ -68,6 +68,7 @@ from .scanner import GuideScannedPost, scan_source_posts
 from .seed import seed_guide_sources
 from .result_delivery import serialized_guide_process
 from .telethon_client import create_telethon_runtime_client
+from .tic_catalog import record_tic_scan
 
 logger = logging.getLogger(__name__)
 
@@ -3630,6 +3631,7 @@ async def run_guide_import_from_results(
             results_path=str(results_path),
         )
         import_completed = True
+        await record_tic_scan(db, run_details, mode)
         run_details["import_summary"] = dict(import_summary or {})
         run_details["source_reports"] = list(import_summary.get("sources") or [])
         run_details["occurrence_changes"] = list(import_summary.get("occurrence_changes") or [])
@@ -3922,6 +3924,7 @@ async def run_guide_monitor(
                 except Exception:
                     logger.warning("guide_monitor: failed to disconnect telethon client", exc_info=True)
 
+    await record_tic_scan(db, run_details, mode)
     metrics["duration_sec"] = int(max(0, round(time.monotonic() - started_monotonic)))
     if remote_session_busy:
         status = "skipped"

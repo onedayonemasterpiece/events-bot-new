@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import date
 
 import pytest
@@ -96,6 +97,12 @@ async def test_vk_upload_keeps_full_card_as_png(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _no_story_writer(monkeypatch):
+    from guide_excursions import digest_writer as dw
+
+    async def unavailable(*_args, **_kwargs):
+        raise FileNotFoundError
+
+    monkeypatch.setattr(dw, "generate_sol_narrative", unavailable)
     async def writer(payload, *, issue_id):
         return None
 
@@ -316,11 +323,12 @@ EDITION_349 = [
                                 {"name": "Мария Морозова", "roles": ["Гид"], "owner": None}]},
 ]
 NARRATIVE_349 = {
+    "lead_occurrence_id": 745,
     "lead": "Где начинается рассвет в два часа дня?",
     "paragraphs": [
-        {"occurrence_ids": [745, 747], "text": "Вдоль ручья пройдёмся с [[1|Ольгой Рубцовой]]."},
-        {"occurrence_ids": [746], "text": "У [[3|Нозы Усмановой]] другая отправная точка."},
-        {"occurrence_ids": [763], "text": "А в воскресенье можно побывать на осетровой ферме с [[4|Марией Морозовой]]."},
+        {"details": [], "occurrence_ids": [745, 747], "text": "Вдоль ручья пройдёмся с [[1|Ольгой Рубцовой]]."},
+        {"details": [], "occurrence_ids": [746], "text": "У [[3|Нозы Усмановой]] другая отправная точка."},
+        {"details": [], "occurrence_ids": [763], "text": "А в воскресенье можно побывать на осетровой ферме с [[4|Марией Морозовой]]."},
     ],
     "outro": "Пешком или на ферму?",
 }
@@ -395,12 +403,12 @@ async def test_writer_rejects_story_that_drops_or_invents_an_excursion(monkeypat
 
     payload, _ = vd._vk_narrative_payload(EDITION_349[:2])
     answers = iter([
-        {"lead": "Хук", "paragraphs": [{"occurrence_ids": [745], "text": "Один абзац."}]},
-        {"lead": "Хук", "paragraphs": [{"occurrence_ids": [745, 746, 999], "text": "Лишний id."}]},
-        {"lead": "Хук", "paragraphs": [{"occurrence_ids": [745, 746], "text": "Оба на месте."}]},
-        {"lead": "Хук", "paragraphs": [{"occurrence_ids": [745], "text": "Один."},
-                                       {"occurrence_ids": [746], "text": "Другой."},
-                                       {"occurrence_ids": [], "text": ""}]},
+        {"lead_occurrence_id": 745, "outro": "", "lead": "Хук", "paragraphs": [{"details": [], "occurrence_ids": [745], "text": "Один абзац."}]},
+        {"lead_occurrence_id": 745, "outro": "", "lead": "Хук", "paragraphs": [{"details": [], "occurrence_ids": [745, 746, 999], "text": "Лишний id."}]},
+        {"lead_occurrence_id": 745, "outro": "", "lead": "Хук", "paragraphs": [{"details": [], "occurrence_ids": [745, 746], "text": "Оба на месте."}]},
+        {"lead_occurrence_id": 745, "outro": "", "lead": "Хук", "paragraphs": [{"details": [], "occurrence_ids": [745], "text": "Один."},
+                                       {"details": [], "occurrence_ids": [746], "text": "Другой."},
+                                       {"details": [], "occurrence_ids": [], "text": ""}]},
     ])
 
     async def generate(*_args, **_kwargs):
@@ -440,8 +448,9 @@ def test_writer_uses_same_roles_as_visual_and_sees_time():
 
 
 @pytest.mark.asyncio
-async def test_test_publication_uses_real_writer_and_card_but_only_notifies_test_recipient(monkeypatch):
-    async def writer(payload, *, issue_id):
+async def test_test_publication_uses_real_writer_and_card_but_only_notifies_test_recipient(monkeypatch, tmp_path):
+    async def writer(payload, *, issue_id, review):
+        review.update(provider="test", model="fixture", raw_response=NARRATIVE_349)
         return dict(NARRATIVE_349, lead="[[1|Ольга Рубцова]] ведёт прогулку.",
                     outro="[[3|Ноза Усманова]] тоже проводит экскурсию.")
 
@@ -468,8 +477,13 @@ async def test_test_publication_uses_real_writer_and_card_but_only_notifies_test
     monkeypatch.setattr(vd, "VISUAL_DIGEST_VK_MENTIONS_ENABLED", True)
     result = await vd.publish_visual_digest_to_vk(
         object(), issue_id=349, group_id=243343951, test_mention=1134828279, publish_date=0,
-        vk_api_fn=_fake_shortener, upload_vk_photo_bytes_fn=upload, post_to_vk_fn=post)
+        vk_api_fn=_fake_shortener, upload_vk_photo_bytes_fn=upload, post_to_vk_fn=post, review_dir=tmp_path)
     assert result["url"].endswith("_123")
+    assert result["guide_mentions"] == {"eligible": 2, "substituted": 2}
+    capture = json.loads((tmp_path / "generation.json").read_text())
+    assert capture["input"]["excursions"] and capture["raw_response"] == NARRATIVE_349
+    assert (tmp_path / "wall-text.txt").read_text() == result["text"]
+    assert (tmp_path / "card-1.png").read_bytes().startswith(b"\x89PNG")
 
 
 @pytest.mark.asyncio
@@ -481,8 +495,10 @@ async def test_review_marks_test_recipient_when_the_story_has_no_confirmed_name(
             {"occurrence_ids": [763], "text": "А в воскресенье можно побывать на осетровой ферме."}])
 
     monkeypatch.setattr(vd, "ask_vk_narrative", writer)
+    coverage = {}
     text = await build_visual_digest_vk_text(EDITION_349, issue_id=349, test_mention=858363572,
-                                             vk_api_fn=_fake_shortener)
+                                             vk_api_fn=_fake_shortener, mention_coverage=coverage)
+    assert coverage == {"eligible": 2, "substituted": 0}
     assert text.endswith("Проверка уведомления: [id858363572|тестовый получатель]")
     assert text.count("[id") == 1
 
@@ -569,9 +585,9 @@ async def test_vk_writer_heading_is_removed_only_when_it_is_a_separate_matching_
     from guide_excursions import digest_writer as dw
 
     paragraphs = [
-        {"occurrence_ids": [745, 747], "text": "ЗЕЛЁНЫЕ ИСТОРИИ\nПройдёмся от Зубров вдоль ручья."},
-        {"occurrence_ids": [746], "text": "РАССВЕТ НАД БАЛТИКОЙ проходит в городе."},
-        {"occurrence_ids": [763], "text": "ДРУГОЙ ЗАГОЛОВОК\nНа ферме покажут осетров."},
+        {"details": [], "occurrence_ids": [745, 747], "text": "ЗЕЛЁНЫЕ ИСТОРИИ\nПройдёмся от Зубров вдоль ручья."},
+        {"details": [], "occurrence_ids": [746], "text": "РАССВЕТ НАД БАЛТИКОЙ проходит в городе."},
+        {"details": [], "occurrence_ids": [763], "text": "ДРУГОЙ ЗАГОЛОВОК\nНа ферме покажут осетров."},
     ]
 
     async def generated(*args, **kwargs):
@@ -649,8 +665,8 @@ async def test_vk_writer_groups_745_and_747_with_paired_title_quotes(monkeypatch
     rows = [EDITION_349[0], dict(EDITION_349[2], canonical_title="«Зелёные истории»")]
     payload, _ = vd._vk_narrative_payload(rows)
     first, repeat = payload["excursions"]
-    answer = {"lead": "Что растёт у ручья?", "paragraphs": [
-        {"occurrence_ids": [745, 747], "text": "Две даты одной прогулки."},
+    answer = {"lead_occurrence_id": 745, "outro": "", "lead": "Что растёт у ручья?", "paragraphs": [
+        {"details": [], "occurrence_ids": [745, 747], "text": "Две даты одной прогулки."},
     ]}
 
     async def generate(*args, **kwargs):
@@ -727,9 +743,11 @@ async def test_loader_adds_earlier_posts_of_the_same_route_and_guide_only(tmp_pa
             INSERT INTO guide_monitor_post VALUES
                 (10, 'Маршрут идёт по проспекту.', '2026-09-01', 'u10', 'announce', '[]'),
                 (11, 'Чужая экскурсия с тем же названием.', '2026-09-02', 'u11', 'announce', '[]'),
-                (12, 'Расписание ноября.', '2026-11-12', 'u12', 'announce_multi', '[]');
+                (12, 'Расписание ноября.', '2026-11-12', 'u12', 'announce_multi', '[]'),
+                (13, '   ', '2026-10-01', 'u13', 'announce', '[]'),
+                (14, 'История района.', '2026-08-01', 'u14', 'announce', '[]');
             INSERT INTO guide_occurrence_source VALUES (1, 10, 'primary'), (2, 11, 'primary'),
-                (3, 12, 'primary'), (4, 12, 'primary');
+                (3, 12, 'primary'), (4, 12, 'primary'), (1, 13, 'primary'), (1, 14, 'primary');
         """)
         earlier = await vd._load_earlier_route_posts(conn, [3], {3: [{"text": "Расписание ноября."}]})
-    assert [p["text"] for p in earlier[3]] == ["Маршрут идёт по проспекту."]
+    assert [p["text"] for p in earlier[3]] == ["Маршрут идёт по проспекту.", "История района."]

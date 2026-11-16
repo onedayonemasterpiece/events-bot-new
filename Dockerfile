@@ -9,6 +9,11 @@ WORKDIR /app
 RUN test "$(printf '%s' "$STATIC_SITE_IMAGE_REPO_SHA" | wc -c)" -eq 40 \
     && ! printf '%s' "$STATIC_SITE_IMAGE_REPO_SHA" | grep -q '[^0-9a-f]'
 RUN apt-get update && apt-get install -y --no-install-recommends webp libatomic1 && rm -rf /var/lib/apt/lists/*
+# Native ChatGPT-login client for the daily VK excursion writer. The service
+# supplies its login at runtime; the image contains only the OpenAI distribution.
+RUN pip install --no-cache-dir --only-binary=:all: --no-deps openai-codex-cli-bin==0.160.0 \
+    && python -c "from codex_cli_bin import bundled_codex_path; from pathlib import Path; Path('/usr/local/bin/codex').symlink_to(bundled_codex_path())" \
+    && codex --version | grep -Fx "codex-cli 0.160.0"
 COPY requirements.txt .
 COPY vendor-private/ /tmp/vendor-private/
 RUN test -f /tmp/vendor-private/ai_resource_control-0.1.4-py3-none-any.whl     && pip install --no-cache-dir /tmp/vendor-private/ai_resource_control-0.1.4-py3-none-any.whl     && pip install --no-cache-dir -r requirements.txt     && rm -rf /tmp/vendor-private

@@ -33,8 +33,9 @@ from telegram_sources import canonicalize_tg_url, parse_tg_post_url
 
 from .dedup import deduplicate_occurrence_rows
 from .digest import RU_MONTH_GEN, format_date_time
-from .digest_writer import ask_vk_narrative
+from .digest_writer import VK_NAME_MARK_RE, ask_vk_narrative
 from .parser import collapse_ws, normalize_title_key, occurrence_fare, price_for_publication
+from .tic_catalog import load_tic_background
 
 logger = logging.getLogger(__name__)
 
@@ -1362,10 +1363,13 @@ async def _load_earlier_route_posts(
         names = {n.casefold() for n in _parse_json_array(post["guides"])}
         if not names & {n.casefold() for n in _parse_json_array(post["old_guides"])}:
             continue  # the same title led by somebody else is another excursion
+        text = (post["text"] or "").strip()
+        if not text:
+            continue
         bucket = earlier.setdefault(post["occurrence_id"], [])
-        known = {p["text"] for p in (*bucket, *linked.get(post["occurrence_id"], []))}
-        if len(bucket) < 2 and post["text"] not in known:
-            bucket.append({"text": post["text"], "post_date": post["post_date"], "url": post["url"]})
+        known = {(p.get("text") or "").strip() for p in (*bucket, *linked.get(post["occurrence_id"], []))}
+        if len(bucket) < 2 and text not in known:
+            bucket.append({"text": text, "post_date": post["post_date"], "url": post["url"]})
     return earlier
 
 
@@ -1430,6 +1434,10 @@ async def _load_visual_rows(conn: aiosqlite.Connection, records: Sequence[Mappin
         await _load_transport(conn, item)
         _apply_published_facts(item, posts)
         out.append(item)
+    route_background = await load_tic_background(conn, out)
+    for item in out:
+        if item["id"] in route_background:
+            item["route_background"] = route_background[item["id"]]
     return out
 
 
@@ -2146,7 +2154,6 @@ async def build_visual_digest_telegram_text(
 
 
 _VK_MOVEMENT = {"walk": "пешком", "bus": "автобус", "tram": "трамвай", "boat": "по воде"}
-_VK_NAME_MARK_RE = re.compile(r"\[\[(\d+)\|([^\[\]|]+)\]\]")
 
 
 def _vk_narrative_payload(items: Sequence[Mapping[str, Any]]) -> tuple[dict[str, Any], dict[int, tuple[int, str]]]:
@@ -2237,6 +2244,7 @@ def _vk_narrative_payload(items: Sequence[Mapping[str, Any]]) -> tuple[dict[str,
             "movement": [_VK_MOVEMENT[mode] for mode in _modes_for(row) if mode in _VK_MOVEMENT],
             "guides": guides, "organizers": organizers,
             "facts": facts, "source_profile": {key: value for key, value in profile.items() if value},
+            **({"route_background": row["route_background"]} if row.get("route_background") else {}),
         })
     payload = {"excursions": excursions, "people": list(people.values()), "sources": list(sources.values())}
     if earlier_posts:
@@ -2288,13 +2296,15 @@ async def _assemble_vk_narrative(
     mentions_enabled: bool,
     shorten: Callable[[str], Awaitable[str]],
     test_mention: int | None = None,
+    mention_coverage: dict[str, int] | None = None,
 ) -> str | None:
     """Wrap the written prose with exact titles, dates, prices, contacts and hashtags from the rows."""
     texts = [narrative["lead"], narrative.get("outro") or "", *(p["text"] for p in narrative["paragraphs"])]
-    if any(re.search(r"[\[\]]", _VK_NAME_MARK_RE.sub(lambda m: m[2], text)) for text in texts):
+    if any(re.search(r"[\[\]]", VK_NAME_MARK_RE.sub(lambda m: m[2], text)) for text in texts):
         return None
 
     test_tags: set[str] = set()
+    tagged_guides: set[int] = set()
     wall_links: set[str] = set()
 
     def mention(m: re.Match[str]) -> str:
@@ -2305,12 +2315,13 @@ async def _assemble_vk_narrative(
         if test_mention is not None:
             # Every identified guide is rewritten to the approved test recipient, so a review
             # post shows exactly the names that production would turn into mentions.
+            tagged_guides.add(owner)
             test_tags.add(f"[id{test_mention}|{label}]")
             return f"[id{test_mention}|{label}]"
         return f"[id{owner}|{label}]" if mentions_enabled else label
 
     def names(text: str) -> str:
-        return _VK_NAME_MARK_RE.sub(mention, text)
+        return VK_NAME_MARK_RE.sub(mention, text)
 
     by_id = {int(row.get("id") or 0): row for row in items}
     tags = _digest_hashtags(items)
@@ -2363,6 +2374,9 @@ async def _assemble_vk_narrative(
     blocks.append("Это дайджест экскурсий по Калининградской области от «Ух ты, Калининград!».")
     blocks.append(" ".join(tags))
     text = "\n\n".join(blocks)
+    if mention_coverage is not None:
+        mention_coverage.update(eligible=len({owner for owner, _ in mention_ids.values()}),
+                                substituted=len(tagged_guides))
     if test_mention is not None:
         remaining = text
         for link_markup in (*test_tags, *wall_links):
@@ -2382,6 +2396,8 @@ async def build_visual_digest_vk_text(
     bot: Any | None = None,
     vk_api_fn: Callable[..., Awaitable[Any]] | None = None,
     test_mention: int | None = None,
+    review: dict[str, Any] | None = None,
+    mention_coverage: dict[str, int] | None = None,
 ) -> str:
     items = [dict(r) for r in rows]
     period = _period_of(items)
@@ -2394,11 +2410,14 @@ async def build_visual_digest_vk_text(
         return short_cache[cache_key] or link
 
     payload, mention_ids = _vk_narrative_payload(items)
-    narrative = await ask_vk_narrative(payload, issue_id=int(issue_id)) if items else None
+    if review is not None:
+        review["input"] = payload
+    writer_options = {"review": review} if review is not None else {}
+    narrative = await ask_vk_narrative(payload, issue_id=int(issue_id), **writer_options) if items else None
     if narrative:
         text = await _assemble_vk_narrative(items, narrative, period=period, mention_ids=mention_ids,
                                             mentions_enabled=VISUAL_DIGEST_VK_MENTIONS_ENABLED,
-                                            shorten=shorten, test_mention=test_mention)
+                                            shorten=shorten, test_mention=test_mention, mention_coverage=mention_coverage)
         if text:
             return text
         logger.warning("guide_vk_narrative issue_id=%s outcome=rejected reason=stray_markup", issue_id)
@@ -2487,8 +2506,11 @@ async def publish_visual_digest_to_vk(
     upload_vk_photo_bytes_fn: Callable[..., Awaitable[str | None]] | None = None,
     publish_stories: bool = False,
     test_mention: int | None = None,
+    review_dir: Path | None = None,
 ) -> dict[str, Any]:
     from .max_delivery import run_legacy_delivery
+    if review_dir is not None and test_mention is None:
+        raise ValueError("A VK review capture requires a test publication")
     if test_mention is not None and (
         str(group_id).lstrip("-") != "243343951" or test_mention not in (858363572, 1134828279)
     ):
@@ -2501,7 +2523,7 @@ async def publish_visual_digest_to_vk(
         return await _publish_visual_digest_to_vk_once(
             db, bot, issue_id=issue_id, max_cards=max_cards, group_id=group, target=target,
             publish_date=publish_date, vk_api_fn=vk_api_fn, post_to_vk_fn=post_to_vk_fn,
-            upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn, publish_stories=publish_stories, test_mention=test_mention)
+            upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn, publish_stories=publish_stories, test_mention=test_mention, review_dir=review_dir)
     if test_mention is not None:
         # Each deliberate review run is a new post, including for the same issue.
         return await send_one()
@@ -2529,6 +2551,7 @@ async def _publish_visual_digest_to_vk_once(
     upload_vk_photo_bytes_fn: Callable[..., Awaitable[str | None]] | None = None,
     publish_stories: bool = False,
     test_mention: int | None = None,
+    review_dir: Path | None = None,
 ) -> dict[str, Any]:
     if vk_api_fn is None:
         import main
@@ -2557,8 +2580,18 @@ async def _publish_visual_digest_to_vk_once(
 
     rows = rows[: max(1, min(int(max_cards), 10)) * VISUAL_DIGEST_CARD_LIMIT]
     group = await _resolve_vk_group_id(db=db, bot=bot, group_id=group_id, target=target, vk_api_fn=vk_api_fn)
-    text = await build_visual_digest_vk_text(rows, issue_id=int(issue_id), db=db, bot=bot, vk_api_fn=vk_api_fn,
-                                            test_mention=test_mention)
+    review = {"issue_id": int(issue_id)} if review_dir is not None else None
+    coverage: dict[str, int] = {}
+    try:
+        text = await build_visual_digest_vk_text(
+            rows, issue_id=int(issue_id), db=db, bot=bot, vk_api_fn=vk_api_fn,
+            test_mention=test_mention, review=review, mention_coverage=coverage if test_mention is not None else None,
+        )
+    finally:
+        if review_dir is not None:
+            (review_dir / "generation.json").write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
+    if review_dir is not None:
+        (review_dir / "wall-text.txt").write_text(text, encoding="utf-8")
     card_bytes = render_visual_digest_cards(rows, issue_id=int(issue_id))
     attachments: list[str] = []
     for idx, payload in enumerate(card_bytes, start=1):
@@ -2569,6 +2602,8 @@ async def _publish_visual_digest_to_vk_once(
             card.save(png, format="PNG")
             logger.info("guide_visual_digest_vk_card issue_id=%s card=%s format=PNG width=%s height=%s bytes=%s",
                         issue_id, idx, card.width, card.height, png.tell())
+        if review_dir is not None:
+            (review_dir / f"card-{idx}.png").write_bytes(png.getvalue())
         att = await upload_vk_photo_bytes_fn(str(group), png.getvalue(), db, bot, filename=f"guide_visual_digest_{issue_id}_{idx}.png")
         if not att:
             raise RuntimeError(f"Guide visual digest VK upload failed for card {idx}/{len(card_bytes)}")
@@ -2580,7 +2615,8 @@ async def _publish_visual_digest_to_vk_once(
     if test_mention is not None:
         # A review post leaves the issue available for regular daily publication.
         return {"published": True, "issue_id": issue_id, "url": url, "group_id": group,
-                "text": text, "cards_count": len(card_bytes), "attachments_count": len(attachments)}
+                "text": text, "cards_count": len(card_bytes), "attachments_count": len(attachments),
+                "guide_mentions": coverage}
 
     post_id = _extract_wall_post_id(url)
     target_key = _vk_public_target_key(group_id=group, target=target or VISUAL_DIGEST_VK_TARGET)

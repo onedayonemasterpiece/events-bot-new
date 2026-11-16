@@ -13,6 +13,7 @@ import asyncio
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -114,6 +115,14 @@ async def _publish(args: argparse.Namespace) -> int:
         publish_date = args.publish_date
         if publish_date is None and args.review_delay_days is not None:
             publish_date = default_review_publish_date(delay_days=int(args.review_delay_days))
+        review_dir = None
+        if args.review_dir:
+            if args.test_mention is None:
+                raise ValueError("--review-dir requires --test-mention")
+            parent = Path(args.review_dir)
+            parent.mkdir(parents=True, exist_ok=True)
+            review_dir = Path(tempfile.mkdtemp(prefix="guide-vk-", dir=parent))
+            print(f"VK review files: {review_dir}", file=sys.stderr)
         result = await publish_visual_digest_to_vk(
             db,
             None,
@@ -124,7 +133,11 @@ async def _publish(args: argparse.Namespace) -> int:
             publish_date=publish_date,
             publish_stories=bool(args.stories),
             test_mention=args.test_mention,
+            review_dir=review_dir,
         )
+        if review_dir is not None:
+            result["review_dir"] = str(review_dir)
+            (review_dir / "receipt.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0 if result.get("published") else 1
     finally:
@@ -201,7 +214,8 @@ def main() -> int:
     publish.add_argument("--issue-id", type=int)
     publish.add_argument("--max-cards", type=int, default=1)
     publish.add_argument("--group-id")
-    publish.add_argument("--test-mention", type=int, help="Recipient of the single test mention in the owner's review group")
+    publish.add_argument("--test-mention", type=int, help="Substitute recipient for eligible guides in the owner's review group")
+    publish.add_argument("--review-dir", help="Save the input, model response, posted text, cards and receipt for this test run")
     publish.add_argument("--target")
     publish.add_argument("--publish-date", type=int, help="Unix timestamp; use 0 for immediate")
     publish.add_argument("--review-delay-days", type=int, default=3, help="Schedule to postponed queue this many days ahead")
