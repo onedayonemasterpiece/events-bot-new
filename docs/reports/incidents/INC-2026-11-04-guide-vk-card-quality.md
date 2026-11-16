@@ -269,3 +269,27 @@ Production deployment and automatic acceptance of17 are separate live checks;
 this entry does not claim they have completed. Visual rendering is unchanged.
 
 Expanded local regression: 218 tests PASS, including scheduler, guide, Kaggle status, video poller/pipeline and partner scheduling. Initial five video fixture failures were due to missing tracked CherryFlash assets in the sparse checkout; restoring those tracked paths resolved all five. Runtime release remains a separate live acceptance step.
+
+### 16 November 2026 — Transport evidence on schedule cards
+
+The old card selected walking from street names and missed the extracted value
+`walking_tour`. Replacing an occurrence fact pack on a sparse update could also
+discard transport. The normal import now keeps post-linked, scoped transport
+claims. Card selection uses direct evidence, a named route template, or an
+explicitly linked monthly VK programme. Group size remains a participation fact.
+
+Retained comparison: `transport-d07db37d/` in the incident artifact directory.
+Nine real primary inputs produced 26 Tier-1/template rows on main and 30 on the
+candidate. On a disposable import, the 20 and 28 November “Рассвет над Балтикой”
+cards showed walking with both the schedule (wall-211429559_3892) and programme
+(wall6939421_6285) URLs. The 22 November farm card had no transport. The source
+poster and both canonical posts were already inspected; neither has a repost
+that explains these cases. This change has no VK ingestion or publisher delta.
+Release, live import and public card verification belong to coordinator acceptance.
+
+Coordinator review reproduced 13 legacy-icon regressions from actual production
+claim spellings (including `walking tour`, «пешеходная», «автобусная»). Exact
+alias normalization now reads only the existing type field; title/geography
+guesses stay removed. The distinguishing regression changed from 13 FAIL / 2 PASS
+to all PASS. Independent integrated transport/import/push/recovery tests: 89 PASS.
+Avatar layout PR1026 stays separate; this entry does not claim a live typed import.

@@ -22,6 +22,8 @@
 - Source registries reject signed duplicates of event walls and resolved aliases of the same excursion VK owner; original guide seed entries retain stable owner IDs. Existing duplicate records require lossless reconciliation before this schema is delivered.
 - Guide scans resume and materialize their saved remote result after a process restart even when broad Kaggle recovery is disabled. Failed imports retain their registry entry; accepted imports reuse their receipt and release the exact completed session lease.
 
+- Guide schedule cards use source-anchored travel modes for the tour, including mixed itineraries. Sparse announcements can reuse an explicitly linked route or monthly program.
+
 - Telegraf in Svetlogorsk has one shared circular venue medallion for site, VK and Telegram, prepared from its official channel avatar.
 
 - Shared site and VK medallions recognize the observed declined names of the Hermann Brachert museum; a street bearing the surname does not select the museum medallion.
