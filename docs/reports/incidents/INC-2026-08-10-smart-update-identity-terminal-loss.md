@@ -484,3 +484,27 @@ checkpoint's scope; see the current correction above for the later release.
 ### 2026-11-14: final MATCH survives the merge path
 
 The existing typed final adjudicator can resolve a widened-recall candidate as FINAL_MATCH, but a second independent merge-identity call was still allowed to contradict it for the same owner and create a duplicate. The merge path now reuses that final result only for its exact selected owner. Unresolved/absent results and ordinary matches retain the merge gate; explicit FINAL_DISTINCT creation is unchanged. An initialized film/time-skew replay and explicit separate-screening negative control accompany the existing incident question-bank corpus. This is local contract repair; it does not close this incident or authorize historical data reconciliation.
+
+### 2026-11-16: selected entity versus carrier or informational focus (draft)
+
+Normal candidate29997 represented «Огни Севильи»,21Nov18:00 and matched9764,
+but the merge gate treated the surrounding weekly carrier as distinct. New
+whole-forum candidates30014/30024 matched7691/11084 for WEST HORECA,19–20Nov,
+but the same gate treated speaker/exhibitor announcements as independent events.
+The recorded vetoes led to duplicate11074/11084/11085. HORECA raw gate quotes
+were not retained, so the recorded outcomes do not prove an internal model cause.
+
+The draft replaces two existing introductory prompt literals with the shared
+selected-entity boundary. Candidate fields must be confirmed by primary source;
+actual distinct parts/sessions, range guards, literal grounding and final outcome
+mapping remain unchanged. No state, classifier, retry, model or configuration is
+added. Four production lines touched/net0 within budget6. Existing mocked
+consumer tests do not prove semantic AFTER efficacy. No research provider calls,
+historical merge/replay, production change or new VK write accompanies this draft.
+
+Retained source-backed reports: horeca11084-11085-identity-boundary-review-20261116.md
+and candidate-entity-boundary-unified-review-20261116.md under the existing
+20261112T111614Z-similar-events-check task. Their actual source/event controls
+remain necessary for future semantic acceptance; the draft must not be merged or
+deployed on static or CI success alone. Existing wrong-description attribution
+and independent related-verifier errors are not repaired by this wording.

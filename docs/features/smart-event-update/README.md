@@ -63,6 +63,14 @@ facts) and grounds them against the same candidate/existing-poster OCR supplied
 to the model. Explicit repeated days may be distinct occurrences; uncertainty
 still schedules a retry and does not authorize creation.
 
+The merge identity gate compares the event represented by the selected candidate
+fields and confirmed by source text or poster OCR. A carrier may contain several
+events; a speaker or exhibitor announcement may update one existing whole event.
+Neither context width nor a new informational focus alone proves DISTINCT.
+A genuine separate part or session must be the candidate's own source-grounded
+entity. Existing identity anchors, citation guards and range-versus-slot rules
+remain unchanged.
+
 The merge identity gate also requires every cited quote to appear in primary
 source text or OCR. A generated candidate summary (`raw_excerpt`) is context,
 not an eligible source for those quotes. An unsupported part of a compound proof
