@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Exact Kaggle adoption of a failed or cancelled run reconciles its existing ledger and releases its builder resource before clearing the handoff, so the next normal calculation can start after a missed terminal callback.
+
 - Unavailable Smart Update merges preserve the previous description instead of appending raw parser text and OCR instructions; source and fact receipts remain intact.
 
 - Outbox selection normalizes detached job timestamps after its read queries, avoiding an unintended bulk autoflush and SQLite lock failures while choosing the next publication.

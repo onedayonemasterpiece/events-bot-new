@@ -449,3 +449,32 @@ retry, lock or queue. Regression: observe real SQLAlchemy statements through
 the normal worker and require no JobOutbox UPDATE before its initial selector.
 The normal run was nevertheless adopted at 00:01:51; first publications and
 absence of this failure after release still need live verification.
+
+### 16 November: authoritative Kaggle ERROR must release the builder
+
+At 00:49:59 UTC, exact-dataset adoption observed Kaggle ERROR for run024229.
+Return76 cleared the claim and snapshot, but a missed callback left its ledger
+alive/export and static_site:builder lease active until03:45:18. Successor024933
+failed resource busy at00:53:47. The status probe, host cleanup and subsequent
+failure are retained in static-old-new-reconciliation-review-20261116.md.
+
+Reuse reconcile_kaggle_run_failure_from_host directly after matched-dataset
+ERROR/FAILED/CANCELLED/CANCELED, before returning existing unavailable76.
+Existing transaction releases only resources owned by that exact run. Reuse
+the existing async DB-close wrapper; reconciliation errors escape, so existing
+host probe_failed deferral preserves the handoff for normal retry. RUNNING
+remains75 without writes; mismatch/unknown retain their previous76 behavior
+without newly terminalizing a run. No queue, timer, result code or retry added.
+
+Distinguishing regression uses initialized SQLite, an alive ledger, exact lease
+and unrelated lease. Baseline keeps the failed holder active; fixed adopter
+closes it and releases only its lease. RUNNING, unknown and mismatched dataset
+remain alive. Existing host reconciliation and adoption suites are included.
+Production prevention release remains pending. No old VK content is rewritten.
+
+The already-abandoned024229 had no remaining claim to revisit. At01:05 UTC the
+root invoked the existing host failure reconciliation once using the retained
+authoritative ERROR observation: failed_reconciled, callback_event_count4,
+released_resource_count1. This is an observed-failure incident mitigation, not a
+fake terminal, reset or new provider push. RECONCILE_024229_USED marks it used;
+do not repeat. Normal successor adoption/publication still must be observed.
