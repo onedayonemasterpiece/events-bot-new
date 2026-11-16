@@ -116,6 +116,29 @@ async def test_source_matching_an_explicit_organizer_gets_that_role_once(tmp_pat
     assert people[1]['owner'] == -237389053 and people[1]['roles'] == ['Организатор']
 
 
+@pytest.mark.asyncio
+async def test_two_source_aliases_merge_after_vk_resolution_and_keep_other_people(tmp_path, monkeypatch):
+    source = -237389053
+    guide_owner = 123
+    photo = tmp_path / 'public.webp'
+    async def ensure(owner):
+        return photo
+    monkeypatch.setattr(avatars, 'ensure_vk_avatar', ensure)
+    monkeypatch.setattr(avatars, 'avatar_metadata', lambda owner: {'name': '80 лет единства'})
+    profiles = [{'display_name': 'Анна Орлова', 'facts_rollup_json': '{"vk_user_id":123}'}]
+    participants = avatars.guide_participants
+    monkeypatch.setattr(avatars, 'guide_participants', lambda row, _: participants(row, profiles))
+    row = {'source_platform': 'vk', 'source_flags_json': '{"vk_id":237389053}',
+           'guide_names': ['Анна Орлова', '80 лет единства — экскурсионный контур', 'Мария Орлова'],
+           'organizer_names': ['80 лет единства']}
+    await avatars.prepare_guide_avatars([row])
+    assert [(p['name'], p['owner'], p['roles']) for p in row['participant_medallions']] == [
+        ('Анна Орлова', guide_owner, ['Гид']),
+        ('80 лет единства', source, ['Гид', 'Организатор']),
+        ('Мария Орлова', None, ['Гид']),
+    ]
+
+
 def test_old_card_features_and_full_size_horizontal_participants_are_preserved(monkeypatch):
     from guide_excursions import visual_digest as visual
     avatars_drawn, badges, chips, texts = [], [], [], []

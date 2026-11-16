@@ -186,12 +186,26 @@ async def prepare_guide_avatars(rows: list[dict[str, Any]], db: Any = None) -> N
         if path := await ensure_vk_avatar(owner):
             row["source_avatar_path"] = str(path)
             public_name = avatar_metadata(owner).get("name") or ""
+            source_names = _identity_names({"display_name": public_name})
+            source_participant = None
+            resolved = []
             for person in participants:
-                if not person.get("owner") and _identity_names({"display_name": person["name"]}) & _identity_names({"display_name": public_name}):
+                if not person.get("owner") and source_names & _identity_names({"display_name": person["name"]}):
                     person.update(owner=owner, path=str(path))
-            if not participants:
-                participants.append({"name": public_name or row.get("source_title"),
+                if person["owner"] == owner:
+                    if source_participant is not None:
+                        for role in person["roles"]:
+                            if role not in source_participant["roles"]:
+                                source_participant["roles"].append(role)
+                        if public_name:
+                            source_participant["name"] = public_name
+                        continue
+                    source_participant = person
+                resolved.append(person)
+            if not resolved:
+                resolved.append({"name": public_name or row.get("source_title"),
                     "roles": [], "owner": owner, "path": str(path)})
+            row["participant_medallions"] = resolved
 
 
 def source_medallions(urls: Any, *, index: dict[str, Any] | None = None) -> list[dict[str, Any]]:
