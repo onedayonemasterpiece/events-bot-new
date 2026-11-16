@@ -35,6 +35,14 @@ retain their stage policy. No identity retry worker is enabled.
 
 ## P0 automatic identity and source-decision contract
 
+Telegram candidates with an inferred location but no retained extracted venue,
+configured source default or known venue reference go through the existing
+location-grounding reviewer. A literal phrase in the source does not establish
+that it is an attendee-facing venue. This narrow trigger preserves producer
+metadata, configured defaults, reference resolution and all existing location
+review triggers; it does not choose a replacement venue itself. Previously
+unknown inferred venues can therefore require the existing review call.
+
 For multi-child Telegram carriers the existing LLM scope review runs even when
 the children share one date or a coordinated heading such as `19 и 20 сентября`.
 The scope reviewer receives the caption plus OCR title/body from posters already
