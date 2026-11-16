@@ -1105,3 +1105,41 @@ def test_split_description_keeps_actual_anniversary_programme_word_boundary():
 def test_split_description_still_rejects_hard_logistics(text):
     candidate = su.EventCandidate(source_text="Концерт", source_type="vk", source_url="https://vk.com/wall-1_2", title="Концерт")
     assert su._description_needs_g4_split_create_logistics_reject(text, candidate=candidate)
+
+
+@pytest.mark.parametrize(
+    "fact,quote,reason,corpus_reason",
+    [
+        ("Варианты изделий для создания: часы", "На выбор: часы.", "insufficient_lexical_support", "grounded"),
+        ("Варианты изделий для создания: часы", "Искажённая цитата", "quote_not_in_source", "grounded"),
+        ("Продолжительность: 3 часа", "Продолжительность: 2 часа.", "unsupported_number", "unsupported_number"),
+        ("Продолжительность: 3 часа", "", "unsupported_number", "unsupported_number"),
+    ],
+)
+def test_rejected_rich_fact_explains_quote_and_corpus_without_exposing_quote(
+    caplog, fact, quote, reason, corpus_reason
+):
+    source = (
+        "Мастер-класс по созданию стеклянных изделий. На выбор: часы. "
+        "Продолжительность: 2 часа."
+    )
+    payload = {"program_or_examples": [
+        {"fact": fact, "evidence_quote": quote},
+        {"fact": "Продолжительность: 2 часа", "evidence_quote": "Продолжительность: 2 часа."},
+    ]}
+
+    with caplog.at_level("WARNING", logger=su.__name__):
+        facts = su._flatten_g4_rich_facts_payload(payload, source_corpus=source)
+
+    assert facts == ["Продолжительность: 2 часа"]
+    records = [r for r in caplog.records if "smart_update.rich_fact_rejected" in r.message]
+    assert len(records) == 1
+    message = records[0].message
+    assert f"reason={reason}" in message
+    assert f"quote_present={bool(quote)}" in message
+    assert f"quote_chars={len(quote)}" in message
+    assert f"corpus_reason={corpus_reason}" in message
+    assert "corpus_matched=" in message and "corpus_ratio=" in message
+    assert source not in message
+    if quote == "На выбор: часы." or quote == "Искажённая цитата":
+        assert quote not in message

@@ -11,6 +11,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Explain rejected rich facts in the existing warning with quote presence/length and full-source lexical support metrics, without logging source quotes or changing fact admission.
 - Bound repeated VK CAPTCHA per existing job without counting unrelated transport failures; retain frozen payloads and exhausted terminal outcomes across restart and enqueue so one refused document cannot loop forever ahead of other publications.
 - Resolve the exact venue name «ВОРОТА» as Закхаймские ворота through the shared location reference, while preserving street/title and other-gate negatives.
 - Guide Kaggle pushes saved JSON/media results directly into the existing HTTP receiver and durable importer, including partial/error outcomes and late delivery after a dead waiter; repeated delivery reuses the accepted run receipt.
