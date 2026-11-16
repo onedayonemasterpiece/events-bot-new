@@ -1,3 +1,7 @@
+## 2026-11-16
+
+- VK relation cards accept shared source-avatar paths from the persistent data mount, preserving first-publication carousels.
+
 # Changelog
 
 - VK source avatars are fetched through the existing reader and reused by tour cards and event source medallions; tour cards use their existing description when space permits. No extra LLM generation step.

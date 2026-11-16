@@ -1,5 +1,7 @@
 # Инциденты
 
+- [INC-2026-11-16 — внешний аватар блокирует карточку похожих](INC-2026-11-16-related-source-avatar-path.md). Пути медальонов из data mount и первая карусель.
+
 - [INC-2026-11-16 — сырой текст при недоступном merge](INC-2026-11-16-unavailable-merge-raw-description.md). Сохранение прежнего описания и source/fact receipts.
 
 - [INC-2026-11-12 — зависшая сборка блокирует похожие события](INC-2026-11-12-related-vector-build-claim.md). Terminal claim, vector freshness и расчёт без Astro.
