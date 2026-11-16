@@ -3018,12 +3018,18 @@ async def process_source(client: TelegramClient | None, source_payload: dict[str
     }
 
 
+def _write_results(payload):
+    checkpoint = RESULT_PATH.with_suffix(".tmp")
+    checkpoint.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    checkpoint.replace(RESULT_PATH)
+
+
 def _save_run_checkpoint(config, run_id, started_at, sources, partial):
     payload = {"schema_version": 1, "run_id": run_id,
                "scan_mode": str(config.get("scan_mode") or "full"),
                "started_at": started_at, "finished_at": datetime.now(timezone.utc).isoformat(),
                "partial": partial, "stats": _summarize_run_stats(sources), "sources": sources}
-    RESULT_PATH.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    _write_results(payload)
 
 
 def deliver_guide_results() -> None:
@@ -3144,7 +3150,7 @@ async def main() -> None:
             if result.get("source_status") != "ok":
                 partial = True
             sources_output.append(result)
-            _save_run_checkpoint(config, run_id, started_at, sources_output, partial)
+            _save_run_checkpoint(config, run_id, started_at, sources_output, True)
             STATUS_PROGRESS.update(
                 {
                     "sources_done": len(sources_output),
@@ -3173,7 +3179,7 @@ async def main() -> None:
         "stats": stats,
         "sources": sources_output,
     }
-    RESULT_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_results(payload)
     STATUS_PROGRESS.update(
         {
             "phase": "report",
@@ -3230,7 +3236,7 @@ async def run_with_delivery() -> None:
         }
         payload.update(partial=True, run_error=f"{type(exc).__name__}: {exc}",
                        finished_at=datetime.now(timezone.utc).isoformat())
-        RESULT_PATH.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        _write_results(payload)
         _status_event("report_written", phase="report", status="error", message=payload["run_error"])
         raise
     finally:

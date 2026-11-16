@@ -120,7 +120,7 @@ def runner_functions():
     import ast
     from types import SimpleNamespace
     source = Path('kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py').read_text()
-    wanted = {'deliver_guide_results', 'run_with_delivery'}
+    wanted = {'deliver_guide_results', 'run_with_delivery', '_write_results'}
     tree = ast.parse(source)
     nodes = [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name in wanted]
     import asyncio, urllib.request, urllib.error, time
