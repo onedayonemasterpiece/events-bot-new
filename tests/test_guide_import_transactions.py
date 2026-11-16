@@ -132,11 +132,13 @@ async def test_authoritative_empty_roles_clear_old_roles_on_normal_reimport(tmp_
     try:
         for roles in (['Старый организатор'], []):
             occurrence['organizer_names'] = roles
+            occurrence['seats_text'] = '7+' if roles else None
             results.write_text(json.dumps(payload))
             await service._import_results_file_inner(db, results_path=str(results))
         async with db.raw_conn() as conn:
-            row = await (await conn.execute('SELECT guide_names_json,organizer_names_json FROM guide_occurrence')).fetchone()
+            row = await (await conn.execute('SELECT guide_names_json,organizer_names_json,seats_text FROM guide_occurrence')).fetchone()
         assert json.loads(row[0]) == ['Гид']
         assert json.loads(row[1]) == []
+        assert row[2] is None
     finally:
         await db.close()

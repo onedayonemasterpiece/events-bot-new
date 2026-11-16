@@ -222,11 +222,11 @@ def resolve_event_graphic_medallions(
         add(pushkin_item, "pushkin_card", semantic_key="program:pushkin-card")
 
     if not any(item.get("reason") == "source_identity" for item in selected):
-        from source_avatars import avatar_path, vk_post_owners
+        from source_avatars import avatar_path, avatar_metadata, vk_post_owners
         urls = [getattr(event, "source_vk_post_url", None), getattr(event, "source_post_url", None), *(getattr(event, "source_urls", None) or [])]
         for owner in vk_post_owners(urls):
             if path := avatar_path(owner):
-                selected.append({"slug": f"vk-source-{owner}", "name": "Источник ВКонтакте", "asset_path": str(path), "reason": "source_avatar", "source_owner": owner})
+                selected.append({"slug": f"vk-source-{owner}", "name": avatar_metadata(owner).get("name") or "", "asset_path": str(path), "reason": "source_avatar", "source_owner": owner})
 
     return selected[:max_items]
 

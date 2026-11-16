@@ -2455,7 +2455,7 @@ async def _upsert_occurrence(
                     WHEN ? != '' THEN ?
                     ELSE status
                 END,
-                seats_text=COALESCE(NULLIF(?, ''), seats_text),
+                seats_text=CASE WHEN ? THEN ? ELSE COALESCE(NULLIF(?, ''), seats_text) END,
                 summary_one_liner=COALESCE(NULLIF(?, ''), summary_one_liner),
                 digest_blurb=COALESCE(NULLIF(?, ''), digest_blurb),
                 fact_pack_json=CASE
@@ -2502,6 +2502,8 @@ async def _upsert_occurrence(
                 parsed.channel_url,
                 parsed.status,
                 parsed.status,
+                "seats_text" in (fact_pack or {}),
+                parsed.seats_text,
                 parsed.seats_text,
                 parsed.summary_one_liner,
                 parsed.digest_blurb,
