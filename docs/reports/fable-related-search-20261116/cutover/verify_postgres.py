@@ -29,7 +29,7 @@ try:
     print("starting isolated container", case, flush=True)
     cli(["docker","run","--rm","--name",case,"--network","none","--tmpfs","/var/lib/postgresql/data:rw,size=196m","-e","POSTGRES_HOST_AUTH_METHOD=trust","-d",image])
     for _ in range(100):
-        if cli(["docker","exec",case,"pg_isready","-U","postgres"],ok=False).returncode==0: break
+        if cli(["docker","exec",case,"pg_isready","-h","127.0.0.1","-U","postgres"],ok=False).returncode==0: break
         time.sleep(.2)
     sql("""CREATE SCHEMA extensions; CREATE EXTENSION vector WITH SCHEMA extensions;
     CREATE TABLE public.event_search_documents(event_id bigint PRIMARY KEY, text_hash text,related_text_hash text,related_doc_version text,metadata jsonb);
