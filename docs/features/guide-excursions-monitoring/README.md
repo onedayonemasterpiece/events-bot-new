@@ -1,5 +1,7 @@
 # Guide Excursions Monitoring
 
+Актуальная постановка для анализа Opus и Falble: [богатый текст VK дайджеста, требования, код и тестовые результаты (16 ноября 2026)](vk-rich-text-review-2026-11-16.md).
+
 Статус: fact-first MVP in progress
 
 Канонический surface для мониторинга экскурсионных анонсов гидов в Telegram. Трек живёт в отдельных `guide_*` таблицах и не попадает в обычные `event`/`/daily`/month/weekend surfaces.
