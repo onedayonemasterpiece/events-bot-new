@@ -5045,7 +5045,8 @@ def build_related(
         chains = copy.deepcopy(cache.get("chains") or {}) if cache_compatible else {}
         raw_chains_for_cache = copy.deepcopy(cached_raw_chains or chains)
         fresh = build_pgvector_related_chain(
-            events, current_date=current_date, anchor_ids=targets,
+            events, current_date=current_date,
+            anchor_ids=None if anchor_ids is None and targets == current_id_set else targets,
             embedding_model=embedding_model,
             embedding_doc_kind=embedding_doc_version,
             graph_meta_out=graph_meta, retrieval_receipt_out=retrieval_receipt,
@@ -6946,7 +6947,8 @@ def main() -> int:
             else None
         ),
     )
-    if args.catalog_mode == "full" and args.related_mode == "pgvector" and args.related_anchor_ids is None:
+    if (args.catalog_mode == "full" and args.related_mode == "pgvector" and args.related_anchor_ids is None
+            and (related_payload.get("graph_reciprocity") or {}).get("policy") != "scoped_pgvector_candidates"):
         validate_pgvector_graph_release(related_payload.get("graph_reciprocity") or {})
     (out_dir / "preview-related.json").write_text(json.dumps(related_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Exported {len(events)} events to {out_dir}")

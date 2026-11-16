@@ -990,3 +990,66 @@ def test_warm_pgvector_targets_keep_partial_cache_and_rebuild_dependents(tmp_pat
             rebuilt = run(None)
             assert set(fetched) == set(range(1, 7)), "incompatible full cache must bootstrap instead of erasing output"
             assert all(rebuilt["related"][str(i)]["strict_verified"] for i in range(1, 7))
+
+
+def test_full_cli_reuses_incremental_graph_without_validating_partial_metrics(tmp_path, monkeypatch):
+    import sqlite3
+    import sys
+    from types import SimpleNamespace
+
+    exporter = _load_exporter_module()
+    events = [_related_event(i, f"Distinct programme {i}", day=i) for i in range(1, 7)]
+    db = tmp_path / "catalog.sqlite"
+    sqlite3.connect(db).close()
+    cache = tmp_path / "related-cache.json"
+    fetched, validated = [], []
+    empty_rpc = False
+
+    def rpc(_name, payload, **_kwargs):
+        anchor = payload["p_anchor_event_id"]
+        fetched.append(anchor)
+        return [] if empty_rpc else [{"event_id": event["id"], "vector_similarity": .85}
+                                     for event in events if event["id"] != anchor]
+
+    validator = exporter.validate_pgvector_graph_release
+    def validate(meta):
+        validated.append(dict(meta))
+        validator(meta)
+
+    monkeypatch.setattr(exporter, "personalization_supabase_request", rpc)
+    monkeypatch.setattr(exporter, "validate_pgvector_graph_release", validate)
+    monkeypatch.setattr(exporter, "fetch_rows", lambda *a, **k: events)
+    monkeypatch.setattr(exporter, "fetch_recent_event_detail_archive_rows", lambda *a, **k: [])
+    monkeypatch.setattr(exporter, "build_event", lambda _con, row, *a, **k: dict(row))
+    monkeypatch.setattr(exporter, "build_catalog_ledger", lambda *a, **k: {})
+    monkeypatch.setattr(exporter, "collect_source_records", lambda *a, **k: [])
+    for name in ("event_participants_for_events", "event_video_assets_for_events",
+                 "build_interest_clubs_projection", "build_interest_clubs_projection_v2",
+                 "build_festival_timeline_projection"):
+        monkeypatch.setattr(exporter, name, lambda *a, **k: {})
+    monkeypatch.setitem(sys.modules, "static_collection_export", SimpleNamespace(
+        stable_hash=lambda *a: "offline", build_registry_projection=lambda *a, **k: ({}, [])))
+    monkeypatch.setitem(sys.modules, "static_place_org_registry", SimpleNamespace(
+        load_registry=lambda: {}, registry_hash=lambda *a: "offline"))
+    monkeypatch.delenv("STATIC_SITE_SYNC_PGVECTOR_VECTORS", raising=False)
+    monkeypatch.delenv("STATIC_SITE_COLLECTION_SEMANTIC_COMPUTE", raising=False)
+    monkeypatch.setattr(sys, "argv", ["exporter", "--db", str(db), "--output-dir", str(tmp_path / "output"),
+        "--catalog-mode", "full", "--current-date", "2026-07-20", "--related-mode", "pgvector",
+        "--related-cache", str(cache), "--related-corpus-revision", "c" * 64,
+        "--repo-sha", "a" * 40, "--run-id", "offline", "--build-id", "offline",
+        "--snapshot-id", "offline", "--snapshot-sha256", "b" * 64])
+    assert exporter.main() == 0
+    assert len(fetched) == 6 and len(validated) == 1
+    fetched.clear()
+    events.append(_related_event(7, "New independent programme", day=7))
+    assert exporter.main() == 0
+    assert fetched == [7], "warm full export must fetch only the new anchor"
+    assert len(validated) == 1, "partial metrics must not be interpreted as a full graph"
+    fetched.clear()
+    assert exporter.main() == 0
+    assert fetched == [] and len(validated) == 1, "empty scope is not a measured full graph"
+    cache.unlink()
+    empty_rpc = True
+    with pytest.raises(RuntimeError, match="graph release gate failed"):
+        exporter.main()
+    assert len(validated) == 2, "a genuinely cold full graph must retain its release validation"
