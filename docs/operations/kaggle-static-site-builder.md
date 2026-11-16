@@ -85,6 +85,11 @@ The production rail is a durable state machine, not a local process lock:
 4. Before push, the running outbox payload stores the exact build/run/repo,
    candidate-token, snapshot hash/path, fingerprint and clock handoff. The
    Kaggle ledger stores the exact input dataset identity.
+   A ledger that remains `created` uses the existing short pre-execution
+   recovery window even when its local handoff exists. That window rearms
+   the same owner's exact adoption; it does not authorize a second push.
+   An unavailable adoption reconciles the original run through the existing
+   failure reconciler before the claim is released for replacement.
 5. If Fly dies after push, a retry first pulls the fixed kernel metadata. A
    matching running kernel is deferred; a matching complete kernel is
    downloaded and fully identity/hash validated, published once and adopted.
