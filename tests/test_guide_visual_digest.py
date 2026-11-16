@@ -635,3 +635,35 @@ def test_visual_booking_skips_dotted_telegram_usernames_and_keeps_valid_links():
                   "https://t.me/share/url?url=https://example.com", "tg://resolve?domain=test_bot",
                   "https://example.com/vladimir.tour"):
         assert vd._primary_link(dict(row, booking_url=valid)) == (valid, False)
+
+
+@pytest.mark.asyncio
+async def test_vk_writer_groups_745_and_747_with_paired_title_quotes(monkeypatch):
+    from guide_excursions import digest_writer as dw
+
+    rows = [EDITION_349[0], dict(EDITION_349[2], canonical_title="«Зелёные истории»")]
+    payload, _ = vd._vk_narrative_payload(rows)
+    first, repeat = payload["excursions"]
+    answer = {"lead": "Что растёт у ручья?", "paragraphs": [
+        {"occurrence_ids": [745, 747], "text": "Две даты одной прогулки."},
+    ]}
+
+    async def generate(*args, **kwargs):
+        return answer
+
+    monkeypatch.setattr(dw, "_get_digest_writer_runtime", lambda: (object(), None))
+    monkeypatch.setattr(dw, "_generate_json", generate)
+    for quoted in ("«Зелёные истории»", '"Зелёные истории"'):
+        repeat["title"] = quoted
+        assert await dw.ask_vk_narrative(payload, issue_id=349)
+
+    for different in ("Зелёные истории города", "Зелёные-истории", "«Зелёные» истории",
+                      '«Зелёные истории"', "««Зелёные истории»»"):
+        repeat["title"] = different
+        assert await dw.ask_vk_narrative(payload, issue_id=349) is None
+
+    first["title"], repeat["title"] = "Парк» и «лес", "«Парк» и «лес»"
+    assert await dw.ask_vk_narrative(payload, issue_id=349) is None
+    first["title"], repeat["title"] = "Зелёные истории", "«Зелёные истории»"
+    repeat["guides"] = ["Ноза Усманова"]
+    assert await dw.ask_vk_narrative(payload, issue_id=349) is None

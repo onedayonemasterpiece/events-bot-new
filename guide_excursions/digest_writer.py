@@ -921,6 +921,13 @@ def _vk_narrative_prompt(payload: Mapping[str, Any], *, issue_id: int) -> str:
     )
 
 
+def _vk_group_title(value: str) -> str:
+    title = collapse_ws(value).casefold()
+    if re.fullmatch(r'«[^«»]*»|"[^"]*"', title):
+        return title[1:-1].strip()
+    return title
+
+
 async def ask_vk_narrative(payload: Mapping[str, Any], *, issue_id: int) -> dict[str, Any] | None:
     """One editorial request for the whole VK edition; None means "use the compact text"."""
     excursions = {item["occurrence_id"]: item for item in payload.get("excursions") or []}
@@ -960,8 +967,8 @@ async def ask_vk_narrative(payload: Mapping[str, Any], *, issue_id: int) -> dict
             return None
         if len(ids) > 1:
             entries = [excursions[i] for i in ids]
-            identity = {(collapse_ws(x["title"]).casefold(), frozenset(x["guides"])) for x in entries}
-            if len(identity) != 1 or not entries[0]["guides"] or not entries[0]["title"]:
+            identity = {(_vk_group_title(x["title"]), frozenset(x["guides"])) for x in entries}
+            if len(identity) != 1 or any(not title or not guides for title, guides in identity):
                 logger.warning("guide_vk_narrative issue_id=%s outcome=rejected reason=mixed_excursions", issue_id)
                 return None
         paragraphs.append({"occurrence_ids": ids, "text": text})
@@ -977,3 +984,4 @@ async def ask_vk_narrative(payload: Mapping[str, Any], *, issue_id: int) -> dict
         return None
     logger.info("guide_vk_narrative issue_id=%s outcome=written paragraphs=%s chars=%s", issue_id, len(paragraphs), len(prose))
     return {"lead": lead, "paragraphs": paragraphs, "outro": outro}
+
