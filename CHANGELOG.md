@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Unavailable Smart Update merges preserve the previous description instead of appending raw parser text and OCR instructions; source and fact receipts remain intact.
+
 - Outbox selection normalizes detached job timestamps after its read queries, avoiding an unintended bulk autoflush and SQLite lock failures while choosing the next publication.
 
 - VK accepts managed CDN originals up to the existing event-media source ceiling before resizing; upload bytes and unrelated URL limits remain unchanged. Static WebP uses native scaled decoding whenever reduction is needed.
