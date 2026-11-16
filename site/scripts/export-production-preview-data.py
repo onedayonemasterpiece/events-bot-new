@@ -4216,8 +4216,8 @@ def build_gemma_related_audit_prompt(
         "Не добавляй event_id, которых нет в candidates. Верни только JSON по схеме.\n"
         "Задача: оценить, насколько каждый candidate тематически близок к anchor, и отсортировать ranked от наиболее похожего к менее похожему.\n"
         "Оценка: 0.90+ почти тот же интерес; 0.72+ можно показывать в блоке «Похожие»; 0.55-0.71 слабая/смежная рекомендация; <0.55 reject=true.\n"
-        "Оцени самостоятельные события. Общий анонс, фестиваль или турнир может содержать разные программы: учитывай факты выбранного title/type, а не всего расписания.\n"
-        "Если событие просто другое, даже качественное, ставь reject=true.\n"
+        "Оцени только самостоятельные программы. Если anchor и candidate описывают ту же конкретную программу, включая общий анонс программы и её отдельный сеанс, ставь reject=true: это не самостоятельное похожее событие. Общий анонс фестиваля или турнира может содержать разные программы: учитывай факты выбранного события, а не всего расписания.\n"
+        "Если программа другая и тематически не близка, даже качественная, ставь reject=true.\n"
         "similarity_class выбери строго из: identical_or_near_identical, highly_similar, thematically_close, weak_or_adjacent_related, different_topic.\n"
         "confidence: 0..1, насколько достаточно фактов и насколько ты уверен в оценке; снижай при скудном описании или спорной похожести.\n"
         "Не объясняй решение, не возвращай лишние поля.\n\n"
@@ -4453,7 +4453,7 @@ def gemma_related_policy_signature(*, model: str) -> str:
             120,
             int(os.getenv("STATIC_SITE_GEMMA_RELATED_FACT_MAX_CHARS", "360") or "360"),
         ),
-        "prompt_version": "related_gemma4_schema_v8_complete_anchor_two_pass",
+        "prompt_version": "related_gemma4_schema_v9_independent_programmes",
     }
     return hashlib.sha1(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
