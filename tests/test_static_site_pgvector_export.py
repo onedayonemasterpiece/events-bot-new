@@ -82,6 +82,9 @@ def test_build_gemma_related_audit_prompt_is_compact_and_xml_escaped() -> None:
     assert "similarity_class" in prompt
     assert "confidence" in prompt
     assert "reason_codes" not in prompt
+    assert "другом городе" in prompt
+    assert "диапазонный" in prompt.lower()
+    assert "другая интерпретация" in prompt
     assert len(prompt) < 2100
 
 
