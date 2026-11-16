@@ -903,7 +903,7 @@ async def ask_vk_narrative(payload: Mapping[str, Any], *, issue_id: int) -> dict
         if not isinstance(raw, dict) or not isinstance(raw.get("text"), str):
             return None
         ids = raw.get("occurrence_ids")
-        text = collapse_ws(raw["text"])
+        text = raw["text"].strip()
         if ids == [] and not text:
             continue
         if not text or not isinstance(ids, list) or not ids or any(type(i) is not int or i not in excursions for i in ids):

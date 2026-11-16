@@ -528,3 +528,25 @@ async def test_vk_same_departure_has_one_booking_and_keeps_full_fare(monkeypatch
     rows[1]["time"] = "11:00"
     text = await build_visual_digest_vk_text(rows, issue_id=350, test_mention=858363572)
     assert "11:00" in text and "09:00-18:00" in text
+
+
+@pytest.mark.asyncio
+async def test_vk_writer_heading_is_removed_only_when_it_is_a_separate_matching_line(monkeypatch):
+    from guide_excursions import digest_writer as dw
+
+    paragraphs = [
+        {"occurrence_ids": [745, 747], "text": "ЗЕЛЁНЫЕ ИСТОРИИ\nПройдёмся от Зубров вдоль ручья."},
+        {"occurrence_ids": [746], "text": "РАССВЕТ НАД БАЛТИКОЙ проходит в городе."},
+        {"occurrence_ids": [763], "text": "ДРУГОЙ ЗАГОЛОВОК\nНа ферме покажут осетров."},
+    ]
+
+    async def generated(*args, **kwargs):
+        return dict(NARRATIVE_349, paragraphs=paragraphs)
+
+    monkeypatch.setattr(dw, "_get_digest_writer_runtime", lambda: (object(), None))
+    monkeypatch.setattr(dw, "_generate_json", generated)
+    text = await build_visual_digest_vk_text(EDITION_349, issue_id=349, vk_api_fn=_fake_shortener)
+    assert "ЗЕЛЁНЫЕ ИСТОРИИ\nПройдёмся от Зубров вдоль ручья." in text
+    assert text.count("ЗЕЛЁНЫЕ ИСТОРИИ") == 1
+    assert "РАССВЕТ НАД БАЛТИКОЙ\nРАССВЕТ НАД БАЛТИКОЙ проходит в городе." in text
+    assert "ДРУГОЙ ЗАГОЛОВОК На ферме покажут осетров." in text

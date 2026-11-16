@@ -2194,7 +2194,12 @@ async def _assemble_vk_narrative(
             details.append((when, price, contact, destination))
         lines = _vk_schedule_lines(details)
         title = _plain(rows[0].get("canonical_title")) or "Экскурсия"
-        blocks.append("\n".join(x for x in [title.upper(), story(paragraph["text"]), *lines] if x))
+        heading = title.upper()
+        body = paragraph["text"]
+        first_line, separator, rest = body.partition("\n")
+        if separator and first_line.strip() == heading:
+            body = rest
+        blocks.append("\n".join(x for x in [heading, story(collapse_ws(body)), *lines] if x))
     if narrative.get("outro"):
         blocks.append(story(narrative["outro"]))
     blocks.append("Это дайджест экскурсий по Калининградской области от «Ух ты, Калининград!».")
