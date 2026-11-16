@@ -35,7 +35,7 @@ const event = (overrides = {}) => ({
 const slugs = (value) => resolveEventMedallions(value, eventPageCatalog).identities.map(({ item }) => item.slug);
 
 test('full manifests keep exact accepted inventory and reachable runtime/source assets', async () => {
-  assert.equal(organizers.length, 28);
+  assert.equal(organizers.length, 30);
   assert.equal(festivals.length, 11);
   assert.equal(festivals.filter((item) => item.category === 'festival').length, 10);
   assert.equal(festivals.filter((item) => item.category === 'venue_brand').length, 1);
@@ -80,6 +80,11 @@ test('declined Brachert venue names resolve without matching a street surname', 
   assert.deepEqual(slugs(event({ venue_name:'Дома-музея Германа Брахерта' })), ['brachert']);
   assert.deepEqual(slugs(event({ venue_name:'Доме-музее Германа Брахерта' })), ['brachert']);
   assert.deepEqual(slugs(event({ venue_name:'Дом культуры', address:'улица Брахерта, 2' })), []);
+});
+
+test('Telegraf venue resolves its shared medallion without matching a street name', () => {
+  assert.deepEqual(slugs(event({ venue_name:'Телеграф', address:'Островского 3, Светлогорск' })), ['telegraf-svetlogorsk']);
+  assert.deepEqual(slugs(event({ venue_name:'Дом культуры', address:'Телеграфная улица, 3' })), []);
 });
 
 test('structured organizers resolve Profi-Tour and Ruin Keepers without venue inference', () => {

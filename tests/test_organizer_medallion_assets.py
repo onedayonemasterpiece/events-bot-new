@@ -21,6 +21,7 @@ def test_brachert_declined_venue_names(name):
 
 @pytest.mark.parametrize('slug,name', [('bar-bastion', 'Бар Бастион'),
                                       ('dom-kitoboya', 'Дом китобоя'),
+                                      ('telegraf-svetlogorsk', 'Телеграф'),
                                       ('dom-semyi', 'Дом семьи')])
 def test_site_and_vk_share_normalized_circular_assets(slug, name):
     manifest = json.loads((ROOT / 'site/src/data/organizerMedallions.json').read_text())
@@ -51,3 +52,8 @@ console.log(JSON.stringify(resolveEventMedallions(event, items).identities.map(x
         assert difference.getbbox() is None
         if slug == 'bar-bastion':
             assert max(png.getpixel((12, 256))[:3]) < 240  # No white field inside the circle.
+
+
+def test_telegraf_street_does_not_select_venue_medallion():
+    assert resolve_event_graphic_medallions(SimpleNamespace(location_name='Дом культуры',
+        location_address='Телеграфная улица, 3')) == []
