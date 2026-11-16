@@ -634,6 +634,54 @@ def _place_line(row: Mapping[str, Any]) -> str:
     return _plain(_fact(row, "city") or row.get("city")) or "детали в тексте"
 
 
+def _scope_visual_source(row: dict[str, Any], post: Mapping[str, Any]) -> None:
+    """Keep a programme's other outings out of both the caption and the story."""
+    entries = _parse_json_array(post["raw_facts_json"])
+    titles = {_plain(e.get("canonical_title") or e.get("title")).casefold()
+              for e in entries if isinstance(e, Mapping)}
+    titles.discard("")
+    parts = re.split(r"(?im)^\s*расписание\s*:\s*$", post["text"] or "", maxsplit=1)
+    if len(titles) < 2 and post["post_kind"] != "announce_multi" and len(parts) == 1:
+        return
+    title = _plain(row["canonical_title"]).casefold()
+    date_iso = _plain(row["date"])
+    matches = [e for e in entries if isinstance(e, Mapping)
+               and _plain(e.get("canonical_title") or e.get("title")).casefold() == title
+               and _plain(e.get("date") or e.get("date_iso")) == date_iso]
+    excerpt = ""
+    if len(matches) == 1:
+        excerpt = _plain(matches[0].get("source_excerpt"))
+    # Older imports have no per-outing excerpt. A named timetable line is still
+    # usable; a whole article attached to several excursions is not.
+    if not excerpt or excerpt == _plain(post["text"]):
+        excerpt = ""
+        body = parts[0]
+        sentences = re.split(r"(?<=[.!?])\s+|\n+", body)
+        if len(parts) == 2:
+            start = next((i for i, sentence in enumerate(sentences)
+                          if title and title in sentence.casefold()), None)
+            if start is not None:
+                excerpt = " ".join(sentences[start:]).strip()
+        if not excerpt:
+            schedule = parts[-1]
+            excerpt = "\n".join(line.strip() for line in schedule.splitlines()
+                                if title and title in line.casefold())
+    row["excursion_excerpt"] = excerpt
+    pack = row.get("fact_pack") or {}
+    hook = _plain(pack.get("main_hook"))
+    evidence = [_plain(e).casefold() for e in pack.get("main_hook_evidence") or [] if _plain(e)]
+    # Historic hooks were sometimes extracted from another excursion in that post.
+    if hook and hook.casefold() not in excerpt.casefold() and not (
+        evidence and all(e in excerpt.casefold() for e in evidence)
+    ):
+        row["fact_pack"] = dict(pack)
+        for field in ("main_hook", "main_hook_evidence", "summary_one_liner", "digest_blurb"):
+            value = _plain(pack.get(field) or row.get(field))
+            if field in ("main_hook", "main_hook_evidence") or value.casefold() not in excerpt.casefold():
+                row["fact_pack"].pop(field, None)
+                row.pop(field, None)
+
+
 def _card_description(row: Mapping[str, Any], *visible: str) -> str:
     """Spend the optional line on details absent from the title and byline."""
     title = _plain(row.get("canonical_title"))
@@ -1234,7 +1282,7 @@ async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) ->
         item["published_visual_digest_state"] = state_map.get(str(item.get("id") or ""))
         post_cur = await conn.execute(
             """
-            SELECT gmp.text, gmp.source_url
+            SELECT gmp.text, gmp.source_url, gmp.post_kind, gmp.raw_facts_json
             FROM guide_occurrence_source gos
             JOIN guide_monitor_post gmp ON gmp.id = gos.post_id
             WHERE gos.occurrence_id=?
@@ -1246,6 +1294,8 @@ async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) ->
         post_row = await post_cur.fetchone()
         item["dedup_source_text"] = collapse_ws(str((post_row["text"] if post_row else "") or ""))
         item["dedup_source_url"] = post_row["source_url"] if post_row else None
+        if post_row:
+            _scope_visual_source(item, post_row)
         payload_url = item["fact_pack"].get("source_post_url") if isinstance(item["fact_pack"], dict) else None
         item["source_post_url"] = _source_post_url(payload_url, item["dedup_source_url"] or item.get("channel_url"))
         reason = _visual_selection_reason(item)
@@ -1371,7 +1421,7 @@ async def _fetch_rows_by_ids(conn: aiosqlite.Connection, occurrence_ids: Sequenc
                 item[key] = item["fact_pack"].get(key)
         post_cur = await conn.execute(
             """
-            SELECT gmp.text, gmp.source_url
+            SELECT gmp.text, gmp.source_url, gmp.post_kind, gmp.raw_facts_json
             FROM guide_occurrence_source gos
             JOIN guide_monitor_post gmp ON gmp.id = gos.post_id
             WHERE gos.occurrence_id=?
@@ -1383,6 +1433,8 @@ async def _fetch_rows_by_ids(conn: aiosqlite.Connection, occurrence_ids: Sequenc
         post_row = await post_cur.fetchone()
         item["dedup_source_text"] = collapse_ws(str((post_row["text"] if post_row else "") or ""))
         item["dedup_source_url"] = post_row["source_url"] if post_row else None
+        if post_row:
+            _scope_visual_source(item, post_row)
         payload_url = item["fact_pack"].get("source_post_url") if isinstance(item["fact_pack"], dict) else None
         item["source_post_url"] = _source_post_url(payload_url, item["dedup_source_url"] or item.get("channel_url"))
         by_id[int(item["id"])] = item
@@ -1996,7 +2048,7 @@ def _vk_narrative_payload(items: Sequence[Mapping[str, Any]]) -> tuple[dict[str,
             entry["excursions"].append(row_id)
             if owner > 0 and "Гид" in roles:
                 mention_ids[entry["n"]] = (owner, name)
-        source_text = _plain(row.get("dedup_source_text"))
+        source_text = _plain(row.get("excursion_excerpt", row.get("dedup_source_text")))
         if source_text:
             source_url = _plain(row.get("dedup_source_url", row.get("source_post_url")))
             source = sources.setdefault((source_url, source_text), {
@@ -2010,6 +2062,9 @@ def _vk_narrative_payload(items: Sequence[Mapping[str, Any]]) -> tuple[dict[str,
         facts = {key: value for key in ("summary_one_liner", "digest_blurb", "route_summary", "meeting_point",
                                         "duration_text", "group_format", "audience_fit", "main_hook", "main_hook_evidence")
                  if (value := _fact(row, key) or row.get(key)) and (not isinstance(value, str) or _plain(value))}
+        caption = _card_description(row, _source_name(row), _place_line(row), _focus_line(row))
+        if caption:
+            facts["card_caption"] = caption
         profile = {"kind": _plain(row.get("source_kind")), "title": _plain(row.get("source_title")),
                    "about": _plain(row.get("source_about_text"))[:600],
                    "summary": _plain(row.get("guide_profile_summary")), "facts": row.get("guide_profile_facts") or {}}
@@ -2022,6 +2077,33 @@ def _vk_narrative_payload(items: Sequence[Mapping[str, Any]]) -> tuple[dict[str,
             "facts": facts, "source_profile": {key: value for key, value in profile.items() if value},
         })
     return {"excursions": excursions, "people": list(people.values()), "sources": list(sources.values())}, mention_ids
+
+
+def _vk_schedule_lines(details: Sequence[tuple[str, str, str, str]]) -> list[str]:
+    """Combine compatible descriptions of one start; keep conflicting times and prices visible."""
+    slots: list[tuple[str, str, str, str]] = []
+    for when, price, contact, destination in details:
+        for i, (prev_when, prev_price, prev_contact, prev_dest) in enumerate(slots):
+            if not when or not destination or destination != prev_dest:
+                continue
+            times = sorted((prev_when, when), key=len)
+            prices = sorted((prev_price, price), key=len)
+            same_start = times[0] == times[1] or re.fullmatch(re.escape(times[0]) + r"\s*[-–—]\s*\d{1,2}:\d{2}", times[1])
+            same_fare = prices[0] == prices[1] or (prices[0] and prices[1].startswith(prices[0] + " "))
+            if not (same_start and same_fare):
+                continue
+            booking = next((c for c in (prev_contact, contact) if "Запись" in c), contact)
+            slots[i] = (times[1], prices[1], booking, destination)
+            break
+        else:
+            slots.append((when, price, contact, destination))
+    if not slots:
+        return []
+    if len({(p, c) for _, p, c, _ in slots}) == 1:
+        price, contact = slots[0][1:3]
+        return [" · ".join(w for w, _, _, _ in slots if w),
+                " · ".join(x for x in (f"💳 {price}" if price else "", contact) if x)]
+    return [" · ".join(x for x in (w, f"💳 {p}" if p else "", c) if x) for w, p, c, _ in slots]
 
 
 async def _assemble_vk_narrative(
@@ -2040,6 +2122,7 @@ async def _assemble_vk_narrative(
         return None
 
     test_tag = ""
+    wall_links: set[str] = set()
 
     def mention(m: re.Match[str]) -> str:
         nonlocal test_tag
@@ -2058,13 +2141,28 @@ async def _assemble_vk_narrative(
         return _VK_NAME_MARK_RE.sub(mention, text)
 
     by_id = {int(row.get("id") or 0): row for row in items}
-    blocks = [f"ЭКСКУРСИИ {period.upper()}".strip() + "\n" + (names(narrative["lead"]) or ""),
-              "Это дайджест экскурсий по Калининградской области от «Ух ты, Калининград!». "
-              "Даты, цены и запись — под каждым рассказом."]
+    tags = _digest_hashtags(items)
+    def tag_city(match: re.Match[str]) -> str:
+        if match.lastgroup == "name":
+            return match[0]
+        word = match[0]
+        tag = f"#{word}"
+        if tag in tags:
+            tags.remove(tag)
+            return tag
+        return word
+
+    city_pattern = "|".join(map(re.escape, _HASHTAG_LOCATIONS))
+    city_or_name = re.compile(r"(?P<name>\[\[\d+\|[^\]]+\]\])|(?<![#\w])(?:" + city_pattern + r")(?!\w)")
+
+    def story(text: str) -> str:
+        return names(city_or_name.sub(tag_city, text))
+
+    blocks = [f"ЭКСКУРСИИ {period.upper()}".strip() + "\n" + story(narrative["lead"])]
     for paragraph in narrative["paragraphs"]:
         rows = sorted((by_id[i] for i in paragraph["occurrence_ids"]),
                       key=lambda r: (_plain(r.get("date")), _plain(r.get("time")) or "99:99"))
-        details: list[tuple[str, str, str]] = []
+        details: list[tuple[str, str, str, str]] = []
         for row in rows:
             try:
                 day = date.fromisoformat(_plain(row.get("date")))
@@ -2074,26 +2172,38 @@ async def _assemble_vk_narrative(
             if _plain(row.get("time")):
                 when = f"{when}, {_plain(row.get('time'))}".strip(", ")
             link, is_phone = _primary_link(row)
+            destination = ""
             if link and is_phone:
-                contact = f"Запись по телефону: {_normalize_phone(link) or _plain(link)}"
+                destination = _normalize_phone(link) or _plain(link)
+                contact = f"☎ Запись по телефону: {destination}"
             elif link:
                 is_booking = _plain(link) != _plain(row.get("source_post_url") or row.get("channel_url"))
-                contact = f"{'Запись' if is_booking else 'Подробности'}: {link if _is_vk_url(link) else await shorten(link)}"
+                label = "Запись" if is_booking else "Подробности"
+                url = link if _is_vk_url(link) else await shorten(link)
+                destination = url
+                if re.fullmatch(r"(?:https?://)?(?:m\.)?vk\.(?:com|ru)/wall-?\d+_\d+/?", url, re.I):
+                    contact = _vk_link(label, url)
+                    wall_links.add(contact)
+                else:
+                    contact = f"{label}: {url}"
+                contact = "🔗 " + contact
             else:
                 contact = ""
-            details.append((when, _plain(row.get("price_line") or row.get("price_text")), contact))
-        if len({(price, contact) for _when, price, contact in details}) == 1:
-            lines = [" · ".join(when for when, _p, _c in details if when), " · ".join(x for x in details[0][1:] if x)]
-        else:
-            lines = [" · ".join(x for x in detail if x) for detail in details]
+            price = _plain(row.get("price_line") or row.get("price_text"))
+            # A short URL may represent both a booking link and the source post.
+            details.append((when, price, contact, destination))
+        lines = _vk_schedule_lines(details)
         title = _plain(rows[0].get("canonical_title")) or "Экскурсия"
-        blocks.append("\n".join(x for x in [title.upper(), names(paragraph["text"]) or "", *lines] if x))
+        blocks.append("\n".join(x for x in [title.upper(), story(paragraph["text"]), *lines] if x))
     if narrative.get("outro"):
-        blocks.append(names(narrative["outro"]) or "")
-    blocks.append(" ".join(_digest_hashtags(items)))
+        blocks.append(story(narrative["outro"]))
+    blocks.append("Это дайджест экскурсий по Калининградской области от «Ух ты, Калининград!».")
+    blocks.append(" ".join(tags))
     text = "\n\n".join(blocks)
     if test_mention is not None:
         remaining = text.replace(test_tag, "", 1) if test_tag else text
+        for link_markup in wall_links:
+            remaining = remaining.replace(link_markup, "")
         if re.search(r"[\[\]@]|\*[\w.-]+", remaining):
             raise ValueError("Unexpected VK mention markup in test digest")
         if not test_tag:

@@ -1295,6 +1295,13 @@ def _merge_json_objects(base: dict[str, Any] | None, extra: dict[str, Any] | Non
     return out
 
 
+def _occurrence_source_excerpt(parsed: GuideParsedOccurrence, post: GuideScannedPost) -> str:
+    # Older multi-event imports can carry the complete post as every row's block.
+    if parsed.post_kind == "announce_multi" and collapse_ws(parsed.block_text) == collapse_ws(post.text):
+        return ""
+    return parsed.block_text
+
+
 def _build_occurrence_fact_pack(
     parsed: GuideParsedOccurrence,
     *,
@@ -2847,7 +2854,7 @@ async def _scan_and_import_source(
                         "audience_fit": list(parsed.audience_fit),
                         "group_format": parsed.group_format,
                         "guide_names": list(parsed.guide_names),
-                        "post_excerpt": post.text,
+                        "post_excerpt": _occurrence_source_excerpt(parsed, post),
                     }
                 )
                 if created:
@@ -3205,7 +3212,7 @@ async def _import_source_payload(
                         "audience_fit": list(parsed.audience_fit),
                         "group_format": parsed.group_format,
                         "guide_names": list(parsed.guide_names),
-                        "post_excerpt": post.text,
+                        "post_excerpt": _occurrence_source_excerpt(parsed, post),
                     }
                 )
                 if created:

@@ -350,10 +350,10 @@ async def test_vk_text_wraps_written_story_with_exact_dates_contacts_and_plain_n
     assert text.startswith("ЭКСКУРСИИ 17–22 НОЯБРЯ\nГде начинается рассвет в два часа дня?\n\n")
     assert "дайджест экскурсий по Калининградской области от «Ух ты, Калининград!»" in text
     assert ("ЗЕЛЁНЫЕ ИСТОРИИ\nВдоль ручья пройдёмся с Ольгой Рубцовой.\n"
-            "17 ноября (вт), 14:00 · 21 ноября (сб), 11:00\n500 руб. · Запись: vk.cc/d3XqaE") in text
+            "17 ноября (вт), 14:00 · 21 ноября (сб), 11:00\n💳 500 руб. · 🔗 Запись: vk.cc/d3XqaE") in text
     assert "РАССВЕТ НАД БАЛТИКОЙ\nУ Нозы Усмановой другая отправная точка.\n20 ноября (пт), 14:00\n" in text
     # Unknown time and price stay absent; the phone is the booking contact.
-    assert ("с Марией Морозовой.\n22 ноября (вс)\nЗапись по телефону: +7 (911) 858-58-49") in text
+    assert ("с Марией Морозовой.\n22 ноября (вс)\n☎ Запись по телефону: +7 (911) 858-58-49") in text
     assert "[" not in text and "docs.google.com" not in text
     assert text.rstrip().endswith("#экскурсии #Калининград #УхтыКалининград")
 
@@ -491,3 +491,39 @@ def test_vk_narrative_pairs_source_excerpt_with_selected_post_url():
     assert [(s["url"], s["excursions"]) for s in payload["sources"]] == [
         (selected_url, [745]), (original["source_post_url"], [746]), ("", [747]),
     ]
+
+
+def test_multi_announcement_assigns_its_description_only_to_named_excursion():
+    post = {"text": "Приглашаем на прогулку «Парки».\nСмотрим деревья.\nРасписание:\n20.11 — Проспект\n21.11 — Парки",
+            "post_kind": "announce_multi", "raw_facts_json": None}
+    row = {"canonical_title": "Проспект", "date": "2026-11-20", "fact_pack": {
+        "main_hook": "Деревья городских парков", "main_hook_evidence": ["Смотрим деревья"]}}
+    vd._scope_visual_source(row, post)
+    assert row["excursion_excerpt"] == "20.11 — Проспект"
+    assert "main_hook" not in row["fact_pack"]
+    row = dict(row, canonical_title="Парки")
+    vd._scope_visual_source(row, post)
+    assert "Смотрим деревья" in row["excursion_excerpt"]
+    assert "Проспект" not in row["excursion_excerpt"]
+
+
+@pytest.mark.asyncio
+async def test_vk_same_departure_has_one_booking_and_keeps_full_fare(monkeypatch):
+    url = "https://vk.com/wall-123_45"
+    rows = [dict(row, canonical_title="Кольцо", city="Черняховск", date="2026-11-28",
+                 guide_names=["Эмма"], booking_url=url) for row in EDITION_349[:2]]
+    rows[0].update(id=740, time="09:00-18:00", price_text="4000 рублей с человека; обед 600", source_post_url=url)
+    rows[1].update(id=741, time="09:00", price_text="4000 рублей")
+    async def writer(*args, **kwargs):
+        return {"lead": "Чем примечателен Черняховск?", "paragraphs": [
+            {"occurrence_ids": [740, 741], "text": "Поедем к кирхе."}], "outro": ""}
+    monkeypatch.setattr(vd, "ask_vk_narrative", writer)
+    text = await build_visual_digest_vk_text(rows, issue_id=350, test_mention=858363572)
+    assert text.count("28 ноября (сб), 09:00") == text.count("4000 рублей") == text.count(url) == 1
+    assert "09:00-18:00" in text and "обед 600" in text and f"[{url}|Запись]" in text
+    assert text.count("#Черняховск") == 1 and "#Черняховск?" in text.splitlines()[1]
+    assert text.index("КОЛЬЦО") < text.index("от «Ух ты, Калининград!»")
+    # A second departure or a conflicting tariff remains visible.
+    rows[1]["time"] = "11:00"
+    text = await build_visual_digest_vk_text(rows, issue_id=350, test_mention=858363572)
+    assert "11:00" in text and "09:00-18:00" in text
