@@ -1534,3 +1534,37 @@ async def test_scope_uses_only_visible_assigned_ocr_as_source(monkeypatch, mode)
     else:
         assert not ok
         assert reason == ("llm_scope_missing_target_city" if mode == "missing_city" else "llm_scope_not_verbatim")
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("#Калининград", True), ("В КАЛИНИНГРАДЕ", True),
+    ("из Калининграда", True), ("к Калининграду", True),
+    ("под Калининградом", True), ("Калининградская область", False),
+    ("Калининградской", False), ("Калининградец", False),
+    ("псевдоКалининграде", False), ("Калининградомский", False),
+])
+def test_city_scope_grounding_keeps_full_city_across_cases(text, expected):
+    assert su._source_supports_city_value(text, "Калининград") is expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("include_city", [True, False])
+async def test_scope_city_rail_accepts_literal_inflection_but_requires_it(monkeypatch, include_city):
+    heading = "НОВОГОДНЯЯ СКАЗКА В КАЛИНИНГРАДЕ 26 и 27 ДЕКАБРЯ"
+    slot = "ИНТЕРАКТИВНОЕ ПРЕДСТАВЛЕНИЕ В УСАДЬБЕ ДЕДА МОРОЗА 12:30 — дети 5–8 лет"
+    venue = "Агропарк «Некрасово поле»"
+    candidate = EventCandidate(
+        source_type="telegram", source_url="https://t.me/scope_fixture/2",
+        source_text="26 декабря 15:00, #Калининград", title="Новогоднее представление",
+        date="2026-12-27", time="12:30", city="Калининград",
+        posters=[PosterCandidate(ocr_text=" ".join([heading, slot, venue]))],
+    )
+
+    async def ask(*args, **kwargs):
+        return {"decision": "scoped", "confidence": 1,
+                "selected_excerpts": ([heading] if include_city else ["26 и 27 ДЕКАБРЯ"]) + [slot, venue]}
+
+    monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+    monkeypatch.setattr(su, "_ask_gemma_json", ask)
+    result = await su._llm_scope_candidate_occurrence(candidate)
+    assert result == ((True, "llm_scoped") if include_city else (False, "llm_scope_missing_target_city"))

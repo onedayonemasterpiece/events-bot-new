@@ -6636,7 +6636,9 @@ def _source_supports_city_value(text: str | None, value: str | None) -> bool:
     haystack = _norm_text_for_grounding(text)
     if len(probe) < 3 or not haystack:
         return False
-    pattern = r"(?<!\w)" + re.escape(probe).replace(r"\ ", r"\s+") + r"(?!\w)"
+    # Keep the full city name: case endings must not admit regional adjectives.
+    suffix = r"(?:а|у|е|ом)?" if re.search(r"[бвгджзклмнпрстфхцчшщ]$", probe) else ""
+    pattern = r"(?<!\w)" + re.escape(probe).replace(r"\ ", r"\s+") + suffix + r"(?!\w)"
     return bool(re.search(pattern, haystack))
 
 

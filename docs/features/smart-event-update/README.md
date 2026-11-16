@@ -42,7 +42,10 @@ assigned to that candidate. Its existing 7000-character bound applies before
 both model input and literal/date/city grounding, so unseen tail text cannot
 become an accepted single-event scope. Generated `raw_excerpt` remains separate
 context, not verbatim source evidence; gallery assignment and OCR calls do not
-change.
+change. City quotations retain the full canonical name while accepting simple
+Russian case endings after a final hard consonant; regional adjectives remain
+insufficient. This surface normalization does not decide city/date association
+or accept non-contiguous model quotations.
 Only the LLM-selected, verbatim-grounded child scope goes to downstream text
 generation; full source text remains provenance. The date grounding helper
 recognizes explicit comma/conjunction day lists sharing a month without
