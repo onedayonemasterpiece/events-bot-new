@@ -10,6 +10,8 @@
 
 ### Fixed
 
+- Source registries reject signed duplicates of event walls and resolved aliases of the same excursion VK owner; original guide seed entries retain stable owner IDs. Existing duplicate records require lossless reconciliation before this schema is delivered.
+
 - Shared site and VK medallions recognize the observed declined names of the Hermann Brachert museum; a street bearing the surname does not select the museum medallion.
 
 - Tour cards keep separate medallions for co-guides and organizers, resolve existing public profile identities, and label an unassigned source as source. Existing extraction now describes both roles explicitly.
