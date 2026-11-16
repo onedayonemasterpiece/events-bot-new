@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- VK event galleries keep the existing grid/carousel selection when recommendation cards are present, with source photos before other dates and related events in both formats. Existing posts are not rewritten to change their layout.
+
 ### Fixed
 
 - Related-event verification excludes an umbrella announcement of the same specific programme through its existing reject verdict, while keeping independent programmes eligible.

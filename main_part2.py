@@ -7381,7 +7381,7 @@ async def _upload_vk_event_gallery(
     relation_cards: list[bytes] | None = None, cue: str = "листай",
 ) -> tuple[list[str], str | None]:
     """Upload approved URLs in display order; label the cover only if a second photo is ready."""
-    mode = "carousel" if relation_cards else _vk_event_gallery_mode(event_id, len(urls))
+    mode = _vk_event_gallery_mode(event_id, len(urls) + len(relation_cards or []))
     carousel = mode == "carousel"
     attachments: list[str] = []
     for card in reversed(relation_cards or []):
@@ -7390,7 +7390,7 @@ async def _upload_vk_event_gallery(
             raise RuntimeError("vk_sync_relation_card_upload_failed")
         attachments.append(uploaded)
     # Upload the cover last in a carousel: a partial edit can still use a lone unlabelled photo.
-    for url in (reversed(urls) if carousel else urls):
+    for url in (reversed(urls) if carousel or relation_cards else urls):
         if carousel and url == urls[0] and attachments:
             photo = await upload_vk_photo(group_id, url, db, bot, swipe_hint=cue if relation_cards else True)
             if not photo:
@@ -7402,7 +7402,7 @@ async def _upload_vk_event_gallery(
         elif not VK_USER_TOKEN:
             logging.info("VK photo upload skipped: user token required", extra={"eid": event_id})
             break
-    if carousel:
+    if carousel or relation_cards:
         attachments.reverse()
     return attachments, mode if len(attachments) > 1 else None
 
