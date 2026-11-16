@@ -287,3 +287,29 @@ def test_dated_guide_credit_supplies_writer_identity_without_a_profile():
     stale = {'display_name': 'Варвара Лалэко', 'facts_rollup_json': '{"vk_user_id":456}'}
     conflict, = avatars.guide_participants(row, [stale])
     assert conflict['owner'] is None and conflict['path'] is None
+
+
+def test_same_announced_guide_on_two_departures_keeps_one_writer_identity():
+    from guide_excursions.visual_digest import _vk_narrative_payload
+
+    linked = '29.11 (вс) 11:00 — «Созидание: люди и судьбы», гид [id90171626|Татьяна Медведева]'
+    plain = '29.11 (вс) 14:00 — «От Победы до Победы», гид Татьяна Медведева'
+    post = dict(url='https://vk.com/wall-211429559_3892', post_date='2026-11-15', text=linked+'\n'+plain)
+    first = dict(id=751, canonical_title='Созидание: люди и судьбы', date='2026-11-29', time='11:00', linked_posts=[post])
+    second = dict(first, id=752, canonical_title='От Победы до Победы', time='14:00')
+    for row in (first, second):
+        row['participant_medallions'] = avatars.guide_participants(row, [])
+        assert row['participant_medallions'][0]['owner'] == 90171626
+    payload, people = _vk_narrative_payload([first, second])
+    assert people == {1: (90171626, 'Татьяна Медведева')}
+    assert payload['people'][0]['excursions'] == [751, 752]
+
+    # Another post, date, role, or namesake cannot identify the second departure's guide.
+    for text in (plain, linked.replace('29.11', '28.11')+'\n'+plain,
+                 linked.replace('гид ', 'запись у ')+'\n'+plain,
+                 linked.replace('Татьяна Медведева', 'Тамара Медведева')+'\n'+plain):
+        people = avatars.guide_participants(dict(second, linked_posts=[dict(post, text=text)]), [])
+        assert not any(person.get('owner') for person in people)
+    conflicting = linked.replace('11:00', '10:00').replace('id90171626', 'id999')
+    people = avatars.guide_participants(dict(second, linked_posts=[dict(post, text='\n'.join([linked, conflicting, plain]))]), [])
+    assert people[0]['owner'] is None

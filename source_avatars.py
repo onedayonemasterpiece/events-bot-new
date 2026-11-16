@@ -135,20 +135,33 @@ def _scheduled_guide_tags(row: dict[str, Any]) -> dict[str, set[int]]:
             published = datetime.fromisoformat(str(post.get("post_date") or day))
         except ValueError:
             continue
+        day_tags: dict[str, set[int]] = {}
+        plain_credits = set()
         for line in str(post.get("text") or "").splitlines():
-            if "[id" not in line or extract_time_text(line) != start or extract_date_iso(line, post_date=published) != day:
+            clock = extract_time_text(line)
+            if not clock or extract_date_iso(line, post_date=published) != day:
                 continue
             titles = list(QUOTE_TITLE_RE.finditer(line))
-            if len(titles) != 1 or normalize_title_key(titles[0][1]).replace("ё", "е") != title:
+            if len(titles) != 1:
                 continue
-            credit = re.match(r"\s*[,;—–-]?\s*гид(?:ы)?\s*[:—–-]?\s*(\[id\d+\|[^\]]+\]"
-                              r"(?:(?:\s*,\s*|\s+и\s+)\[id\d+\|[^\]]+\])*)", line[titles[0].end():], re.I)
+            matches_slot = clock == start and normalize_title_key(titles[0][1]).replace("ё", "е") == title
+            credit = re.match(r"\s*[,;—–-]?\s*гид(?:ы)?\b\s*[:—–-]?\s*(\S.*)", line[titles[0].end():], re.I)
             if not credit:
                 continue
-            for uid, label in re.findall(r"\[id([1-9]\d*)\|([^\]]+)\]", credit[1]):
+            names = credit[1].strip().rstrip(".!")
+            if matches_slot and re.fullmatch(r"[^\W\d_]+(?:[- ][^\W\d_]+)+", names):
+                plain_credits.add(names)
+            tag_list = re.match(r"\[id\d+\|[^\]]+\](?:(?:\s*,\s*|\s+и\s+)\[id\d+\|[^\]]+\])*", names, re.I)
+            for uid, label in re.findall(r"\[id([1-9]\d*)\|([^\]]+)\]", tag_list[0] if tag_list else ""):
                 name = " ".join(label.split())
                 if len(name.split()) >= 2:
-                    slots.setdefault(name, set()).add(int(uid))
+                    day_tags.setdefault(name.casefold().replace("ё", "е"), set()).add(int(uid))
+                    if matches_slot:
+                        slots.setdefault(name, set()).add(int(uid))
+        for name in plain_credits:
+            # The same announcement explicitly credits this person again, without repeating the VK link.
+            if ids := day_tags.get(name.casefold().replace("ё", "е")):
+                slots.setdefault(name, set()).update(ids)
     return slots
 
 
