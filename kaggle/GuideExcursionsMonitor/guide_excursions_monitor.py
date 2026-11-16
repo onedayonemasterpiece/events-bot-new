@@ -3030,6 +3030,7 @@ def _save_run_checkpoint(config, run_id, started_at, sources, partial):
                "started_at": started_at, "finished_at": datetime.now(timezone.utc).isoformat(),
                "partial": partial, "stats": _summarize_run_stats(sources), "sources": sources}
     _write_results(payload)
+    return payload
 
 
 def deliver_guide_results() -> None:
@@ -3058,7 +3059,7 @@ def deliver_guide_results() -> None:
             archive.unlink()
             return
         except Exception as exc:
-            print(f"[guide_result] delivery failed attempt={attempt + 1} error={type(exc).__name__}", flush=True)
+            print(f"[guide_result] delivery failed attempt={attempt + 1} error={type(exc).__name__} http_status={getattr(exc, 'code', None)}", flush=True)
             if isinstance(exc, urllib.error.HTTPError) and 400 <= exc.code < 500:
                 break
             if attempt < 2:
@@ -3169,18 +3170,8 @@ async def main() -> None:
         for resource_key in acquired_resources:
             if STATUS_CLIENT is not None:
                 STATUS_CLIENT.release_resource(resource_key)
-    stats = _summarize_run_stats(sources_output)
-    payload = {
-        "schema_version": 1,
-        "run_id": run_id,
-        "scan_mode": str(config.get("scan_mode") or "full"),
-        "started_at": started_at,
-        "finished_at": datetime.now(timezone.utc).isoformat(),
-        "partial": partial,
-        "stats": stats,
-        "sources": sources_output,
-    }
-    _write_results(payload)
+    payload = _save_run_checkpoint(config, run_id, started_at, sources_output, partial)
+    stats = payload["stats"]
     STATUS_PROGRESS.update(
         {
             "phase": "report",

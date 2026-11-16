@@ -45,7 +45,7 @@ def acknowledge_import(run_id: str) -> None:
         (kaggle_service.RESULTS_STORE_ROOT / f"guide-excursions-push-{run_id}" / ".delivery_pending").unlink(missing_ok=True)
 
 
-def _unpack(archive: Path, staging: Path, target: Path, run_id: str) -> Path:
+def _unpack(archive: Path, staging: Path, target: Path, run_id: str) -> tuple[Path, str]:
     with zipfile.ZipFile(archive) as bundle:
         limit = kaggle_service.RESULTS_STORE_MAX_MB * 1024 * 1024
         if limit and sum(item.file_size for item in bundle.infolist()) > limit:
@@ -62,10 +62,12 @@ def _unpack(archive: Path, staging: Path, target: Path, run_id: str) -> Path:
     if not isinstance(payload, dict) or payload.get("run_id") != run_id or not isinstance(payload.get("sources"), list):
         raise ValueError("Result run_id or sources mismatch")
     # A receipt must outlive an application/host restart, not just its waiter.
-    for path in staging.rglob("*"):
-        if path.is_file():
-            with path.open("rb") as file:
-                os.fsync(file.fileno())
+    for path in [*staging.rglob("*"), staging]:
+        descriptor = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
     try:
         staging.rename(target)
     except OSError as exc:
@@ -77,7 +79,7 @@ def _unpack(archive: Path, staging: Path, target: Path, run_id: str) -> Path:
         os.fsync(parent_fd)
     finally:
         os.close(parent_fd)
-    return target / result.name
+    return target / result.name, payload.get("scan_mode") or "full"
 
 
 async def receive_guide_results(request, db):
@@ -106,11 +108,11 @@ async def receive_guide_results(request, db):
         staging.mkdir()
         (staging / ".delivery_pending").touch()
         try:
-            result = await asyncio.to_thread(_unpack, archive, staging, target, run_id)
+            result, mode = await asyncio.to_thread(_unpack, archive, staging, target, run_id)
         except (ValueError, KeyError, OSError, zipfile.BadZipFile) as exc:
+            logger.warning("guide_result.rejected run_id=%s error=%s", run_id, exc)
             raise web.HTTPBadRequest(text=str(exc)) from exc
-    payload = json.loads(result.read_text())
-    receipt = {"results_path": str(result), "mode": payload.get("scan_mode") or "full"}
+    receipt = {"results_path": str(result), "mode": mode}
     # Keep this event even when a previous host decision marked the run failed.
     # It also survives removal/replacement of the kernel-keyed poller registry.
     async with _fresh_status_write_transaction(db, run_id=full_run_id) as conn:
@@ -144,7 +146,7 @@ async def pending_result_jobs(db):
             "WHERE e.event_name='guide_result_saved' AND NOT EXISTS ("
             "SELECT 1 FROM ops_run o WHERE o.kind='guide_monitoring' "
             "AND o.status IN ('success','partial','error') "
-            "AND json_extract(o.details_json,'$.run_id')=substr(e.run_id,15) "
+            "AND e.run_id='guide_monitor:' || json_extract(o.details_json,'$.run_id') "
             "AND json_type(o.details_json,'$.import_summary')='object')"
         )
         rows = await cur.fetchall()

@@ -366,7 +366,8 @@ async def test_resume_guide_monitor_jobs_uses_output_when_status_lookup_fails(
     async def fake_update_job_meta(*args, **kwargs):
         return None
 
-    async def fake_remove_job(job_type: str, kernel_ref: str) -> None:
+    async def fake_remove_job(job_type: str, kernel_ref: str, *, run_id=None) -> None:
+        assert run_id == "f18774f300c7"
         removed.append((job_type, kernel_ref))
 
     monkeypatch.setattr(guide_service, "KaggleClient", DummyKaggleClient)

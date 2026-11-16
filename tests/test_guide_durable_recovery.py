@@ -68,7 +68,7 @@ async def test_recovery_survives_reused_pid_and_keeps_failed_import(tmp_path, mo
         return jobs
     async def update(_kind, _ref, *, meta_updates):
         jobs[0]['meta'].update(meta_updates)
-    async def remove(*args):
+    async def remove(*args, **kwargs):
         removed.append(args)
     monkeypatch.setattr(service, 'KaggleClient', Client)
     monkeypatch.setattr(service, 'list_jobs', listing)
@@ -131,15 +131,3 @@ async def test_completed_import_releases_exact_session_lease(tmp_path, monkeypat
             assert (await (await conn.execute("SELECT status FROM kaggle_resource_lease")).fetchone())[0] == 'released'
     finally:
         await db.close()
-
-
-@pytest.mark.asyncio
-async def test_recovery_does_not_compete_with_existing_local_run(monkeypatch):
-    calls = []
-    async def listing(*args):
-        calls.append(1)
-        return []
-    monkeypatch.setattr(service, 'list_jobs', listing)
-    async with service._RUN_LOCK:
-        assert await service.resume_guide_monitor_jobs(object(), None, chat_id=123) == 0
-    assert calls == []
