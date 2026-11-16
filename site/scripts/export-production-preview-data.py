@@ -2707,7 +2707,7 @@ def build_event(
         **age_projection,
         "source_url": source_url,
         "source_urls": source_urls,
-        "source_medallions": source_medallions(source_urls, index=_SOURCE_AVATARS),
+        "source_medallions": source_medallions([row_get(row, "source_post_url") or row_get(row, "source_vk_post_url")], index=_SOURCE_AVATARS),
         "source_count": len(source_urls),
         "question_cta": event_question_cta(con, event_id, row),
         "telegraph_url": clean_text(row["telegraph_url"]) or None,

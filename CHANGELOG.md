@@ -1,3 +1,5 @@
+- Shared source medallions retain original-source identity and use alpha-preserving circular avatars across encoder, Telegram, VK and site data.
+
 ## 2026-11-16
 
 - VK relation cards accept shared source-avatar paths from the persistent data mount, preserving first-publication carousels.
