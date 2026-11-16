@@ -4632,5 +4632,71 @@
         21
       ]
     ]
+  },
+  "integrated_graph_run": {
+    "exporter_blob": "8d7afd6d9adbda7f483d1cbf9920dd4cd8bb3350",
+    "main": "55b20c63e1a0e475c3b4727ec83e435055916c22",
+    "n_pairs": 84,
+    "n_events": 690,
+    "main_without_programme_selection": {
+      "v2": [
+        12,
+        53
+      ],
+      "equal_mix": [
+        14,
+        57
+      ],
+      "jazz_11074_to_9762": [
+        14,
+        23
+      ]
+    },
+    "with_programme_selection": {
+      "v2": [
+        12,
+        55
+      ],
+      "equal_mix": [
+        15,
+        57
+      ],
+      "jazz_11074_to_9762": [
+        7,
+        15
+      ]
+    },
+    "recipe_parity": {
+      "archive_input_pairs_matched": 687,
+      "unavailable_exact_texts": [
+        10421,
+        10442,
+        10752
+      ],
+      "vectors_replayed": 690,
+      "max_abs_coordinate_error": 1.1102230246251565e-16
+    },
+    "live_projection_comparison": {
+      "observed_at": "2026-11-16T16:12:00Z",
+      "catalog_size": 699,
+      "matched_full_inputs": 686,
+      "changed_ids": [
+        10421,
+        10442,
+        10752,
+        10940
+      ],
+      "new_ids": [
+        11089,
+        11090,
+        11091,
+        11092,
+        11093,
+        11094,
+        11095,
+        11096,
+        11097
+      ]
+    }
   }
 }

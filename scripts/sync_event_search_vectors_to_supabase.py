@@ -14,6 +14,7 @@ import asyncio
 import hashlib
 import html
 import json
+import math
 import os
 import random
 import re
@@ -86,6 +87,7 @@ MONTHS_GENITIVE_RU = (
 CATALOG_REVISION_SCHEMA_VERSION = "event_search_catalog_revision_v1"
 CORPUS_REVISION_SCHEMA_VERSION = "event_search_corpus_revision_v2"
 COVERAGE_RECEIPT_SCHEMA_VERSION = "event_search_projection_coverage_v1"
+RELATED_DOC_VERSION = "event-related-doc-v3-equal-content-facts"
 DOCUMENT_KIND_CONTRACT = {
     "search_v3": ("text_hash", "search_doc_version"),
     "related_v1": ("related_text_hash", "related_doc_version"),
@@ -756,6 +758,7 @@ class SearchDoc:
     document: dict[str, Any]
     search_embedding_input: str
     related_embedding_input: str
+    related_facts_input: str = ""
 
 
 def build_search_doc(event: dict[str, Any], *, site_origin: str, base_path: str, ics_base_url: str) -> SearchDoc:
@@ -766,8 +769,12 @@ def build_search_doc(event: dict[str, Any], *, site_origin: str, base_path: str,
     # Gemini Embedding 2 has no taskType field; the task is part of the prompt.
     search_embedding_input = f"title: {clean_text(event.get('title'))} | text: {digest}"
     related_embedding_input = f"related-event: title: {clean_text(event.get('title'))} | text: {related_digest}"
+    summary = clean_text(event.get("summary"))[:5200] or clean_text(event.get("description_html"))[:2200]
+    related_facts_input = "\n".join(dict.fromkeys(filter(None, (
+        clean_text(event.get("title")), summary, clean_text(event.get("canonical_search_digest")),
+    ))))
     search_text_hash = sha256_text(search_embedding_input)
-    related_text_hash = sha256_text(related_embedding_input)
+    related_text_hash = sha256_text(_canonical_json([RELATED_DOC_VERSION, related_embedding_input, related_facts_input]))
     ticket = event.get("ticket") or {}
     weekday_iso, weekday_ru = event_weekday(event)
     time_of_day = event_time_of_day(event)
@@ -777,7 +784,7 @@ def build_search_doc(event: dict[str, Any], *, site_origin: str, base_path: str,
     doc = {
         "event_id": int(event["id"]),
         "search_doc_version": "event-search-doc-v3-search-facets",
-        "related_doc_version": "event-related-doc-v2-content-only",
+        "related_doc_version": RELATED_DOC_VERSION,
         "card_snapshot_version": "event-card-v3-media-layout",
         "text_hash": search_text_hash,
         "related_text_hash": related_text_hash,
@@ -828,6 +835,7 @@ def build_search_doc(event: dict[str, Any], *, site_origin: str, base_path: str,
         document=doc,
         search_embedding_input=search_embedding_input,
         related_embedding_input=related_embedding_input,
+        related_facts_input=related_facts_input,
     )
 
 
@@ -1013,13 +1021,19 @@ def fetch_existing_embeddings(event_ids: list[int], *, model: str, dim: int, doc
     if not event_ids:
         return {}
     out: dict[int, str] = {}
+    model_q = urllib.parse.quote(model, safe="")
+    kind_q = urllib.parse.quote(doc_kind, safe="")
+    scope = f"embedding_model=eq.{model_q}&embedding_dim=eq.{int(dim)}&embedding_doc_kind=eq.{kind_q}"
+    if doc_kind == "related_v1" and supabase_request("GET", (
+        f"event_embeddings?select=event_id&{scope}&limit=1"
+        f"&or=(metadata->>doc_version.is.null,metadata->>doc_version.neq.{RELATED_DOC_VERSION})"
+    )):
+        raise RuntimeError("Related index has a different document version; switch the complete index before incremental sync")
     chunk_size = 80
     for start in range(0, len(event_ids), chunk_size):
         chunk = event_ids[start : start + chunk_size]
         in_list = ",".join(str(int(x)) for x in chunk)
-        model_q = urllib.parse.quote(model, safe="")
-        kind_q = urllib.parse.quote(doc_kind, safe="")
-        path = f"event_embeddings?select=event_id,text_hash&embedding_model=eq.{model_q}&embedding_dim=eq.{int(dim)}&embedding_doc_kind=eq.{kind_q}&event_id=in.({in_list})"
+        path = f"event_embeddings?select=event_id,text_hash&{scope}&event_id=in.({in_list})"
         rows = supabase_request("GET", path) or []
         for row in rows:
             out[int(row["event_id"])] = str(row.get("text_hash") or "")
@@ -1125,8 +1139,10 @@ def noncanonical_embedding_rows(
     document_kinds: Iterable[str],
     embedding_model: str,
     embedding_dim: int,
+    deferred_related_ids: Iterable[int] = (),
 ) -> list[dict[str, Any]]:
-    """Select rows that cannot belong to the requested authoritative corpus."""
+    """Select incompatible rows, retaining compatible related vectors deferred by the call cap."""
+    deferred_related_ids = set(deferred_related_ids)
 
     expected = {int(doc.event_id): doc for doc in docs}
     requested = set(document_kinds)
@@ -1147,10 +1163,11 @@ def noncanonical_embedding_rows(
         doc = expected[event_id]
         hash_key, version_key = DOCUMENT_KIND_CONTRACT[kind]
         metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        deferred = kind == "related_v1" and event_id in deferred_related_ids
         if (
             str(row.get("embedding_model") or "") != str(embedding_model)
             or dim != int(embedding_dim)
-            or str(row.get("text_hash") or "") != str(doc.document.get(hash_key) or "")
+            or (not deferred and str(row.get("text_hash") or "") != str(doc.document.get(hash_key) or ""))
             or str(metadata.get("doc_version") or "")
             != str(doc.document.get(version_key) or "")
         ):
@@ -1292,6 +1309,16 @@ def gemini_embed(
             sleep_fn(wait_seconds)
 
 
+def equal_mix(content: list[float], facts: list[float], *, dim: int) -> list[float]:
+    def unit(values: list[float]) -> list[float]:
+        norm = math.hypot(*values)
+        if len(values) != dim or not math.isfinite(norm) or norm == 0:
+            raise ValueError("Invalid vector for related embedding")
+        return [value / norm for value in values]
+
+    return unit([a + b for a, b in zip(unit(content), unit(facts))])
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Sync static-site event search docs + Gemini embeddings to personalization Supabase pgvector.")
     parser.add_argument("--env-file", default=".env")
@@ -1330,6 +1357,8 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="Explicit no-op alias for the default planning mode.")
     args = parser.parse_args()
 
+    if args.prune_missing and (args.event_ids.strip() or args.limit > 0):
+        parser.error("--prune-missing requires the entire catalog")
     load_env(ROOT / args.env_file)
     fixture = json.loads(Path(args.preview_events_json).read_text(encoding="utf-8"))
     events = [dict(event) for event in (fixture.get("events") or [])]
@@ -1407,7 +1436,6 @@ def main() -> int:
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0
 
-    upserted_docs = upsert_documents(docs)
     existing_by_kind = {
         kind: fetch_existing_embeddings(
             [doc.event_id for doc in docs],
@@ -1417,8 +1445,10 @@ def main() -> int:
         )
         for kind in document_kinds
     }
+    upserted_docs = upsert_documents(docs)
     rows: list[dict[str, Any]] = []
     provider_calls = 0
+    deferred_related_ids: set[int] = set()
     embedding_client: GoogleAIClient | None = None
     skipped_by_kind = {kind: 0 for kind in document_kinds}
     skipped_ids_by_kind: dict[str, list[int]] = {kind: [] for kind in document_kinds}
@@ -1436,22 +1466,26 @@ def main() -> int:
                 skipped_by_kind[doc_kind] += 1
                 skipped_ids_by_kind[doc_kind].append(doc.event_id)
                 continue
-            if provider_calls >= max(0, int(args.max_provider_calls)):
+            inputs = (embedding_input,) if doc_kind == "search_v3" else (embedding_input, doc.related_facts_input)
+            if provider_calls + len(inputs) > args.max_provider_calls:
+                if doc_kind == "related_v1":
+                    deferred_related_ids.add(doc.event_id)
                 # The call cap limits provider work, not verification. Keep
                 # scanning the remaining documents so a zero-call audit can
                 # prove that every stored embedding is current.
                 continue
             if embedding_client is None:
                 embedding_client = build_embedding_client(key_env=args.google_key_env)
-            vector = gemini_embed(
-                embedding_input,
-                model=args.embedding_model,
-                dim=args.embedding_dim,
-                client=embedding_client,
-                rate_limit_retries=args.rate_limit_retries,
-                rate_limit_max_wait_seconds=args.rate_limit_max_wait_seconds,
-            )
-            provider_calls += 1
+            vectors = [
+                gemini_embed(
+                    text, model=args.embedding_model, dim=args.embedding_dim, client=embedding_client,
+                    rate_limit_retries=args.rate_limit_retries,
+                    rate_limit_max_wait_seconds=args.rate_limit_max_wait_seconds,
+                )
+                for text in inputs
+            ]
+            provider_calls += len(vectors)
+            vector = vectors[0] if doc_kind == "search_v3" else equal_mix(*vectors, dim=args.embedding_dim)
             rows.append({
                 "event_id": doc.event_id,
                 "embedding_model": args.embedding_model,
@@ -1505,7 +1539,7 @@ def main() -> int:
             )
     skipped_total = sum(skipped_by_kind.values())
     expected_embeddings = len(docs) * len(document_kinds)
-    not_embedded_due_call_cap = max(0, expected_embeddings - skipped_total - provider_calls)
+    not_embedded_due_call_cap = max(0, expected_embeddings - skipped_total - upserted_embeddings)
     stale_event_ids: list[int] = []
     if args.prune_missing:
         indexed_ids = fetch_indexed_event_ids()
@@ -1522,6 +1556,7 @@ def main() -> int:
             document_kinds=document_kinds,
             embedding_model=args.embedding_model,
             embedding_dim=args.embedding_dim,
+            deferred_related_ids=deferred_related_ids,
         )
         if rejected_embeddings:
             noncanonical_embeddings_deleted = delete_embedding_rows(

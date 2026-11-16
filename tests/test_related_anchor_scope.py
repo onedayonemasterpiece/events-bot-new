@@ -115,6 +115,16 @@ def test_first_publication_uses_changed_anchors_and_keeps_capped_work(tmp_path, 
     assert new_policy['related']['729']['strict_verified']
     assert not new_policy['related']['725']['strict_verified']
     assert not new_policy['strict_verified_related']
+    # A recipe change on rollout/rollback has no reusable retrieval, even with stable event IDs.
+    previous = json.loads(cache_path.read_text())
+    previous["schema_version"] = "event_pgvector_related_chain_v2_cache_20261114_content_vector_only"
+    previous["event_fingerprints"] = {key: "old-shape" for key in previous["event_fingerprints"]}
+    cache_path.write_text(json.dumps(previous))
+    previous_calls = len(retrieval)
+    rebuilt = run(anchors={729})
+    assert retrieval[previous_calls:] == [729]
+    assert rebuilt["related"]["729"]["strict_verified"]
+    assert not rebuilt["related"]["725"]["strict_verified"]
     cache_path.unlink()
     before_calls = len(audits), len(retrieval)
     cold_selected = run(anchors={729})
@@ -385,3 +395,102 @@ def test_missing_old_fingerprints_do_not_create_a_cold_audit_tail(tmp_path, monk
     count = len(audits)
     run(set())
     assert len(audits) == count
+
+
+def test_linked_dates_invalidate_warm_related_candidates(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location(
+        'related_link_change', os.getenv('RELATED_EXPORTER_PATH') or
+        Path(__file__).resolve().parents[1] / 'site/scripts/export-production-preview-data.py')
+    exporter = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(exporter)
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'test-only')
+    events = [dict(id=i, title=f'Programme {i}', other_date_ids=[]) for i in range(1, 5)]
+    calls = []
+    peers = {1: [2, 3], 2: [1, 3], 3: [4], 4: [3]}
+
+    def rpc(_name, payload, **kwargs):
+        anchor = payload['p_anchor_event_id']
+        calls.append(anchor)
+        return [{'event_id': peer, 'vector_similarity': .86 - rank * .01}
+                for rank, peer in enumerate(peers[anchor])]
+
+    def audit(*, candidates, **kwargs):
+        return {row['id']: {'llm_semantic_score': .9, 'confidence': .9,
+                            'reject': False, 'similarity_class': 'highly_similar'}
+                for row in candidates}
+
+    monkeypatch.setattr(exporter, 'personalization_supabase_request', rpc)
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+    cache_path = tmp_path / 'related.json'
+
+    def run(anchors):
+        return exporter.build_related(events, current_date='2026-11-16', related_mode='pgvector',
+                                      cache_path=cache_path, gemma_verify=True, anchor_ids=anchors)
+
+    assert run(None)['related']['1']['similar'] == [2, 3]
+    unlinked_cache = cache_path.read_text()
+    events[0]['other_date_ids'] = [2]
+    events[1]['other_date_ids'] = [1]
+    for anchors in (None, {1}):
+        cache_path.write_text(unlinked_cache)
+        calls.clear()
+        linked = run(anchors)['related']
+        assert linked['1']['similar'] == [3]
+        assert linked['2']['similar'] == [3]
+        assert linked['4']['similar'] == [3]
+        assert set(calls) == ({1, 2, 3, 4} if anchors is None else {1, 2})
+        calls.clear()
+        run(anchors)
+        assert calls == []
+
+    events[0]['other_date_ids'] = []
+    events[1]['other_date_ids'] = []
+    assert run({1})['related']['1']['similar'] == [2, 3]
+    assert calls == [1, 2]
+
+
+def test_scoped_anchor_sees_a_split_below_its_audit_cutoff(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location(
+        'related_programme_split', os.getenv('RELATED_EXPORTER_PATH') or
+        Path(__file__).resolve().parents[1] / 'site/scripts/export-production-preview-data.py')
+    exporter = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(exporter)
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'test-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT', '10')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '2')
+    events = [dict(id=i, title=f'Programme {i}', start_date='2026-11-17') for i in range(1, 28)]
+    events[1]['other_date_ids'] = [3]
+    events[2]['other_date_ids'] = [4, 2]
+    events[3]['other_date_ids'] = [3]
+    calls = []
+
+    def rpc(_name, payload, **kwargs):
+        anchor = payload['p_anchor_event_id']
+        calls.append(anchor)
+        ids = range(2, 28) if anchor == 1 else [27 if anchor != 27 else 26]
+        return [{'event_id': i, 'vector_similarity': .86 - rank * .001}
+                for rank, i in enumerate(ids)]
+
+    def audit(*, candidates, **kwargs):
+        return {row['id']: {'llm_semantic_score': .9, 'confidence': .99, 'reject': False}
+                for row in candidates}
+
+    monkeypatch.setattr(exporter, 'personalization_supabase_request', rpc)
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+    cache = tmp_path / 'related.json'
+
+    def run(anchors):
+        return exporter.build_related(events, current_date='2026-11-16', related_mode='pgvector',
+                                      cache_path=cache, gemma_verify=True, anchor_ids=anchors)
+
+    assert 4 not in run(None)['related']['1']['pure_related']
+    # Only 3 and 4 change direct links. Anchor 1's audited representative is 2.
+    events[2]['other_date_ids'] = [2]
+    events[3]['other_date_ids'] = []
+    calls.clear()
+    result = run({1})['related']['1']
+    assert result['strict_verified'] and 4 in result['pure_related']
+    assert calls == [1, 2, 3, 4]
+    calls.clear()
+    run({1})
+    assert not calls

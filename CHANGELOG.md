@@ -11,6 +11,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Event-to-event Gemini retrieval now combines the existing description embedding with accepted event facts in the same related vector and selects independent programmes before repeated dates. The incremental writer accounts for both embedding calls and checks the active index version.
 - Related events keep the verified Gemma decisions from partial batches and request the missing candidates before marking an event ready for VK publication.
 - Redact signed VK upload tickets in existing API error and CAPTCHA logs while preserving upload requests and cached recovery parameters.
 - Explain rejected rich facts in the existing warning with quote presence/length and full-source lexical support metrics, without logging source quotes or changing fact admission.
