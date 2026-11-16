@@ -478,3 +478,31 @@ authoritative ERROR observation: failed_reconciled, callback_event_count4,
 released_resource_count1. This is an observed-failure incident mitigation, not a
 fake terminal, reset or new provider push. RECONCILE_024229_USED marks it used;
 do not repeat. Normal successor adoption/publication still must be observed.
+
+### 16 November: successful related-only adoption also closes its Kaggle run
+
+After the failure fix PR1011, run030543 validated/downloaded five files and
+adopted JSON generated01:13:45 at01:17:48. Events11068/11069 became verified and
+ordinary initial jobs completed01:21:58/01:22:21. Its missed terminal callback
+still left ledger alive/export and builder lease active. Successor031916 failed
+busy at01:20:44. This was a successful-result branch bypass, not recurrence of
+the explicit ERROR branch fixed by1011.
+
+The related-only early return skipped the existing HTML terminal reconciliation.
+Invoke existing reconcile_kaggle_run_terminal_from_host before finishing the
+claim in that branch. The runner has already validated and atomically imported
+JSON. Keep published=false; no HTML candidate is published. If reconciliation
+fails, propagate before claim completion so the existing exact handoff retries.
+No new status, controller, retry, queue or model call is needed (five lines).
+
+The initialized completion regression now seeds an alive run/owned lease plus
+an unrelated lease, and injects a reconciliation failure in the opposite case.
+Require success to close ledger/release owned lease/clear claim without HTML
+success, and failure to retain claim and lease. Existing ledger and related-only
+suite:34 PASS. Exact baseline comparison and mandatory CI are recorded in PR.
+
+The already completed030543 was reconciled once using the actual validated
+receipt: reconciled, callback_event_count5, released_resource_count1.
+RECONCILE_030543_USED prevents repeating that incident mitigation. This neither
+pushes a kernel nor resets the queue or edits VK. Future prevention remains a
+normal main release; verify the next ordinary adoption and Event11070 initial.

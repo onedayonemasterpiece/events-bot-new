@@ -25142,6 +25142,11 @@ async def _finish_static_site_candidate(
             "input_fingerprint": input_fingerprint, "published": False,
             "related_retrieval": related_result.get("related_retrieval"),
         }})
+        from kaggle_status import reconcile_kaggle_run_terminal_from_host
+
+        await reconcile_kaggle_run_terminal_from_host(
+            db, run_id=run_id, message="host validated related-only result",
+        )
         await asyncio.to_thread(
             finish_static_site_build_claim, db.path, claim_token=claim_token,
             run_id=run_id, input_fingerprint=input_fingerprint,
