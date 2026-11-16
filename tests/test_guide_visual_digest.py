@@ -550,3 +550,19 @@ async def test_vk_writer_heading_is_removed_only_when_it_is_a_separate_matching_
     assert text.count("ЗЕЛЁНЫЕ ИСТОРИИ") == 1
     assert "РАССВЕТ НАД БАЛТИКОЙ\nРАССВЕТ НАД БАЛТИКОЙ проходит в городе." in text
     assert "ДРУГОЙ ЗАГОЛОВОК На ферме покажут осетров." in text
+
+
+@pytest.mark.parametrize("header", ["Расписание:\n", ""])
+def test_timetable_line_grounds_only_an_excursion_without_details(header):
+    row = {"canonical_title": "Рассвет над Балтикой", "date": "2026-11-20",
+           "guide_names": ["Ноза Усманова", "Другой гид"], "fact_pack": {}}
+    post = {"text": "Про растения.\n" + header
+            + "13.11 (пт) 14:00 — «Рассвет над Балтикой», гид Другой гид.\n"
+            + "🔸 20.11 (пт) 14:00 — «Рассвет над Балтикой», гид [id123|Ноза Усманова]",
+            "post_kind": "announce_multi", "raw_facts_json": None}
+    vd._scope_visual_source(row, post)
+    ids = {3: (123, "Ноза Усманова")}
+    assert vd._timetable_description([row], ids) == "Гид — [[3|Ноза Усманова]]."
+    assert vd._timetable_description([dict(row, timetable_guides=[])], ids) == "Экскурсия включена в расписание."
+    assert vd._timetable_description([dict(row, route_summary="Ленинский проспект")], ids) is None
+    assert vd._timetable_description([row, {"canonical_title": "Рассвет над Балтикой"}], ids) is None

@@ -636,6 +636,7 @@ def _place_line(row: Mapping[str, Any]) -> str:
 
 def _scope_visual_source(row: dict[str, Any], post: Mapping[str, Any]) -> None:
     """Keep a programme's other outings out of both the caption and the story."""
+    row.pop("timetable_guides", None)
     entries = _parse_json_array(post["raw_facts_json"])
     titles = {_plain(e.get("canonical_title") or e.get("title")).casefold()
               for e in entries if isinstance(e, Mapping)}
@@ -666,6 +667,21 @@ def _scope_visual_source(row: dict[str, Any], post: Mapping[str, Any]) -> None:
             schedule = parts[-1]
             excerpt = "\n".join(line.strip() for line in schedule.splitlines()
                                 if title and title in line.casefold())
+            # A bare dated line can establish a guide, but no scenery or route.
+            date_parts = date_iso.split("-")
+            if excerpt and len(date_parts) == 3:
+                day_month = f"{date_parts[2]}.{date_parts[1]}"
+                timetable = re.compile(
+                    r"[^\w]*" + re.escape(day_month) + r"(?:\.\d{4})?\s*(?:\(\w{2}\)\s*)?"
+                    r"(?:\d{1,2}:\d{2}\s*)?[—–-]\s*[«\"]?" + re.escape(title)
+                    + r"[»\"]?\s*(?:,\s*гид\s+(?P<guide>[\w-]+(?:\s+[\w-]+){0,2}))?[.\s]*", re.I)
+                day_lines = [line for line in excerpt.splitlines() if day_month in line]
+                plain_lines = [re.sub(r"\[id\d+\|([^\]]+)\]", r"\1", line) for line in day_lines]
+                line_matches = [timetable.fullmatch(line) for line in plain_lines]
+                if line_matches and all(line_matches):
+                    known = row.get("guide_names") or _fact(row, "guide_names") or []
+                    named = {(m["guide"] or "").casefold() for m in line_matches}
+                    row["timetable_guides"] = [name for name in known if name.casefold() in named]
     row["excursion_excerpt"] = excerpt
     pack = row.get("fact_pack") or {}
     hook = _plain(pack.get("main_hook"))
@@ -2106,6 +2122,26 @@ def _vk_schedule_lines(details: Sequence[tuple[str, str, str, str]]) -> list[str
     return [" · ".join(x for x in (w, f"💳 {p}" if p else "", c) if x) for w, p, c, _ in slots]
 
 
+def _timetable_description(
+    rows: Sequence[Mapping[str, Any]], mention_ids: Mapping[int, tuple[int, str]],
+) -> str | None:
+    if not all("timetable_guides" in row for row in rows):
+        return None
+    for row in rows:
+        title = _plain(row.get("canonical_title")).casefold()
+        for field in ("main_hook", "route_summary", "meeting_point"):
+            detail = _plain(_fact(row, field) or row.get(field)).casefold()
+            if detail and detail != title:
+                return None
+    guides = [name for name in rows[0]["timetable_guides"]
+              if all(name in row["timetable_guides"] for row in rows)]
+    if not guides:
+        return "Экскурсия включена в расписание."
+    markers = {name: f"[[{n}|{name}]]" for n, (_, name) in mention_ids.items()}
+    byline = ", ".join(markers.get(name, name) for name in guides)
+    return f"{'Гид' if len(guides) == 1 else 'Гиды'} — {byline}."
+
+
 async def _assemble_vk_narrative(
     items: Sequence[Mapping[str, Any]],
     narrative: Mapping[str, Any],
@@ -2199,7 +2235,8 @@ async def _assemble_vk_narrative(
         first_line, separator, rest = body.partition("\n")
         if separator and first_line.strip() == heading:
             body = rest
-        blocks.append("\n".join(x for x in [heading, story(collapse_ws(body)), *lines] if x))
+        body = _timetable_description(rows, mention_ids) or collapse_ws(body)
+        blocks.append("\n".join(x for x in [heading, story(body), *lines] if x))
     if narrative.get("outro"):
         blocks.append(story(narrative["outro"]))
     blocks.append("Это дайджест экскурсий по Калининградской области от «Ух ты, Калининград!».")
