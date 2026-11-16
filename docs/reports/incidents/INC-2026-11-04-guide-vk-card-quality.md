@@ -325,3 +325,58 @@ manual transport, source dates or event rows were assigned. Retained receipts:
 `guide-transport-live-acceptance-20261116.log` in the canonical incident artifact
 directory. Completed preflight fixtures can be removed; keep release rollback
 and canonical source results.
+
+
+### 16 November 2026 — Preserving explicit source exclusions
+
+PR 1047 removes field-density promotion of an explicit negative extraction
+result. The original OSQ announcement (Telegram excursions_profitour/982)
+offers a November 19 visit for an organized school group. FULL 19 correctly
+returned digest_eligible=false with that explanation, but the server promoted
+it to true because logistics fields were populated. Net production change:
+-14 lines; existing status/date checks stay in place. No second classifier,
+LLM call, queue, retry, flag or model/quota change was introduced.
+
+The normal-import regression reproduced two failures before the change;
+the corrected focused suite passed 18 tests, and the exact candidate image
+passed all four eligibility cases. All four required GitHub checks passed.
+Merged main: 193578780cd25b991b5238c8d1d44caec7dbd46b. The exact image
+runcoveer/events:guide-exclusion-20261116 has immutable ID
+sha256:f4f1fa984ddb581380569fddad656b298839fe43b3fcb500a12dd6ffa87e71b2;
+all 4524 tracked files matched Git. Network-isolated preflight boot passed
+with scheduler and webhook disabled; production data was not mounted.
+
+FULL 19 was accepted through the existing saved-input recovery in ops 12405:
+192 reports, 187 ok / 5 partial, 309 posts, 89 LLM ok / 3 deferred / 2 errors.
+Its registry is settled. The last resume created undated/ineligible row 788
+and updated 61 rows. The real PUSH failed with three URLError responses;
+fallback acceptance is not direct-PUSH acceptance. The observed 355 MiB media
+bundle exceeded the old 128 MiB receiver capacity; 512 MiB is now active.
+That mismatch alone does not prove the cause of the unclassified URLError.
+
+One ordinary FULL 20 (run 0f1ee3ff3b88, ops 12414, version 20) is reading all
+201 sources, including late IDs 197–205. Its frozen config was independently
+compared with the enabled registry: no source missing. Do not submit it again.
+The separate CLI container uses the previous immutable image, so the app
+release does not repair its already-loaded importer. OSQ row 786 still needs
+normal source-level acceptance on the corrected code after that run settles;
+no category was manually changed. School-group rows 765/783 have a different
+semantic extraction defect (raw positive eligibility), not fixed by PR 1047.
+The old Noza programme 6285 is outside the five-day scan window and still
+needs the existing targeted source path. These limits remain explicit.
+
+Evidence is retained in the canonical incident artifact directory:
+guide19-terminal12405-and-links-20261116.json,
+guide-version20-frozen-coverage-20261116.json,
+guide-exclusion-build-20261116.log,
+guide-exclusion-candidate-test-20261116.log and
+guide-exclusion-cutover-20261116.log. No accepted import, public digest,
+Stories or prior Slack success message was repeated.
+
+Events-only cutover completed: effective environment and mounts were unchanged,
+Kotopogoda container identity was unchanged, live health returned ok=true,
+ready=true, issues=[], and receiver capacity remained 512 MiB. Rollback image
+is sha256:3790fe576507360d35bb3711026492e3daf7408fea0bfb511238a8ca72c23063.
+The FULL 20 one-off remained running after cutover. Live receipt:
+guide-exclusion-live-and-guide20-20261116.json. Production OSQ source
+acceptance has not been executed while that run owns the guide lock.
