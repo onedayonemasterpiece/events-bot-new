@@ -10,6 +10,8 @@
 
 ### Fixed
 
+- Guide schedule cards use source-anchored travel modes for the tour, including mixed itineraries. Sparse announcements can reuse an explicitly linked route or monthly program.
+
 - Telegraf in Svetlogorsk has one shared circular venue medallion for site, VK and Telegram, prepared from its official channel avatar.
 
 - Shared site and VK medallions recognize the observed declined names of the Hermann Brachert museum; a street bearing the surname does not select the museum medallion.

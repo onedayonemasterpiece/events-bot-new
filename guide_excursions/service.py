@@ -2379,6 +2379,18 @@ async def _insert_occurrence_claims(
                 "organizer_names": list(parsed.organizer_names),
             }
         )
+    # Keep the typed facts when an enrichment supplies its own claim list.
+    claims = [claim for claim in claims if claim["fact_key"] not in {"transport", "group_format", "program"}]
+    if program := (fact_pack or {}).get("program"):
+        claims.append({"fact_key": "program", "fact_value": program})
+    if group_format := (fact_pack or {}).get("group_format"):
+        claims.append({"fact_key": "group_format", "fact_value": group_format})
+    transport = (fact_pack or {}).get("transport")
+    if isinstance(transport, Mapping) and isinstance(transport.get("modes"), list) and transport.get("quote"):
+        provenance = {key: transport.get(key) for key in ("quote", "scope", "source_block_id")}
+        if provenance["scope"] == "program" and program and not parsed.date_iso:
+            provenance["program"] = program
+        claims.append({"fact_key": "transport", "fact_value": transport["modes"], "provenance": provenance})
     await _insert_entity_claims(
         conn,
         entity_kind="occurrence",
@@ -2397,6 +2409,7 @@ async def _upsert_occurrence(
     parsed: GuideParsedOccurrence,
     template_id: int | None,
     fact_pack: Mapping[str, Any] | None = None,
+    fact_claims: Sequence[Mapping[str, Any]] | None = None,
 ) -> tuple[int, bool]:
     cur = await conn.execute(
         """
@@ -2617,6 +2630,7 @@ async def _upsert_occurrence(
         post_id=post_id,
         parsed=parsed,
         fact_pack=fact_pack,
+        fact_claims=fact_claims,
     )
     return occurrence_id, created
 
@@ -3175,6 +3189,7 @@ async def _import_source_payload(
                 parsed=parsed,
                 template_id=template_id,
                 fact_pack=fact_pack,
+                fact_claims=occurrence_claims,
             )
             if occurrence_id:
                 enrich_targets.append(
@@ -3193,14 +3208,6 @@ async def _import_source_payload(
                         "guide_names": list(parsed.guide_names),
                         "post_excerpt": post.text,
                     }
-                )
-                await _insert_occurrence_claims(
-                    conn,
-                    occurrence_id=occurrence_id,
-                    post_id=post_id,
-                    parsed=parsed,
-                    fact_pack=fact_pack,
-                    fact_claims=occurrence_claims,
                 )
                 if created:
                     metrics["occurrences_created"] += 1

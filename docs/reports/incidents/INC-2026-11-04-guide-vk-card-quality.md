@@ -242,3 +242,20 @@ list; sparse status updates still preserve roles. The distinguishing test uses
 the ordinary results importer twice, fails before the change with the old
 organizer still present, and passes after it. This fixes the stored data path,
 not only its portrait rendering.
+
+### 16 November 2026 — Transport evidence on schedule cards
+
+The old card selected walking from street names and missed the extracted value
+`walking_tour`. Replacing an occurrence fact pack on a sparse update could also
+discard transport. The normal import now keeps post-linked, scoped transport
+claims. Card selection uses direct evidence, a named route template, or an
+explicitly linked monthly VK programme. Group size remains a participation fact.
+
+Retained comparison: `transport-d07db37d/` in the incident artifact directory.
+Nine real primary inputs produced 26 Tier-1/template rows on main and 30 on the
+candidate. On a disposable import, the 20 and 28 November “Рассвет над Балтикой”
+cards showed walking with both the schedule (wall-211429559_3892) and programme
+(wall6939421_6285) URLs. The 22 November farm card had no transport. The source
+poster and both canonical posts were already inspected; neither has a repost
+that explains these cases. This change has no VK ingestion or publisher delta.
+Release, live import and public card verification belong to coordinator acceptance.

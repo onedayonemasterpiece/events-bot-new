@@ -1400,7 +1400,8 @@ def prefilter_pass(post: ScannedPost, source_kind: str, flags: dict[str, Any]) -
         or any(token in collapse_ws(post.text).lower() for token in ("авторская", "приглашаем", "пешеходная"))
     ):
         return False
-    return any(flags[key] for key in ("has_date_signal", "has_booking_signal", "has_status_signal", "grouped_album_present"))
+    linked_schedule = "расписани" in post.text.casefold() and re.search(r"\[club\d+\|", post.text)
+    return bool(linked_schedule) or any(flags[key] for key in ("has_date_signal", "has_booking_signal", "has_status_signal", "grouped_album_present"))
 
 
 def _line_cleanup(line: str) -> str:
@@ -1493,6 +1494,11 @@ def build_occurrence_blocks(text: str, *, limit: int = 8) -> list[dict[str, Any]
     blocks: list[dict[str, Any]] = []
     for idx, block in enumerate(split_occurrence_blocks(text), start=1):
         cleaned = collapse_ws(block)
+        # An extended introduction can hide the first dated line from the compact schedule index.
+        if len(cleaned) > 1200 and not _has_schedule_anchor(cleaned[:420]):
+            anchor = DATE_RE.search(cleaned)
+            if anchor:
+                cleaned = cleaned[anchor.start():]
         if not cleaned:
             continue
         schedule_anchor_text = collapse_ws(_normalize_keycap_digit_dates(cleaned))
@@ -1622,6 +1628,9 @@ def _compact_post_payload(
     }
     if for_extract:
         payload["schedule_blocks"] = _compact_occurrence_blocks(post.text, limit=8)
+        first_date = next((m.start() for m in re.finditer(r"[^\n]+", post.text) if _has_schedule_anchor(m[0])), 0)
+        if first_date > excerpt_limit:
+            payload["before_first_date"] = collapse_ws(post.text[:first_date])[-excerpt_limit:]
     return payload
 
 
@@ -1695,12 +1704,37 @@ _OCCURRENCE_FIELD_TYPES: dict[str, dict[str, Any]] = {
     "title_normalized": {"type": "string"},
     "date": {"type": "string"},
     "time": {"type": "string"},
-    "duration_text": {"type": "string"},
+    "duration_text": {"type": "string", "description": "Duration for this named tour only. Omit if stated for another tour in the post."},
     "city": {"type": "string"},
-    "meeting_point": {"type": "string"},
-    "route_summary": {"type": "string"},
+    "meeting_point": {"type": "string", "description": "Meeting point for this named tour only, or expressly shared by all listed tours."},
+    "route_summary": {"type": "string", "description": "Itinerary for this named tour only. Omit when only a different route is described."},
     "audience_fit": {"type": "array", "items": {"type": "string"}},
-    "group_format": {"type": "string"},
+    "group_format": {"type": "string", "description": "Participation arrangement only (open, small_group, private) when stated."},
+    "program": {"type": "object", "description": (
+        "Only for a tour explicitly listed in a particular monthly project schedule, or an undated "
+        "announcement of that entire monthly schedule: copy its exact VK [clubNN|name] mention and "
+        "calendar month YYYY-MM. Do not infer membership from the page/guide or a nearby event."),
+        "properties": {"mention": {"type": "string"}, "month": {"type": "string"}}},
+    "transport": {
+        "type": "object",
+        "description": (
+            "How participants travel ON this tour. Omit unless stated in a verbatim source quote. "
+            "A farm, out-of-town school, long trip, street, or meeting at a bus stop proves no mode. "
+            "For mixed tours include each stated leg. Never borrow transport, duration, route or meeting "
+            "point from a featured tour for a different title in the schedule footer. "
+            "Use route scope only when the source describes the named route itself across dates, "
+            "without a date/season restriction. For an explicit statement covering a specific monthly "
+            "programme as a whole use program scope and quote the full clause including month and mode. "
+            "Otherwise use occurrence scope. A project name is not a route."
+        ),
+        "properties": {
+            "modes": {"type": "array", "items": {"type": "string", "enum": ["walk", "bus", "tram", "boat", "route"]},
+                      "description": "route means explicit travel by car/jeep. Do not infer bus from a transfer."},
+            "quote": {"type": "string", "description": "Exact words naming the mode(s) for this tour."},
+            "scope": {"type": "string", "enum": ["occurrence", "route", "program"]},
+        },
+        "required": ["modes", "quote", "scope"],
+    },
     "price_text": {"type": "string"},
     "booking_text": {"type": "string"},
     "booking_url": {"type": "string"},
@@ -1971,7 +2005,7 @@ def _merge_occurrence_layers(base: dict[str, Any], patch: dict[str, Any]) -> dic
     }
     list_keys = {"audience_fit", "guide_names", "organizer_names"}
     for key, value in patch.items():
-        if key == "fact_pack":
+        if key in {"fact_pack", "transport", "program"}:
             continue
         if key == "fact_claims":
             existing = merged.get("fact_claims") if isinstance(merged.get("fact_claims"), list) else []
@@ -2068,6 +2102,7 @@ async def screen_post(
         "- if the body is mostly historical/reportage but ends with or inserts a concrete future excursion CTA — including relative date markers (this Sunday, tomorrow, next weekend) or a named guide — treat it as announce or status_update, not reportage; absence of exact time or meeting point is fine\n"
         "- on-demand offers or posts saying only that dates remain without naming the dates may be announce/template_only, but digest_eligible_default must be no or mixed until a concrete future date is grounded\n"
         "- generic calendars, inspiration, bloom/lifestyle, or travel-wishlist posts without a concrete excursion -> ignore\n"
+        "- A promised schedule can already state a reusable fact. Example: 'скоро расписание на ноябрь групповых пешеходных экскурсий' with the named project -> decision=template_only, post_kind=template_signal, extract_mode=template, digest_eligible_default=no. No date or route name is needed. A bare 'скоро расписание' supplies no such fact.\n"
         "- if one post clearly contains several different excursions led by the source's own guide, use announce_multi\n"
         "- a post that enumerates multiple festivals/events across different cities or regions as a round-up/travel calendar is template_only or ignore, even when one entry falls inside source.base_region; individual enumerated entries are not per-guide excursions and must not be materialized as announce\n"
         "- base_region_fit is your own semantic judgement about whether the concrete excursion(s) in the post take place inside source.base_region; it must not be derived from keyword matching alone\n"
@@ -2173,6 +2208,8 @@ async def _extract_announce_post_tier1(
         "city",
         "meeting_point",
         "route_summary",
+        "transport",
+        "program",
         "audience_fit",
         "group_format",
         "price_text",
@@ -2212,6 +2249,7 @@ async def _extract_announce_post_tier1(
         "- set base_region_fit per occurrence by your own judgement versus source.base_region (inside|outside|ambiguous|unknown); do not rely on keyword matching\n"
         "- if an occurrence clearly takes place outside source.base_region, set base_region_fit=outside; do not silently drop it, let the server filter\n"
         "- do not invent details; if a field is unclear, leave it empty\n"
+        "- post.before_first_date is the featured tour description immediately before its schedule. If it explicitly names a walking/bus tour, attach that quoted mode to each dated line bearing the same route title, even when another guide's dates intervene. Other titles get none of its duration, meeting point, route or transport. Include explicit transport in booking calls to action for this very tour.\n"
         "- keep only Tier-1 public facts; no extra commentary or hidden thinking traces\n\n"
         f"Input:\n{json.dumps({'source': compact_source, 'screen': compact_screen, 'post': compact_post}, ensure_ascii=False)}"
     )
@@ -2278,6 +2316,8 @@ async def _extract_status_post(
         "city",
         "meeting_point",
         "route_summary",
+        "transport",
+        "program",
         "price_text",
         "booking_text",
         "booking_url",
@@ -2333,6 +2373,8 @@ async def _extract_template_post(
         "title_normalized",
         "city",
         "route_summary",
+        "transport",
+        "program",
         "audience_fit",
         "group_format",
         "booking_text",
@@ -2357,6 +2399,7 @@ async def _extract_template_post(
         "- no future date means digest_eligible must stay false\n"
         "- if the same post also contains concrete dated occurrence blocks for this route, do not create a duplicate template occurrence\n"
         "- volunteer cleanups, subbotniks, restoration work days, community service, lectures without a guided route, and generic meetups are not template excursions unless a guided route/walk/tour is the primary reusable offer\n"
+        "- if the source announces a monthly program of tours of a stated type, return its program.mention (verbatim VK community link) and program.month (YYYY-MM from post date and the stated month); transport.scope=program needs both. Quote the whole statement including month. Never create dates or a specific route from this.\n"
         "- use template_hint for reusable route/topic information\n"
         "- OCR may contribute reusable route/topic facts only when they are explicit on the poster/image\n"
         "- do not invent schedule facts\n"
@@ -2379,6 +2422,7 @@ def _clean_occurrence_payload(
     post: ScannedPost,
     source_payload: dict[str, Any],
     screen: dict[str, Any] | None = None,
+    ocr_chunks: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     title = collapse_ws(item.get("canonical_title"))
     if not title:
@@ -2442,8 +2486,38 @@ def _clean_occurrence_payload(
         "template_hint": item.get("template_hint") if isinstance(item.get("template_hint"), dict) else {},
         "profile_hint": item.get("profile_hint") if isinstance(item.get("profile_hint"), dict) else {},
     }
-    if not out["fact_pack"]:
-        out["fact_pack"] = {}
+    # Only the typed extraction may establish a transport claim.
+    out["fact_pack"].pop("transport", None)
+    out["fact_pack"].pop("group_format", None)
+    out["fact_pack"].pop("program", None)
+    program = item.get("program")
+    if isinstance(program, dict):
+        mention = collapse_ws(program.get("mention"))
+        month = collapse_ws(program.get("month"))
+        club = mention.lstrip("[").partition("|")[0]
+        if club in re.findall(r"\[(club[1-9]\d*)\|", post.text) and re.fullmatch(r"\d{4}-(0[1-9]|1[012])", month):
+            if not date_iso or date_iso[:7] == month:
+                out["fact_pack"]["program"] = f"{club}:{month}"
+    transport = item.get("transport")
+    if isinstance(transport, dict):
+        quote = collapse_ws(transport.get("quote"))
+        block_id = out["source_block_id"]
+        evidence = [post.text, *(_ocr_chunk_text(chunk) for chunk in ocr_chunks or [])]
+        if (screen or {}).get("post_kind") == "announce_multi":
+            blocks = build_occurrence_blocks(post.text)
+            evidence = [block["text"] for block in blocks if block["id"] == block_id]
+            if evidence:
+                route_key = normalize_title_key(title_normalized)
+                for paragraph in re.split(r"\n\s*\n", post.text):
+                    if route_key and f" {route_key} " in f" {normalize_title_key(paragraph)} ":
+                        evidence.append(paragraph)
+        if quote and any(quote.casefold() in collapse_ws(text).casefold() for text in evidence):
+            modes = _string_list_value(transport.get("modes"))
+            if modes and all(mode in {"walk", "bus", "tram", "boat", "route"} for mode in modes):
+                out["fact_pack"]["transport"] = {
+                    "modes": sorted(modes), "quote": quote, "source_block_id": block_id,
+                    "scope": transport.get("scope") or "occurrence",
+                }
     out["fact_pack"]["base_region_fit"] = base_region_fit
     if route_summary and "route_summary" not in out["fact_pack"]:
         out["fact_pack"]["route_summary"] = route_summary
@@ -2485,6 +2559,8 @@ async def _extract_occurrence_block(
         "city",
         "meeting_point",
         "route_summary",
+        "transport",
+        "program",
         "audience_fit",
         "group_format",
         "price_text",
@@ -2554,6 +2630,7 @@ async def _extract_occurrence_block(
         post=post,
         source_payload=source_payload,
         screen=screen,
+        ocr_chunks=ocr_chunks,
     )
 
 
@@ -2762,7 +2839,7 @@ async def extract_post(
                     ocr_chunks=ocr_chunks,
                 )
                 merged_item = _merge_occurrence_layers(item, semantic_patch)
-            occurrence = _clean_occurrence_payload(merged_item, post=post, source_payload=source_payload, screen=screen)
+            occurrence = _clean_occurrence_payload(merged_item, post=post, source_payload=source_payload, screen=screen, ocr_chunks=ocr_chunks)
             if occurrence:
                 fingerprint = str(occurrence.get("source_fingerprint") or "")
                 if fingerprint and fingerprint in seen_fingerprints:
