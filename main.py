@@ -19451,11 +19451,11 @@ DEPENDENCY_RETRY_HORIZON = timedelta(days=7)
 
 
 def _static_site_pre_handoff_stale_seconds() -> int:
-    """Short recovery window before a durable static-build claim exists.
+    """Short recovery window before remote execution is observed.
 
-    A remote build keeps the full 90-minute runtime budget.  A row left
-    ``running`` by a process restart before it wrote a durable claim/handoff
-    must not block Smart Update for the same 90 minutes.
+    A remote build keeps the full runtime budget. A row left ``running`` by
+    a process restart before handoff or while its ledger is only ``created``
+    must return to exact adoption instead of holding that whole budget.
     """
 
     raw = (os.getenv("STATIC_SITE_PRE_HANDOFF_STALE_SECONDS") or "").strip()
@@ -19805,7 +19805,7 @@ async def _run_due_jobs_once_locked(
                     (active_static_job_id and int(active_static_job_id) == int(rjob.id))
                     or isinstance(payload.get("remote_handoff"), Mapping)
                 )
-                if not has_durable_owner:
+                if not has_durable_owner or remote_status == "created":
                     limit = min(limit, _static_site_pre_handoff_stale_seconds())
             age = (now - rjob.updated_at).total_seconds()
             if age > limit:
@@ -19819,7 +19819,7 @@ async def _run_due_jobs_once_locked(
                         stale_seconds=max(int(limit), 7200),
                         now=now,
                     )
-                    if remote_run_id:
+                    if remote_run_id and remote_status != "created":
                         logging.info(
                             "STATIC_SITE_REMOTE_STILL_LIVE job_id=%s run_id=%s age=%s",
                             rjob.id,
@@ -25714,6 +25714,12 @@ async def _recover_previous_static_site_attempt(
     if proc.returncode == 75:
         raise StaticSiteSingleFlightDeferred(f"static_site_remote_recovery_live:{claim.run_id}")
     if proc.returncode == 76:
+        from kaggle_status import reconcile_kaggle_run_failure_from_host
+
+        await reconcile_kaggle_run_failure_from_host(
+            db, run_id=claim.run_id,
+            message="host rejected unavailable static-site handoff before replacement",
+        )
         await asyncio.to_thread(
             finish_static_site_build_claim,
             db.path,
