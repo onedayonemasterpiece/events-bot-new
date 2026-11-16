@@ -1497,6 +1497,17 @@ def adopt_existing_kernel_output(args: argparse.Namespace, client, kernel_ref: s
     print(f'[static-site-kaggle] adoption status={raw} raw={status}', flush=True)
     if raw in {'QUEUED', 'RUNNING', 'INITIALIZING', 'PREPARING'}:
         return ADOPT_REMOTE_LIVE_EXIT
+    if raw in {'ERROR', 'FAILED', 'CANCELLED', 'CANCELED'}:
+        status_db = (getattr(args, 'status_db', '') or os.getenv('STATIC_SITE_STATUS_DB') or '').strip()
+        if status_db and getattr(args, 'run_id', None):
+            from db import Database
+            from kaggle_status import reconcile_kaggle_run_failure_from_host
+
+            reconciliation = asyncio.run(_create_status_config_and_close(
+                Database(status_db), reconcile_kaggle_run_failure_from_host,
+                run_id=args.run_id, message=f'Exact Kaggle adoption observed terminal status {raw}',
+            ))
+            print(f'[static-site-kaggle] terminal adoption reconciled: {reconciliation}', flush=True)
     if raw != 'COMPLETE':
         return ADOPT_REMOTE_UNAVAILABLE_EXIT
     out_dir = prepare_output_directory(OUTPUT_ROOT, args.build_id)
