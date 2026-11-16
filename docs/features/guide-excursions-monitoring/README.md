@@ -636,3 +636,14 @@ cards and full rows retain their geometry; no extra LLM step generates text.
 модели в существующем запросе; дополнительного LLM этапа нет. Для описания
 используется уже извлечённый `fact_pack.main_hook`, затем готовые `digest_blurb`
 и `summary_one_liner`, только если осталось место.
+
+## Digest eligibility at the saved-result import boundary
+
+The importer must preserve an extractor decision `digest_eligible=false`, including a
+free-text explanation. A date, city, description and booking phone do not establish
+public individual admission: OSQ Group post `https://t.me/excursions_profitour/982`
+explicitly offered an organized school group. Filling two logistics fields must not
+promote that negative model decision. Existing missing-date, private-mode, cancelled
+and typed-disqualifying-reason checks still prevent publication of inconsistent
+positive decisions. This rule fixes decision transport; a model that incorrectly
+returns `true` for an organized group still requires a separate extraction correction.
