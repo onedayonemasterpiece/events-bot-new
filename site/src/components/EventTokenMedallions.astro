@@ -93,7 +93,7 @@ organizers.forEach(({ item:organizer, evidence }) => {
 for (const source of event.source_medallions || []) {
   tokens.push({
     kind:'source', key:`source:vk:${source.owner_id}`, label:source.name,
-    ariaLabel:`Источник события: ${source.name}`, title:`Источник: ${source.name}`,
+    ariaLabel:source.name, title:source.name,
     imageUrl:source.image_url, slug:`vk-source-${source.owner_id}`, layoutRole:'secondary',
   });
 }

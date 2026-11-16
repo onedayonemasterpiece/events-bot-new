@@ -380,3 +380,36 @@ async def test_resume_guide_monitor_jobs_uses_output_when_status_lookup_fails(
     assert recovered == 1
     assert len(imported) == 1
     assert removed == [("guide_monitoring", "richss777/guide-excursions-monitor")]
+
+
+def test_guide_preserves_configured_shared_key_pool(monkeypatch):
+    import ast
+    from typing import Any
+    monkeypatch.setenv('TG_API_ID', '1')
+    monkeypatch.setenv('TG_API_HASH', 'hash')
+    monkeypatch.setenv('TG_SESSION', 'session')
+    for name in ('TELEGRAM_AUTH_BUNDLE_S22', 'GUIDE_MONITORING_AUTH_BUNDLE_ENV'):
+        monkeypatch.delenv(name, raising=False)
+    names = ['GOOGLE_API_KEY6', 'GOOGLE_API_KEY', 'GOOGLE_API_KEY2',
+             'GOOGLE_API_KEY3', 'GOOGLE_API_KEY4', 'GOOGLE_API_KEY5']
+    secrets = {name: 'fixture-' + name for name in names}
+    for name, value in secrets.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv('GOOGLE_AI_NORMAL_KEY_ENVS', ','.join(names))
+    payload = json.loads(kaggle_service._build_secrets_payload())
+    assert payload['GOOGLE_AI_NORMAL_KEY_ENVS'] == ','.join(names)
+    assert {name: payload[name] for name in names} == secrets
+
+    runner = Path('kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py')
+    node = next(n for n in ast.parse(runner.read_text()).body
+                if isinstance(n, ast.ClassDef) and n.name == '_GuideSecretsProviderAdapter')
+    import os
+    namespace = {'Any': Any, 'os': os, 'GOOGLE_KEY_ENV': 'GOOGLE_API_KEY2',
+                 'GOOGLE_FALLBACK_KEY_ENV': 'GOOGLE_API_KEY'}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), str(runner), 'exec'), namespace)
+    provider = type('Provider', (), {'get_secret': lambda self, name: secrets.get(name)})()
+    adapter = namespace[node.name](provider)
+    assert adapter.get_secret('GOOGLE_API_KEY') == secrets['GOOGLE_API_KEY']
+    assert adapter.get_secret('GOOGLE_API_KEY6') == secrets['GOOGLE_API_KEY6']
+    monkeypatch.delenv('GOOGLE_AI_NORMAL_KEY_ENVS')
+    assert adapter.get_secret('GOOGLE_API_KEY') == secrets['GOOGLE_API_KEY2']

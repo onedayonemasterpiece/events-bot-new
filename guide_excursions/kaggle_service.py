@@ -335,6 +335,12 @@ def _build_secrets_payload() -> str:
         "TG_API_HASH": _require_env_any("TG_API_HASH", "TELEGRAM_API_HASH"),
         "GOOGLE_API_KEY2": _require_env_any("GOOGLE_API_KEY2"),
     }
+    normal_pool = (os.getenv("GOOGLE_AI_NORMAL_KEY_ENVS") or "").strip()
+    if normal_pool:
+        payload["GOOGLE_AI_NORMAL_KEY_ENVS"] = normal_pool
+        for name in normal_pool.split(","):
+            if name.strip():
+                payload[name.strip()] = _require_env_any(name.strip())
     if auth_bundle_env:
         bundle_raw = _require_env_any(auth_bundle_env)
         payload["TELEGRAM_AUTH_BUNDLE_S22"] = bundle_raw

@@ -547,7 +547,8 @@ def _is_katya_kostyugova(row: Mapping[str, Any]) -> bool:
 
 
 def _source_name(row: Mapping[str, Any]) -> str:
-    row = {**row, **{k: v for k, v in (row.get("fact_pack") or {}).items() if k in ("guide_names", "organizer_names")}}
+    if people := row.get("participant_medallions"):
+        return ", ".join(dict.fromkeys(_plain(p["name"]) for p in people))
     guides = [_plain(x) for x in (row.get("guide_names") or []) if _plain(x)] if isinstance(row.get("guide_names"), list) else []
     orgs = [_plain(x) for x in (row.get("organizer_names") or []) if _plain(x)] if isinstance(row.get("organizer_names"), list) else []
     if guides and _is_katya_kostyugova(row):
@@ -620,9 +621,37 @@ def _place_line(row: Mapping[str, Any]) -> str:
         return "Калининград · трамвайная история"
     if "обзорная прогулка" in low:
         return "Калининград · обзорный маршрут"
-    if route and len(route) < 58 and route.lower() != low:
+    if route and len(route) < 58 and route.casefold() != _plain(row.get("canonical_title")).casefold():
         return route
-    return _plain(row.get("city") or _fact(row, "city")) or "детали в тексте"
+    return _plain(_fact(row, "city") or row.get("city")) or "детали в тексте"
+
+
+def _card_description(row: Mapping[str, Any], *visible: str) -> str:
+    """Spend the optional line on details absent from the title and byline."""
+    title = _plain(row.get("canonical_title"))
+    repeated = [title, *re.split(r"[:：]", title), *visible]
+    for role in ("guide_names", "organizer_names"):
+        names = _fact(row, role) or row.get(role) or []
+        if isinstance(names, list):
+            repeated.extend(str(name) for name in names)
+    candidates = []
+    for value in (_fact(row, "main_hook"), row.get("digest_blurb"), row.get("summary_one_liner")):
+        text = _plain(value)
+        for phrase in sorted({_plain(value) for value in repeated}, key=len, reverse=True):
+            if phrase:
+                pattern = r"(?<!\w)" + re.escape(phrase) + r"(?!\w)"
+                text = re.sub(pattern, "", text, flags=re.I)
+        # The date/time and invitation are already expressed by the card.
+        text = re.sub(r"[«»\"“”]", "", text)
+        text = re.sub(r"(?iu)\b(?:приглашаем на|состоится|увлекательная|экскурсия|прогулка|проекта|гид)\b[ —:]*", "", text)
+        text = re.sub(r"(?iu)\b\d{1,2}\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\b", "", text)
+        text = re.sub(r"(?iu)\bв\s+\d{1,2}:\d{2}\b", "", text)
+        text = _plain(text).strip(" ,.;:—–-")
+        text = re.sub(r"(?iu)^(?:на|с)\s*[.,;:]?\s*$", "", text)
+        if text:
+            candidates.append(text[0].upper() + text[1:])
+    visible_words = set(re.findall(r"\w{4,}", " ".join(repeated).casefold()))
+    return max(candidates, key=lambda text: len(set(re.findall(r"\w{4,}", text.casefold())) - visible_words), default="")
 
 
 def _focus_line(row: Mapping[str, Any]) -> str:
@@ -658,8 +687,13 @@ def _focus_line(row: Mapping[str, Any]) -> str:
 
 def _modes_for(row: Mapping[str, Any]) -> list[str]:
     fp_group = _plain(_fact(row, "group_format") or row.get("group_format"))
-    text = " ".join([_plain(row.get("canonical_title")), _route_raw(row), fp_group, _plain(row.get("duration_text"))]).lower().replace("ё", "е")
+    text = " ".join([_plain(row.get("canonical_title")), _route_raw(row), fp_group, _plain(row.get("duration_text")), _plain(row.get("summary_one_liner")), _plain(row.get("digest_blurb"))]).lower().replace("ё", "е")
+    format_key = fp_group.casefold().replace("_", " ")
     modes: list[str] = []
+    if format_key in {"walking", "walking tour", "guided walk", "guided walking tour"}:
+        modes.append("walk")
+    if format_key in {"bus", "bus tour"}:
+        modes.append("bus")
     if "трамва" in text:
         modes.append("tram")
     if re.search(r"сплав|байдар|лодк|катер|корабл|яхт|водн|река", text):
@@ -679,7 +713,8 @@ def _modes_for(row: Mapping[str, Any]) -> list[str]:
 
 
 def _seats_text(row: Mapping[str, Any]) -> str:
-    text = _plain(row.get("seats_line") or row.get("seats_text"))
+    facts = row.get("fact_pack") or {}
+    text = _plain(facts.get("seats_text") if "seats_text" in facts else (row.get("seats_line") or row.get("seats_text")))
     if not text:
         return ""
     m = re.search(r"\d+", text)
@@ -850,30 +885,6 @@ def _draw_avatar(draw_img: Image.Image, row: Mapping[str, Any], x: int, y: int, 
     draw_img.alpha_composite(layer)
 
 
-def _draw_participant_medallions(img: Image.Image, row: Mapping[str, Any], x: int, y: int,
-        width: int, height: int, pal: VisualPalette, accent: str) -> None:
-    people = row.get("participant_medallions") or []
-    if not people:
-        _draw_avatar(img, row, x, y + (height - width) // 2, width, pal, accent)
-        return
-    columns = 1 if len(people) <= 2 else 2
-    lines = math.ceil(len(people) / columns)
-    size = min(100, width // columns - 6, (height - 16) // lines - 22)
-    start_y = y + (height - lines * (size + 22)) // 2
-    draw = ImageDraw.Draw(img)
-    for idx, person in enumerate(people):
-        cx = x + (idx % columns) * (width // columns) + (width // columns - size) // 2
-        cy = start_y + (idx // columns) * (size + 22)
-        # An unresolved person gets their own initials, never the source's portrait.
-        portrait_row = {"guide_names": [person["name"]], "source_title": person["name"],
-            "source_avatar_path": person.get("path") or ""}
-        _draw_avatar(img, portrait_row, cx, cy, size, pal, accent)
-        font = _font(_MAIN_FONT, 13 if columns > 1 else 16)
-        for role_idx, role in enumerate(person["roles"]):
-            draw.text((cx + size / 2, cy + size + 4 + role_idx * 18), role,
-                font=font, fill=_hex(pal.guide), anchor="mt")
-
-
 def _draw_icon_badges(img: Image.Image, modes: Sequence[str], x: int, y: int, pal: VisualPalette) -> None:
     layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
@@ -1031,38 +1042,53 @@ def render_visual_digest_card(
         rd = ImageDraw.Draw(row_layer)
         _draw_date_tile(rd, row, row_h, accent, palette)
         tx = 238
-        ty = 42 if expanded else 28
-        title_lines = _wrap_by_width(rd, _plain(row.get("canonical_title")) or "Экскурсия", title_font, 515, 2)
+        participants = row.get("participant_medallions") or []
+        av_size = 140
+        avatar_step = round(av_size * 0.8)
+        av_x = 820 - max(0, len(participants) - 1) * avatar_step
+        text_width = min(515, av_x - 42 - tx - 22)
+        ty = (18 if len(participants) >= 3 else 24) if len(participants) > 1 else (42 if expanded else 28)
+        row_title_font = _font(_MAIN_FONT, 30) if len(participants) >= 3 else title_font
+        title_lines = _wrap_by_width(rd, _plain(row.get("canonical_title")) or "Экскурсия", row_title_font, text_width, 3 if len(participants) >= 3 else 2)
         for line in title_lines:
-            rd.text((tx, ty), line, font=title_font, fill=_hex(palette.text))
-            ty += 40 if expanded else 34
+            rd.text((tx, ty), line, font=row_title_font, fill=_hex(palette.text))
+            ty += 34 if len(participants) >= 3 else (40 if expanded else 34)
         guide = _source_name(row)
         if guide:
-            rd.text((tx, ty + 2), "".join(_wrap_by_width(rd, guide, guide_font, 515, 1)), font=guide_font, fill=_hex(palette.guide))
-            ty += 34 if expanded else 27
+            row_guide_font = _font(_MAIN_FONT, 20) if len(participants) >= 3 else guide_font
+            for name_line in _wrap_by_width(rd, guide, row_guide_font, text_width, max(1, len(participants))):
+                rd.text((tx, ty + 2), name_line, font=row_guide_font, fill=_hex(palette.guide))
+                ty += 23 if len(participants) >= 3 else (28 if len(participants) > 1 else (34 if expanded else 27))
         place = _place_line(row)
-        rd.text((tx, ty + 2), "".join(_wrap_by_width(rd, place, route_font, 515, 1)), font=route_font, fill=_hex(palette.route))
-        ty += 34 if expanded else 26
+        if place and place.casefold() not in _plain(row.get("canonical_title")).casefold():
+            rd.text((tx, ty + 2), "".join(_wrap_by_width(rd, place, route_font, text_width, 1)), font=route_font, fill=_hex(palette.route))
+            ty += 34 if expanded else 26
         focus = _focus_line(row)
-        if focus:
-            rd.text((tx, ty + 2), "".join(_wrap_by_width(rd, focus, focus_font, 515, 1)), font=focus_font, fill=_hex(palette.focus))
+        if focus and ty + (23 if expanded else 21) <= row_h - 12:
+            rd.text((tx, ty + 2), "".join(_wrap_by_width(rd, focus, focus_font, text_width, 1)), font=focus_font, fill=_hex(palette.focus))
             ty += 27 if expanded else 23
-        description = _plain(_fact(row, "main_hook") or row.get("digest_blurb") or row.get("summary_one_liner"))
+        description = _card_description(row, guide, place, focus)
         description_font = _font(_MAIN_FONT, 21 if expanded else 18)
         line_h = 25 if expanded else 22
-        available_lines = max(0, min(2, (row_h - ty - 12) // line_h))
-        if description and available_lines:
-            for line in _wrap_by_width(rd, description, description_font, 515, available_lines):
-                rd.text((tx, ty + 2), line, font=description_font, fill=_hex(palette.route))
-                ty += line_h
+        available_lines = max(0, min(2, (row_h - ty - (54 if _seats_text(row) else 12)) // line_h))
+        for line in _wrap_by_width(rd, description, description_font, text_width, available_lines) if description and available_lines else []:
+            rd.text((tx, ty + 2), line, font=description_font, fill=_hex(palette.route))
+            ty += line_h
         seats = _seats_text(row)
         if seats:
-            _draw_chip(rd, seats, 654, row_h - (54 if expanded else 52), accent)
+            chip_width = max(92, int(rd.textlength(seats, font=_font(_MAIN_FONT, 17))) + 28)
+            chip_x = min(654, av_x - 42 - chip_width - 14)
+            _draw_chip(rd, seats, chip_x, row_h - (54 if expanded else 52), accent)
         img.alpha_composite(row_layer, (42, y))
-        av_size = 140
-        av_x = 42 + 778
         av_y = y + round((row_h - av_size) / 2)
-        _draw_participant_medallions(img, row, av_x, y, av_size, row_h, palette, accent)
+        if participants:
+            for idx, person in enumerate(participants):
+                px = av_x + idx * avatar_step
+                portrait = {"guide_names": [person["name"]], "source_title": person["name"],
+                    "source_avatar_path": person.get("path") or ""}
+                _draw_avatar(img, portrait, px, av_y, av_size, palette, accent)
+        else:
+            _draw_avatar(img, row, av_x, av_y, av_size, palette, accent)
         modes = _modes_for(row)
         _draw_icon_badges(img, modes, 42 + 920, av_y + (12 if len(modes) > 1 else 76), palette)
 

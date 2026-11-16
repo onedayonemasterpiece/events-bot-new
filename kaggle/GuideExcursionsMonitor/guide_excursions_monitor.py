@@ -395,6 +395,8 @@ class _GuideSecretsProviderAdapter:
         self.base = base
 
     def get_secret(self, name: str) -> str | None:
+        if (os.getenv("GOOGLE_AI_NORMAL_KEY_ENVS") or "").strip():
+            return self.base.get_secret(name)
         if name == "GOOGLE_API_KEY":
             return self.base.get_secret(GOOGLE_KEY_ENV) or self.base.get_secret(GOOGLE_FALLBACK_KEY_ENV)
         return self.base.get_secret(name)
@@ -1698,7 +1700,7 @@ _OCCURRENCE_FIELD_TYPES: dict[str, dict[str, Any]] = {
     "duration_text": {"type": "string"},
     "city": {"type": "string"},
     "meeting_point": {"type": "string"},
-    "route_summary": {"type": "string"},
+    "route_summary": {"type": "string", "description": "Actual route, places visited or excursion content explicitly stated for this occurrence. The tour title alone is not a route description. Leave empty when the announcement gives no route/content details."},
     "audience_fit": {"type": "array", "items": {"type": "string"}},
     "group_format": {"type": "string"},
     "price_text": {"type": "string"},
@@ -1706,7 +1708,7 @@ _OCCURRENCE_FIELD_TYPES: dict[str, dict[str, Any]] = {
     "booking_url": {"type": "string"},
     "channel_url": {"type": "string"},
     "status": {"type": "string"},
-    "seats_text": {"type": "string"},
+    "seats_text": {"type": "string", "description": "Explicit remaining/free seat availability for this dated occurrence only. Preserve a stated remaining count or availability phrase. Never use age restrictions (7+), vehicle capacity (up to 3 guests), minimum group size, price or a count belonging to another date. Leave empty when remaining seats are unstated."},
     "summary_one_liner": {"type": "string"},
     "digest_blurb": {"type": "string"},
     "digest_eligible": {"type": "boolean"},

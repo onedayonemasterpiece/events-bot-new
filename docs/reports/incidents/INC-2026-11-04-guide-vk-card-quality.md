@@ -242,3 +242,40 @@ list; sparse status updates still preserve roles. The distinguishing test uses
 the ordinary results importer twice, fails before the change with the old
 organizer still present, and passes after it. This fixes the stored data path,
 not only its portrait rendering.
+
+
+### 2026-11-16: original layout preview and configured key pool
+
+The owner rejected the participant grid and technical role captions before
+production delivery. The follow-up reuses the original avatar painter at
+140 px, places portraits horizontally with the explicitly allowed 20% overlap,
+and retains the original transport badges, availability chip and theme line.
+Only participant names appear in the byline. Existing person-profile aliases
+prevent two portraits for Julia Grishanova / Amber Fringilla; project profiles
+remain separate identities. Existing descriptions contribute details after
+removing the visible title/byline, without another generation step. An explicit
+empty seats fact clears stale availability during ordinary reimport.
+
+Historical issue309 and the two-guide card were replayed from retained real
+inputs. Current preview349 was shown to the owner, who called it considerably
+better and requested an audit of transport extraction. No follow-up visual
+release has been deployed. No public post or story was created by previews.
+The transport audit found no bus evidence in the farm post/poster; the walking
+format of the November project exists in a separate program announcement.
+No occurrence types were assigned by hand. Broader format/context propagation
+and copied VK content remain open investigation items.
+
+A separate confirmed transfer defect affects the guide runner: production
+configures a six-key GOOGLE_AI_NORMAL_KEY_ENVS pool, but the Kaggle secret
+payload transmitted only key2. The follow-up transmits the existing configured
+pool and its keys and preserves exact key-name resolution in the adapter.
+Without a declared pool, legacy key2 behavior remains. This reuses the shared
+atomic limiter; no new quota mechanism, limit, model or retry is introduced.
+The distinguishing regression failed before the change and passes afterward.
+Validation: 38 layout/import/schema tests; 19 guide packaging/owner/schema tests;
+11 shared-client normal-pool tests. These are local results, not deployment.
+
+Full run8a5351821148/version17 continues remotely after local ops12367 crashed.
+At09:52UTC its callback ledger showed91/189 sources complete and210 posts.
+Current enabled registry has191 rows; later additions must be reconciled with
+the final source reports. No duplicate scan or SaveKernel was submitted.
