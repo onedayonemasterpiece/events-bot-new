@@ -11,6 +11,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Resolve the exact venue name «ВОРОТА» as Закхаймские ворота through the shared location reference, while preserving street/title and other-gate negatives.
 - Guide Kaggle pushes saved JSON/media results directly into the existing HTTP receiver and durable importer, including partial/error outcomes and late delivery after a dead waiter; repeated delivery reuses the accepted run receipt.
 
 - Calendar comment jobs start 5–12 minutes after public release, leaving three minutes inside the requested 5–15 minute window for existing upload pacing and retries; known-publication deferral uses the same schedule.
