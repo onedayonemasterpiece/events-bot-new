@@ -82,6 +82,8 @@ Fable использовал другой знаменатель для ранг
 python -m pytest -q tests/test_static_site_pgvector_export.py tests/test_related_anchor_scope.py
 ```
 
+**Проверка сборки и отката.** На коде объединённого PR все четыре задания основного GitHub CI завершились успешно. В журнале перечислены 82 прошедшие профильные проверки: 23 обычной синхронизации, 13 версии корпуса, 7 области пересчёта и 39 экспортёра pgvector. На изолированном PostgreSQL 17.10 с pgvector 0.8.2 проверили подготовку файла через тот же проектор, переключение на новую версию и точный откат, включая метаданные поиска и время записи. Смена только принятого описания потребовала новый короткий вход. Неполный состав, устаревший исходный хеш и попытка откатить изменившуюся строку были отвергнуты до изменения данных. Отдельный запуск GitHub Actions повторил SQL-проверку с двумя 768-мерными векторами. Production-операция в эти прогоны не входила. [CI объединённого PR](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/43909007211) · [Изолированная проверка переключения и отката](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/43910247029) · [Квитанция полного прогона](../fable-related-search-20261116/cutover/integration-receipt.json)
+
 ## Как перепроверить под devester
 
 Обе открытые ветки доступны по ссылкам под любым GitHub-пользователем. [PR #1045 — готовность ответа Gemma](https://github.com/onedayonemasterpiece/events-bot-new/pull/1045) · [PR #1046 — вектор и проверенный отбор программ](https://github.com/onedayonemasterpiece/events-bot-new/pull/1046)
