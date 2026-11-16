@@ -900,3 +900,8 @@ def test_reposts_share_booking_phones_landmark_and_day_but_only_one_has_the_tari
     assert display["price_text"] == tariff
     assert not vd._same_visual_departure(full, dict(short, canonical_title="Поездка в замок Бранденбург"))
     assert not vd._same_visual_departure(full, dict(short, linked_posts=[{"url":"vk2", "text": "Бронь 555-022."}]))
+
+
+def test_bundled_card_font_distinguishes_numero_from_missing_glyph():
+    font = vd._font(vd._NUMERO_FONT, 36)
+    assert bytes(font.getmask("№")) != bytes(font.getmask("\u0378"))

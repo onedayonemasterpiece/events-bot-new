@@ -112,6 +112,7 @@ _MAIN_FONT = _FONT_DIR / "Cygre-ExtraBold.ttf"
 _BOLD_FONT = _FONT_DIR / "Cygre-Bold.ttf"
 _SEMI_FONT = _FONT_DIR / "Cygre-SemiBold.ttf"
 _DEJAVU_BOLD = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
+_NUMERO_FONT = _FONT_DIR.resolve().parents[1] / "video_announce" / "assets" / "DrukCyr-Bold.ttf"
 
 W, H = 1080, 1350
 RU_MONTH_SHORT = {
@@ -1164,7 +1165,7 @@ def render_visual_digest_card(
         row_title_font = _font(_MAIN_FONT, 30) if len(participants) >= 3 else title_font
         title_text = _plain(row.get("canonical_title")) or "Экскурсия"
         if "№" in title_text:
-            row_title_font = _fallback_font(_DEJAVU_BOLD, row_title_font.size)
+            row_title_font = _font(_NUMERO_FONT, row_title_font.size)
         title_lines = _wrap_by_width(rd, title_text, row_title_font, text_width, 3 if len(participants) >= 3 else 2)
         for line in title_lines:
             rd.text((tx, ty), line, font=row_title_font, fill=_hex(palette.text))
@@ -1186,7 +1187,7 @@ def render_visual_digest_card(
         description = _card_description(row) or _focus_line(row)
         description_font = _font(_MAIN_FONT, 21 if expanded else 18)
         if "№" in description:
-            description_font = _fallback_font(_DEJAVU_BOLD, description_font.size)
+            description_font = _font(_NUMERO_FONT, description_font.size)
         line_h = 25 if expanded else 22
         available_lines = max(0, min(2, (row_h - ty - (54 if _seats_text(row) else 12)) // line_h))
         for line in _wrap_by_width(rd, description, description_font, text_width, available_lines) if description and available_lines else []:
