@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- A validated related-only result reconciles its successful Kaggle ledger and builder lease before completing the claim; a lost terminal callback no longer leaves the next recommendation calculation waiting for the lease TTL.
+
 - Exact Kaggle adoption of a failed or cancelled run reconciles its existing ledger and releases its builder resource before clearing the handoff, so the next normal calculation can start after a missed terminal callback.
 
 - Unavailable Smart Update merges preserve the previous description instead of appending raw parser text and OCR instructions; source and fact receipts remain intact.

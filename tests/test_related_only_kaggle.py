@@ -173,32 +173,62 @@ def test_related_only_returns_importable_json_without_site_build(tmp_path, monke
         runner.validate_downloaded_result(tmp_path, args)
 
 
+@pytest.mark.parametrize('reconcile_failure', [False, True])
 @pytest.mark.asyncio
-async def test_related_completion_releases_claim_without_site_success(tmp_path, monkeypatch):
+async def test_related_completion_releases_claim_without_site_success(tmp_path, monkeypatch, reconcile_failure):
     import main
+    import kaggle_status
+    from db import Database
+    from datetime import datetime, timedelta, timezone
     from static_site_release import claim_static_site_build
 
+    monkeypatch.setenv('KAGGLE_STATUS_CALLBACK_URL', 'https://example.test/internal/kaggle/run-event')
     db_path = tmp_path / 'state.sqlite'
-    claim = claim_static_site_build(str(db_path), job_id=12, run_id='related-test',
-                                   input_fingerprint='b' * 64, effective_date='2026-11-12',
-                                   request_watermark=None)
-    (tmp_path / 'static_site_build_result.json').write_text(json.dumps({'profile': 'related-only'}))
-    # The runner validates and imports this mandatory artifact before completion.
-    (tmp_path / 'event_related.json').write_text(json.dumps({
-        'related': {}, 'cache': {'state': 'incremental'},
-        'gemma_verification': {'changed_event_ids': [], 'verified_event_ids': []},
-    }))
-    async def patch(*a, **kw):
-        pass
-    monkeypatch.setattr(main, '_patch_static_site_request_payload', patch)
-    assert await main._finish_static_site_candidate(
-        db=SimpleNamespace(path=str(db_path)), job_id=12, output_dir=tmp_path,
-        build_id='production-related-test', run_id='related-test', repo_sha='a' * 40,
-        snapshot_metadata=None, candidate_token='', input_fingerprint='b' * 64,
-        clock=SimpleNamespace(effective_date='2026-11-12'), claim_token=claim.claim_token,
-    ) is True
-    with sqlite3.connect(db_path) as c:
-        assert c.execute('select active_job_id,last_success_at from static_site_build_state').fetchone() == (None, None)
+    db = Database(str(db_path))
+    await db.init()
+    try:
+        await kaggle_status.create_kaggle_run_config(db, run_id='related-test',
+            session_id=None, kind='static_site_builder', notebook='StaticSiteBuilder')
+        now = datetime.now(timezone.utc)
+        async with db.raw_conn() as conn:
+            await conn.execute("UPDATE kaggle_run_ledger SET status='alive',phase='export' WHERE run_id='related-test'")
+            for resource, owner in [('static_site:builder', 'related-test'), ('unrelated', 'other-run')]:
+                await conn.execute("INSERT INTO kaggle_resource_lease(resource_key,run_id,holder_kind,status,acquired_at,expires_at,updated_at) VALUES (?,?,'kaggle','active',?,?,?)",
+                    (resource, owner, now.isoformat(), (now + timedelta(hours=3)).isoformat(), now.isoformat()))
+            await conn.commit()
+        claim = claim_static_site_build(str(db_path), job_id=12, run_id='related-test',
+            input_fingerprint='b' * 64, effective_date='2026-11-12', request_watermark=None)
+        (tmp_path / 'static_site_build_result.json').write_text(json.dumps({'profile': 'related-only'}))
+        # Runner validated/imported these artifacts before calling this host boundary.
+        (tmp_path / 'event_related.json').write_text(json.dumps({
+            'related': {}, 'cache': {'state': 'incremental'},
+            'gemma_verification': {'changed_event_ids': [], 'verified_event_ids': []},
+        }))
+        async def patch(*a, **kw):
+            pass
+        monkeypatch.setattr(main, '_patch_static_site_request_payload', patch)
+        if reconcile_failure:
+            async def fail(*a, **kw):
+                raise RuntimeError('ledger unavailable')
+            monkeypatch.setattr(kaggle_status, 'reconcile_kaggle_run_terminal_from_host', fail)
+        async def finish():
+            return await main._finish_static_site_candidate(
+                db=db, job_id=12, output_dir=tmp_path, build_id='production-related-test',
+                run_id='related-test', repo_sha='a' * 40, snapshot_metadata=None,
+                candidate_token='', input_fingerprint='b' * 64,
+                clock=SimpleNamespace(effective_date='2026-11-12'), claim_token=claim.claim_token)
+        if reconcile_failure:
+            with pytest.raises(RuntimeError, match='ledger unavailable'):
+                await finish()
+        else:
+            assert await finish() is True
+        with sqlite3.connect(db_path) as c:
+            assert c.execute('select active_job_id,last_success_at from static_site_build_state').fetchone() == (12 if reconcile_failure else None, None)
+            assert c.execute("select status from kaggle_run_ledger where run_id='related-test'").fetchone()[0] == ('alive' if reconcile_failure else 'done')
+            assert c.execute("select status from kaggle_resource_lease where resource_key='static_site:builder'").fetchone()[0] == ('active' if reconcile_failure else 'released')
+            assert c.execute("select status from kaggle_resource_lease where resource_key='unrelated'").fetchone()[0] == 'active'
+    finally:
+        await db.close()
 
 
 @pytest.mark.asyncio
