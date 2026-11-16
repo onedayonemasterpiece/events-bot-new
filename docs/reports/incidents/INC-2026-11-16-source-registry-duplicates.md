@@ -54,10 +54,24 @@ run is materialized. This is a specific saved-input dependency, not a blanket
 idle-system release gate. Profile 156→7 is a separate, previously rejected action
 and is not part of this repair.
 
-At this commit no production record has been merged and this source constraint
-change has not been delivered. Required completion: exact latest-head CI, original
-run materialization, lossless reconciliation, zero duplicate identities, fresh
-same-owner rejection, exact-main delivery, health and normal import acceptance.
+November 16 production reconciliation completed: event pairs 5120→5028 and
+5126→117 at 09:58 UTC; guide pairs 111→17, 181→18, 97→20 and 83→30 at
+10:55 UTC, after original FULL run 8a5351821148 materialized through operation
+12375 at 10:44:49. No source scan or kernel was replayed. Nineteen duplicate post
+records were consolidated with occurrence and fact references rebound; all 318
+profiles, 542 templates, 782 occurrences and 27,919 facts were preserved at commit.
+Two posts acquired different raw extraction outputs in the completed run. Both
+complete variants were retained in the existing raw-facts list; no semantic choice
+or public tour field was changed. Independent affected-row comparison verified
+entity fields, source text/URLs, raw outputs and occurrence links.
+
+The constraint change is not yet applied to the live DB. Delivery is DB-only:
+extract the two index literals from exact merged main, apply transactionally with
+a durable intent, then check duplicate rejection with rolled-back SAVEPOINTs,
+health and ordinary source registration. No image build or restart is required.
+The actual running image passed initialized network-none migration controls and
+repeated seed preservation, including a wrong-SHA rejection before initialization.
+Those offline controls do not establish a later ordinary import result.
 
 Retained evidence:
 `/home/dev/artifacts/events-bot-new/20261116T093430Z-source-registry-dedup-20261116/`
