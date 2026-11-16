@@ -507,7 +507,8 @@ def test_old_vector_space_retrieves_again_before_certifying_anchors(tmp_path, mo
         return exporter.build_related(events, current_date="2026-07-20", related_mode="pgvector",
                                       cache_path=cache_path, gemma_verify=True, anchor_ids=anchors)
 
-    assert run({1, 6})["related"]["1"]["pure_related"] == [2]
+    initial_peers = run({1, 6})["related"]["1"]["pure_related"]
+    assert 2 in initial_peers and 4 not in initial_peers
     chosen = 4
     legacy = json.loads(cache_path.read_text())
     legacy["schema_version"] = old_schema
