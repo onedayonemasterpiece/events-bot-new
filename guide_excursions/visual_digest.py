@@ -2136,9 +2136,12 @@ def _timetable_description(
     guides = [name for name in rows[0]["timetable_guides"]
               if all(name in row["timetable_guides"] for row in rows)]
     if not guides:
-        return "Экскурсия включена в расписание."
-    markers = {name: f"[[{n}|{name}]]" for n, (_, name) in mention_ids.items()}
-    byline = ", ".join(markers.get(name, name) for name in guides)
+        return ""
+    labels = []
+    for name in guides:
+        matches = [n for n, (_, candidate) in mention_ids.items() if candidate == name]
+        labels.append(f"[[{matches[0]}|{name}]]" if len(matches) == 1 else name)
+    byline = ", ".join(labels)
     return f"{'Гид' if len(guides) == 1 else 'Гиды'} — {byline}."
 
 
@@ -2235,7 +2238,8 @@ async def _assemble_vk_narrative(
         first_line, separator, rest = body.partition("\n")
         if separator and first_line.strip() == heading:
             body = rest
-        body = _timetable_description(rows, mention_ids) or collapse_ws(body)
+        timetable = _timetable_description(rows, mention_ids)
+        body = collapse_ws(body) if timetable is None else timetable
         blocks.append("\n".join(x for x in [heading, story(body), *lines] if x))
     if narrative.get("outro"):
         blocks.append(story(narrative["outro"]))

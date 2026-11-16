@@ -563,6 +563,7 @@ def test_timetable_line_grounds_only_an_excursion_without_details(header):
     vd._scope_visual_source(row, post)
     ids = {3: (123, "Ноза Усманова")}
     assert vd._timetable_description([row], ids) == "Гид — [[3|Ноза Усманова]]."
-    assert vd._timetable_description([dict(row, timetable_guides=[])], ids) == "Экскурсия включена в расписание."
+    assert vd._timetable_description([dict(row, timetable_guides=[])], ids) == ""
+    assert vd._timetable_description([row], {**ids, 4: (456, "Ноза Усманова")}) == "Гид — Ноза Усманова."
     assert vd._timetable_description([dict(row, route_summary="Ленинский проспект")], ids) is None
     assert vd._timetable_description([row, {"canonical_title": "Рассвет над Балтикой"}], ids) is None
