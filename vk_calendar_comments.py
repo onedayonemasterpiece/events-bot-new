@@ -58,7 +58,7 @@ async def schedule_calendar_comment(db, event_id, post_url, publish_date):
     ids = main._vk_owner_and_post_id(post_url)
     if not ids or not group or int(ids[0]) != -int(group):
         return
-    delay = random.Random(post_url).randint(300, 900)
+    delay = random.Random(post_url).randint(300, 720)
     await main.enqueue_job(
         db, event_id, main.JobTask.vk_calendar_comment,
         {"post_url": post_url, "publish_date": publish_date},

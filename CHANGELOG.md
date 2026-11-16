@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Calendar comment jobs start 5–12 minutes after public release, leaving three minutes inside the requested 5–15 minute window for existing upload pacing and retries; known-publication deferral uses the same schedule.
+
 - VK event galleries keep the existing grid/carousel selection when recommendation cards are present, with source photos before other dates and related events in both formats. Existing posts are not rewritten to change their layout.
 
 ### Fixed
