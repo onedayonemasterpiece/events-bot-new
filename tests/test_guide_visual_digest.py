@@ -545,6 +545,7 @@ async def test_vk_writer_heading_is_removed_only_when_it_is_a_separate_matching_
 
     monkeypatch.setattr(dw, "_get_digest_writer_runtime", lambda: (object(), None))
     monkeypatch.setattr(dw, "_generate_json", generated)
+    monkeypatch.setattr(vd, "ask_vk_narrative", dw.ask_vk_narrative)  # undo the autouse stub
     text = await build_visual_digest_vk_text(EDITION_349, issue_id=349, vk_api_fn=_fake_shortener)
     assert "ЗЕЛЁНЫЕ ИСТОРИИ\nПройдёмся от Зубров вдоль ручья." in text
     assert text.count("ЗЕЛЁНЫЕ ИСТОРИИ") == 1

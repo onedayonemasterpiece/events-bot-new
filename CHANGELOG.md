@@ -11,6 +11,7 @@
 ## [Unreleased]
 
 ### Changed
+- Guide excursions VK digest story: the writer instruction now makes the model list each excursion's own source details before writing (`details`, not published), treats a title and a timetable line as no evidence of route or scenery, sizes a paragraph by the material, allows a bridge only on a shared fact, puts participation limits first and inflects names inside the mark. Review of nine real runs: `docs/features/guide-excursions-monitoring/vk-narrative-fable-verdict-2026-11-16.md`. Not yet run on a live model.
 - Guide visual VK digest (owner request 2026-11-16): the post text was a numbered list `title — link`; it is now a connected first-person editorial story written by one LLM request per edition, with exact titles in caps, dates, price, booking contact, brand line and hashtags added from stored rows. The compact list remains the text when the writer is unavailable or its answer is rejected. Personal guide mentions `[id…|name]` exist behind `GUIDE_VISUAL_DIGEST_VK_MENTIONS` (default off, sandbox testing only).
 
 ### Fixed
