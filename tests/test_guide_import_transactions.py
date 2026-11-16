@@ -111,3 +111,32 @@ async def test_guide_provider_wait_releases_writer_and_preserves_reimport(
                 assert facts["main_hook"] == "Архитектура и история вала"
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+async def test_authoritative_empty_roles_clear_old_roles_on_normal_reimport(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / 'roles.sqlite'))
+    await db.init()
+    async def no_enrichment(rows): return {}
+    monkeypatch.setattr(service, 'apply_occurrence_enrichment', no_enrichment)
+    monkeypatch.setattr(service, 'apply_profile_enrichment', no_enrichment)
+    occurrence = {'canonical_title': 'Архитектура Литовского вала', 'date': '2099-11-20',
+        'status': 'available', 'digest_eligible': True,
+        'guide_names': ['Гид'], 'organizer_names': ['Старый организатор']}
+    payload = {'run_id': 'role-update', 'sources': [{'platform': 'telegram',
+        'username': 'ruin_keepers', 'source_status': 'ok', 'posts': [{
+            'message_id': 12345, 'source_url': 'https://t.me/ruin_keepers/12345',
+            'text': '20 ноября 2099. Прогулка.', 'post_kind': 'announce_single',
+            'prefilter_passed': True, 'llm_status': 'ok', 'occurrences': [occurrence]}]}]}
+    results = tmp_path / 'results.json'
+    try:
+        for roles in (['Старый организатор'], []):
+            occurrence['organizer_names'] = roles
+            results.write_text(json.dumps(payload))
+            await service._import_results_file_inner(db, results_path=str(results))
+        async with db.raw_conn() as conn:
+            row = await (await conn.execute('SELECT guide_names_json,organizer_names_json FROM guide_occurrence')).fetchone()
+        assert json.loads(row[0]) == ['Гид']
+        assert json.loads(row[1]) == []
+    finally:
+        await db.close()

@@ -233,3 +233,12 @@ normal VK reader; local rendered roles were inspected. Retained probe logs and
 images are in the managed 20261104T093210Z-guide-digest-vk-quality-20261104
 directory. This entry records implementation evidence; deployment and public
 product acceptance are recorded separately after they happen.
+
+
+Normal-import regression reproduced stale organizer metadata surviving a newer
+explicit empty role list. The occurrence upsert now replaces a role list when
+that role was authoritatively supplied by the new fact pack, including an empty
+list; sparse status updates still preserve roles. The distinguishing test uses
+the ordinary results importer twice, fails before the change with the old
+organizer still present, and passes after it. This fixes the stored data path,
+not only its portrait rendering.
