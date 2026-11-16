@@ -1053,3 +1053,11 @@ def test_full_cli_reuses_incremental_graph_without_validating_partial_metrics(tm
     with pytest.raises(RuntimeError, match="graph release gate failed"):
         exporter.main()
     assert len(validated) == 2, "a genuinely cold full graph must retain its release validation"
+    with pytest.raises(RuntimeError, match="graph release gate failed"):
+        exporter.main()
+    assert len(validated) == 3, "cached failed full graph must not become unmeasured scoped success"
+    fetched.clear()
+    sys.argv[sys.argv.index("--related-corpus-revision") + 1] = "d" * 64
+    with pytest.raises(RuntimeError, match="graph release gate failed"):
+        exporter.main()
+    assert fetched == [] and len(validated) == 4, "revision-only change must not hide a cached bad full graph"

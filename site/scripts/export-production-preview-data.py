@@ -4962,7 +4962,6 @@ def build_related(
     )
     cache_valid = (
         cache_compatible
-        and (related_mode != "pgvector" or cache.get("related_corpus_revision") == related_corpus_revision)
         and (
             related_mode != "bge"
             or cache.get("shared_bge_artifact_sha256")
@@ -5003,6 +5002,8 @@ def build_related(
     unfinished_anchor_ids: set[int] = set()
     if related_mode == "pgvector":
         graph_meta = {"policy": "scoped_pgvector_candidates"}
+        if cache_valid:
+            graph_meta.update(copy.deepcopy(cache.get("graph_reciprocity") or {}))
         if not cache_compatible:
             cached_verified_event_ids.clear()
             # Old rankings remain visible until requested. Only a fresh scoped RPC
