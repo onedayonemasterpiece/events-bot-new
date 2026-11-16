@@ -6636,7 +6636,9 @@ def _source_supports_city_value(text: str | None, value: str | None) -> bool:
     haystack = _norm_text_for_grounding(text)
     if len(probe) < 3 or not haystack:
         return False
-    pattern = r"(?<!\w)" + re.escape(probe).replace(r"\ ", r"\s+") + r"(?!\w)"
+    # Keep the full city name: case endings must not admit regional adjectives.
+    suffix = r"(?:а|у|е|ом)?" if re.search(r"[бвгджзклмнпрстфхцчшщ]$", probe) else ""
+    pattern = r"(?<!\w)" + re.escape(probe).replace(r"\ ", r"\s+") + suffix + r"(?!\w)"
     return bool(re.search(pattern, haystack))
 
 
@@ -6942,7 +6944,15 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
     # accidentally placed into ``location_name`` can make the producer's exact
     # child excerpt look ungrounded and terminally lose the child.
     _restore_configured_telegram_location(candidate)
-    corpus = str(candidate.source_text or "").strip()
+    corpus = _clip("\n\n".join(
+        str(value).strip()
+        for value in (
+            candidate.source_text,
+            *(text for poster in candidate.posters
+              for text in (poster.ocr_title, poster.ocr_text)),
+        )
+        if str(value or "").strip()
+    ), 7000)
     payload = {
         "target": {
             "title": candidate.title,
@@ -6952,7 +6962,7 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
             "location_name": candidate.location_name,
             "city": candidate.city,
         },
-        "source_text": _clip(corpus, 7000),
+        "source_text": corpus,
         "raw_excerpt": _clip(candidate.raw_excerpt, 1200),
     }
     prompt = (

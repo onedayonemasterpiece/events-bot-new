@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Occurrence scope review receives already-read assigned poster OCR alongside the caption, using the same bounded text for source quotations and grounding; literal inflected city names survive the existing city rail without admitting regional adjectives.
+
 - A validated related-only result reconciles its successful Kaggle ledger and builder lease before completing the claim; a lost terminal callback no longer leaves the next recommendation calculation waiting for the lease TTL.
 
 - Exact Kaggle adoption of a failed or cancelled run reconciles its existing ledger and releases its builder resource before clearing the handoff, so the next normal calculation can start after a missed terminal callback.
