@@ -286,3 +286,10 @@ cards showed walking with both the schedule (wall-211429559_3892) and programme
 poster and both canonical posts were already inspected; neither has a repost
 that explains these cases. This change has no VK ingestion or publisher delta.
 Release, live import and public card verification belong to coordinator acceptance.
+
+Coordinator review reproduced 13 legacy-icon regressions from actual production
+claim spellings (including `walking tour`, «пешеходная», «автобусная»). Exact
+alias normalization now reads only the existing type field; title/geography
+guesses stay removed. The distinguishing regression changed from 13 FAIL / 2 PASS
+to all PASS. Independent integrated transport/import/push/recovery tests: 89 PASS.
+Avatar layout PR1026 stays separate; this entry does not claim a live typed import.
