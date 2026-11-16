@@ -399,7 +399,8 @@ async def test_writer_rejects_story_that_drops_or_invents_an_excursion(monkeypat
         {"lead": "Хук", "paragraphs": [{"occurrence_ids": [745, 746, 999], "text": "Лишний id."}]},
         {"lead": "Хук", "paragraphs": [{"occurrence_ids": [745, 746], "text": "Оба на месте."}]},
         {"lead": "Хук", "paragraphs": [{"occurrence_ids": [745], "text": "Один."},
-                                       {"occurrence_ids": [746], "text": "Другой."}]},
+                                       {"occurrence_ids": [746], "text": "Другой."},
+                                       {"occurrence_ids": [], "text": ""}]},
     ])
 
     async def generate(*_args, **_kwargs):
