@@ -267,3 +267,5 @@ repeated accepted import. Focused guide/scheduler checks pass. Full relevant
 scheduler/guide/video/session regression run is recorded in task evidence.
 Production deployment and automatic acceptance of17 are separate live checks;
 this entry does not claim they have completed. Visual rendering is unchanged.
+
+Expanded local regression: 218 tests PASS, including scheduler, guide, Kaggle status, video poller/pipeline and partner scheduling. Initial five video fixture failures were due to missing tracked CherryFlash assets in the sparse checkout; restoring those tracked paths resolved all five. Runtime release remains a separate live acceptance step.
