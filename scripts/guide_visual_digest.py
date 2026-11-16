@@ -14,6 +14,7 @@ import json
 import os
 import sys
 import tempfile
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +28,7 @@ except Exception:  # pragma: no cover
 
 from db import Database
 from guide_excursions.visual_digest import (
+    VISUAL_DIGEST_CARD_LIMIT,
     build_visual_digest_issue,
     build_visual_digest_vk_text,
     default_review_publish_date,
@@ -36,6 +38,7 @@ from guide_excursions.visual_digest import (
     publish_visual_digest_to_telegram,
     publish_visual_digest_to_vk,
     render_visual_digest_cards,
+    select_visual_digest_rows,
 )
 
 
@@ -123,10 +126,60 @@ async def _publish(args: argparse.Namespace) -> int:
             parent.mkdir(parents=True, exist_ok=True)
             review_dir = Path(tempfile.mkdtemp(prefix="guide-vk-", dir=parent))
             print(f"VK review files: {review_dir}", file=sys.stderr)
+        review_rows = None
+        selection = {}
+        issue_id = args.issue_id
+        if (args.select_only or args.previous_review) and args.as_of is None:
+            raise ValueError("--select-only and --previous-review require --as-of")
+        if args.as_of is not None:
+            if args.group_id != "243343951" or args.test_mention not in (858363572, 1134828279):
+                raise ValueError("--as-of requires the review community and an approved test recipient")
+            previous_ids = set()
+            last_number = 0
+            for path in args.previous_review:
+                receipt = json.loads(path.read_text(encoding="utf-8"))
+                if not (receipt.get("published") is True and str(receipt.get("group_id")) == args.group_id
+                        and receipt.get("url") and date.fromisoformat(receipt["as_of"]) < args.as_of
+                        and receipt.get("covered_occurrence_ids")):
+                    raise ValueError(f"Expected a successful earlier dated review in {path}")
+                previous_ids.update(int(i) for i in receipt["covered_occurrence_ids"])
+                last_number = max(last_number, int(receipt["issue_id"]))
+            max_items = max(1, min(args.max_cards, 10)) * VISUAL_DIGEST_CARD_LIMIT
+            if issue_id is not None:
+                if previous_ids:
+                    raise ValueError("Use --issue-id for the existing edition or --previous-review for projected selection")
+                issue = await load_visual_digest_issue(db, issue_id, selection_only=args.select_only)
+                if not issue:
+                    raise ValueError(f"Visual issue {issue_id} does not exist")
+                review_rows = list(issue["items"])[:max_items]
+            else:
+                review_rows = await select_visual_digest_rows(db, max_items=max_items, as_of=args.as_of,
+                                                              previous_ids=sorted(previous_ids))
+                if not last_number:
+                    async with db.raw_conn() as conn:
+                        cursor = await conn.execute("SELECT COALESCE(MAX(id), 0) FROM guide_digest_issue")
+                        last_number = int((await cursor.fetchone())[0])
+                issue_id = last_number + 1
+            selection = {
+                "as_of": args.as_of.isoformat(), "issue_id": issue_id, "projected_number": args.issue_id is None,
+                "covered_occurrence_ids": sorted({i for r in review_rows for i in r.get("covered_visual_ids", [r["id"]])}),
+                "items": [{"id": r["id"], "title": r.get("canonical_title"), "date": r.get("date"),
+                           "time": r.get("time"), "source": r.get("source_post_url")} for r in review_rows],
+            }
+            output = json.dumps(selection, ensure_ascii=False, indent=2)
+            print(output, file=sys.stderr, flush=True)
+            if review_dir is not None:
+                (review_dir / "selection.json").write_text(output, encoding="utf-8")
+            if args.select_only or not review_rows:
+                print(output)
+                return 0 if review_rows else 2
+            if args.issue_id is None:
+                from source_avatars import prepare_guide_avatars
+                await prepare_guide_avatars(review_rows, db)
         result = await publish_visual_digest_to_vk(
             db,
             None,
-            issue_id=args.issue_id,
+            issue_id=issue_id,
             max_cards=args.max_cards,
             group_id=args.group_id,
             target=args.target,
@@ -134,7 +187,9 @@ async def _publish(args: argparse.Namespace) -> int:
             publish_stories=bool(args.stories),
             test_mention=args.test_mention,
             review_dir=review_dir,
+            review_rows=review_rows,
         )
+        result.update(selection)
         if review_dir is not None:
             result["review_dir"] = str(review_dir)
             (review_dir / "receipt.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -215,6 +270,9 @@ def main() -> int:
     publish.add_argument("--max-cards", type=int, default=1)
     publish.add_argument("--group-id")
     publish.add_argument("--test-mention", type=int, help="Substitute recipient for eligible guides in the owner's review group")
+    publish.add_argument("--as-of", type=date.fromisoformat, help="Preview the daily selection for this local date in the review community")
+    publish.add_argument("--previous-review", type=Path, action="append", default=[], help="Earlier published dated review receipt; repeat for each earlier day")
+    publish.add_argument("--select-only", action="store_true", help="Print the dated selection without generating or posting a digest")
     publish.add_argument("--review-dir", help="Save the input, model response, posted text, cards and receipt for this test run")
     publish.add_argument("--target")
     publish.add_argument("--publish-date", type=int, help="Unix timestamp; use 0 for immediate")

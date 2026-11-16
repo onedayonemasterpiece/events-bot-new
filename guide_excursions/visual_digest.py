@@ -659,6 +659,39 @@ def _place_line(row: Mapping[str, Any]) -> str:
     return _plain(_fact(row, "city") or row.get("city")) or "детали в тексте"
 
 
+def _schedule_attributes_day_to_other_title(post: Mapping[str, Any], title: str, day: str) -> bool:
+    """A named outing in the introduction is not automatically the first dated entry."""
+    text = str(post.get("text") or "").casefold().replace("ё", "е")
+    sections = re.split(r"(?m)^\s*расписание\s*:\s*", text, maxsplit=1)
+    if len(sections) != 2 or not title or not day:
+        return False
+    intro, schedule = sections
+    name = _place_phrase(title)
+    try:
+        anchor = datetime.fromisoformat(str(post.get("post_date") or day))
+    except ValueError:
+        return False
+    if not name.search(intro) or any(extract_date_iso(line, post_date=anchor) == day for line in intro.splitlines()):
+        return False
+    entries = [line for line in schedule.splitlines() if extract_date_iso(line, post_date=anchor) == day]
+    if not entries or any(name.search(line) for line in schedule.splitlines()):
+        return False
+    # Require an explicitly titled schedule entry. A terse time or a location alone
+    # gives no reason to override the extracted date.
+    return all(re.search(r"[—–-]\s*[«\"“][^»\"”]+[»\"”]", entry) for entry in entries)
+
+
+def _opening_has_only_published_time(post: Mapping[str, Any], clock: str) -> bool:
+    text = str(post.get("text") or "")
+    if not re.fullmatch(r"\d{1,2}:\d{2}", clock) or text.count(clock) != 1:
+        return False
+    return bool(re.search(
+        r"\b(?:открытие|церемония)\b[^.!?\n]*?\bв\s+" + re.escape(clock) +
+        r"[.!]\s*В\s+(?:этот|тот)\s+(?:же\s+)?день\b[^.!?\n]*?\b(?:экскурси|прогулк)",
+        text, re.I,
+    ))
+
+
 def _apply_published_facts(row: dict[str, Any], posts: Sequence[Mapping[str, Any]]) -> None:
     """Recover the outing's extracted roles and fare before loading portraits or composing a post."""
     title = _plain(row.get("canonical_title"))
@@ -1291,7 +1324,49 @@ def _same_visual_departure(left: Mapping[str, Any], right: Mapping[str, Any]) ->
     return title == _plain(right.get("route_summary")).casefold() or other == _plain(left.get("route_summary")).casefold()
 
 
-def _conflicting_departure_logistics(rows: Sequence[Mapping[str, Any]]) -> bool:
+_FARE_LINE = re.compile(r"^\s*(?:стоимость|цена)(?: участия)?\s*:\s*(\d[^.!?\n]+)", re.I | re.M)
+_SUPPLEMENT = re.compile(
+    r"(\b(?:дополнительно|отдельно) оплачивается [а-яё-]+)\s*[—–-]\s*"
+    r"(\d[\d \u00a0]*)\s*(?:руб(?:лей|ля|ль)?|₽)(?: с человека)?", re.I,
+)
+
+
+def _agreed_base_fare(rows: Sequence[Mapping[str, Any]]) -> str:
+    """Remove a disputed supplement only when the two published offers otherwise agree."""
+    terms: dict[str, set[str]] = {}
+    base_amounts: set[str] = set()
+    for row in rows:
+        stored = re.match(r"\d[\d\s]*", _plain(row.get("price_line") or row.get("price_text")))
+        if stored:
+            base_amounts.add("".join(stored[0].split()))
+        for post in row.get("linked_posts", []):
+            text = str(post.get("text") or "")
+            prices = _FARE_LINE.findall(text)
+            if len(prices) != 1:
+                continue
+            price = prices[0].strip()
+            base_amounts.add("".join(re.match(r"\d[\d\s]*", price)[0].split()))
+            supplement = _SUPPLEMENT.search(price)
+            if supplement and supplement.group(2).strip():
+                common = _SUPPLEMENT.sub(r"\1", price, count=1)
+                terms.setdefault(common, set()).add("".join(supplement.group(2).split()))
+    if len(terms) == 1 and len(base_amounts) == 1:
+        common, amounts = next(iter(terms.items()))
+        if len(amounts) > 1:
+            return common
+    return ""
+
+
+def _agreed_fare_source(text: str, agreed_fare: str) -> str:
+    def reconcile(match: re.Match[str]) -> str:
+        price = match[1].strip()
+        if _SUPPLEMENT.sub(r"\1", price, count=1) == agreed_fare:
+            return match[0].replace(match[1], agreed_fare)
+        return match[0]
+    return _FARE_LINE.sub(reconcile, text)
+
+
+def _conflicting_departure_logistics(rows: Sequence[Mapping[str, Any]], *, agreed_fare: str = "") -> bool:
     times = [_plain(r.get("time")) for r in rows if _plain(r.get("time"))]
     spans = {re.sub(r"\s*[-–—]\s*", "-", t) for t in times}
     starts = {span.split("-")[0] for span in spans}
@@ -1300,7 +1375,7 @@ def _conflicting_departure_logistics(rows: Sequence[Mapping[str, Any]]) -> bool:
     # Preserve the fuller fare ("4000 рублей с человека ...") and a compatible
     # end time. Incompatible prices or starts could describe two separate offers.
     return (len(starts) > 1 or len({t for t in spans if "-" in t}) > 1
-            or any(not known_fares[-1].startswith(f + " ") for f in known_fares[:-1]))
+            or (not agreed_fare and any(not known_fares[-1].startswith(f + " ") for f in known_fares[:-1])))
 
 
 def _select_documented_departures(requested: Sequence[dict[str, Any]], peers: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1310,10 +1385,12 @@ def _select_documented_departures(requested: Sequence[dict[str, Any]], peers: Se
         if row["id"] in seen:
             continue
         members = [m for m in peers if m["id"] == row["id"] or _same_visual_departure(row, m)]
-        incompatible = (_conflicting_departure_logistics(members)
+        agreed_fare = _agreed_base_fare(members)
+        incompatible = (_conflicting_departure_logistics(members, agreed_fare=agreed_fare)
                         or any(not _same_visual_departure(a, b) for i, a in enumerate(members) for b in members[i + 1:]))
         if incompatible or any(m["id"] in seen for m in members):
             members = [row]
+            agreed_fare = _agreed_base_fare(members)
         source = max(members, key=lambda m: (
             bool(m.get("time") and _plain(m.get("price_text"))), len(_plain(m.get("time"))),
             len(_plain(m.get("route_summary"))), -int(m["id"])))
@@ -1340,6 +1417,14 @@ def _select_documented_departures(requested: Sequence[dict[str, Any]], peers: Se
             representative["covered_visual_states"] = {str(m["id"]): _visual_item_state(m) for m in members}
         representative["covered_visual_ids"] = sorted(m["id"] for m in members)
         representative["linked_posts"] = [post for member in members for post in member["linked_posts"]]
+        if agreed_fare:
+            representative["price_line"] = representative["price_text"] = agreed_fare
+            representative["fact_pack"] = {**(representative.get("fact_pack") or {}), "price_text": agreed_fare}
+            # Preserve the originals for provenance while excluding the disputed figure from writer input.
+            representative["linked_posts"] = [
+                {**post, "writer_text": _agreed_fare_source(post.get("text") or "", agreed_fare)}
+                for post in representative["linked_posts"]
+            ]
         representative["visual_selection_reason"] = row.get("visual_selection_reason")
         seen.update(representative["covered_visual_ids"])
         selected.append(representative)
@@ -1430,6 +1515,16 @@ async def _load_visual_rows(conn: aiosqlite.Connection, records: Sequence[Mappin
         state_map = _visual_issue_state_map(item.get("visual_issue_media_items_json"))
         item["published_visual_digest_state"] = state_map.get(str(item.get("id") or ""))
         posts = linked.get(item["id"], [])
+        if posts and all(_schedule_attributes_day_to_other_title(post, _plain(item.get("canonical_title")),
+                                                                _plain(item.get("date"))) for post in posts):
+            continue
+        clock = _plain(item.get("time"))
+        if posts and clock and all(_opening_has_only_published_time(post, clock) for post in posts):
+            item["time"] = item["fact_pack"]["time"] = None
+            for key in ("summary_one_liner", "digest_blurb", "main_hook", "main_hook_evidence", "route_summary"):
+                if clock in str(item.get(key) or "") or clock in str(item["fact_pack"].get(key) or ""):
+                    item.pop(key, None)
+                    item["fact_pack"].pop(key, None)
         item["linked_posts"] = posts
         item["earlier_route_posts"] = earlier.get(item["id"], [])
         primary = posts[0] if posts else {}
@@ -1471,8 +1566,9 @@ async def _include_documented_departures(conn: aiosqlite.Connection, requested: 
     return _select_documented_departures(requested, peers)
 
 
-async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) -> list[dict[str, Any]]:
-    await ensure_visual_digest_schema(conn)
+async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int, as_of: date | None = None) -> list[dict[str, Any]]:
+    if as_of is None:
+        await ensure_visual_digest_schema(conn)
     sql = _VISUAL_ROW_QUERY + """
         WHERE go.digest_eligible = 1
           AND go.date IS NOT NULL
@@ -1487,7 +1583,7 @@ async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) ->
         ORDER BY go.date ASC, COALESCE(go.time, '99:99') ASC, go.updated_at DESC
         LIMIT ?
     """
-    cur = await conn.execute(sql, (_visual_start_iso(), _future_cutoff_iso(), int(limit)))
+    cur = await conn.execute(sql, (_visual_start_iso(as_of), _future_cutoff_iso(as_of), int(limit)))
     candidates = []
     for item in await _load_visual_rows(conn, await cur.fetchall()):
         reason = _visual_selection_reason(item)
@@ -1511,11 +1607,21 @@ def _source_post_url(payload_url: Any, fallback_url: Any) -> str | None:
     return primary or fallback or None
 
 
-async def select_visual_digest_rows(db: Database, *, max_items: int = VISUAL_DIGEST_CARD_LIMIT) -> list[dict[str, Any]]:
+async def select_visual_digest_rows(db: Database, *, max_items: int = VISUAL_DIGEST_CARD_LIMIT,
+                                    as_of: date | None = None, previous_ids: Sequence[int] = ()) -> list[dict[str, Any]]:
     async with db.raw_conn() as conn:
         await _enable_row_factory(conn)
         raw_limit = max(int(max_items) * 4, 48)
-        rows = await _fetch_visual_candidates(conn, limit=raw_limit)
+        if as_of is None:
+            rows = await _fetch_visual_candidates(conn, limit=raw_limit)
+        else:
+            rows = await _fetch_visual_candidates(conn, limit=raw_limit + len(previous_ids), as_of=as_of)
+        candidates = {r["id"] for r in rows}
+        if previous_ids and rows:
+            # Compare today's candidates with yesterday's departures using the
+            # normal deduplicator, even when a prior row has since been marked.
+            previous = await _fetch_rows_by_ids(conn, previous_ids)
+            rows.extend(row for row in previous if row["id"] not in candidates)
     if not rows:
         return []
     dedup = await deduplicate_occurrence_rows(rows, family=VISUAL_DIGEST_FAMILY, limit=max(len(rows), int(max_items)))
@@ -1523,10 +1629,22 @@ async def select_visual_digest_rows(db: Database, *, max_items: int = VISUAL_DIG
     # The ordinary deduplicator may choose among candidates more broadly. Keep
     # distinct rows when a single apparent route has conflicting published starts.
     by_id = {r["id"]: r for r in rows}
+    covered = {}
     for canonical_id, member_ids in dedup.coverage_by_display_id.items():
         group = [by_id[i] for i in member_ids]
         if len(group) > 1 and _conflicting_departure_logistics(group):
             display_rows.extend(dict(r) for r in group if r["id"] != canonical_id)
+        elif as_of is not None:
+            covered[canonical_id] = sorted({i for r in group for i in r.get("covered_visual_ids", [r["id"]])})
+    if as_of is not None:
+        shown = set(previous_ids)
+        remaining = []
+        for row in display_rows:
+            ids = covered.get(row["id"], row.get("covered_visual_ids", [row["id"]]))
+            if row["id"] in candidates and not shown.intersection(ids):
+                row["covered_visual_ids"] = ids
+                remaining.append(row)
+        display_rows = remaining
     display_rows.sort(key=lambda r: (str(r.get("date") or ""), str(r.get("time") or "99:99"), int(r.get("id") or 0)))
     return display_rows[: int(max_items)]
 
@@ -1598,10 +1716,11 @@ def _issue_occurrence_ids(items_json: Any) -> list[int]:
     return out
 
 
-async def load_visual_digest_issue(db: Database, issue_id: int | None = None) -> dict[str, Any] | None:
+async def load_visual_digest_issue(db: Database, issue_id: int | None = None, *, selection_only: bool = False) -> dict[str, Any] | None:
     async with db.raw_conn() as conn:
         await _enable_row_factory(conn)
-        await ensure_visual_digest_schema(conn)
+        if not selection_only:
+            await ensure_visual_digest_schema(conn)
         if issue_id is not None:
             cur = await conn.execute(
                 "SELECT * FROM guide_digest_issue WHERE id=? AND family=?",
@@ -1618,8 +1737,9 @@ async def load_visual_digest_issue(db: Database, issue_id: int | None = None) ->
         ids = _issue_occurrence_ids(issue["items_json"])
         rows = await _fetch_rows_by_ids(conn, ids)
     payload = dict(issue)
-    from source_avatars import prepare_guide_avatars
-    await prepare_guide_avatars(rows, db)
+    if not selection_only:
+        from source_avatars import prepare_guide_avatars
+        await prepare_guide_avatars(rows, db)
     payload["items"] = rows
     return payload
 
@@ -2199,7 +2319,7 @@ def _vk_narrative_payload(items: Sequence[Mapping[str, Any]]) -> tuple[dict[str,
             posts = [{"url": row.get("dedup_source_url", row.get("source_post_url")),
                       "text": row.get("dedup_source_text")}]
         for post in posts:
-            source_text = (post.get("text") or "").strip()
+            source_text = (post.get("writer_text") or post.get("text") or "").strip()
             if not source_text:
                 continue
             source_url = _plain(post.get("url"))
@@ -2513,10 +2633,13 @@ async def publish_visual_digest_to_vk(
     publish_stories: bool = False,
     test_mention: int | None = None,
     review_dir: Path | None = None,
+    review_rows: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     from .max_delivery import run_legacy_delivery
     if review_dir is not None and test_mention is None:
         raise ValueError("A VK review capture requires a test publication")
+    if review_rows is not None and (test_mention is None or issue_id is None):
+        raise ValueError("Projected rows require a numbered test publication")
     if test_mention is not None and (
         str(group_id).lstrip("-") != "243343951" or test_mention not in (858363572, 1134828279)
     ):
@@ -2529,7 +2652,8 @@ async def publish_visual_digest_to_vk(
         return await _publish_visual_digest_to_vk_once(
             db, bot, issue_id=issue_id, max_cards=max_cards, group_id=group, target=target,
             publish_date=publish_date, vk_api_fn=vk_api_fn, post_to_vk_fn=post_to_vk_fn,
-            upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn, publish_stories=publish_stories, test_mention=test_mention, review_dir=review_dir)
+            upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn, publish_stories=publish_stories, test_mention=test_mention,
+            review_dir=review_dir, review_rows=review_rows)
     if test_mention is not None:
         # Each deliberate review run is a new post, including for the same issue.
         return await send_one()
@@ -2558,7 +2682,10 @@ async def _publish_visual_digest_to_vk_once(
     publish_stories: bool = False,
     test_mention: int | None = None,
     review_dir: Path | None = None,
+    review_rows: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    if review_rows is not None and (test_mention is None or issue_id is None):
+        raise ValueError("Projected rows require a numbered test publication")
     if vk_api_fn is None:
         import main
 
@@ -2572,7 +2699,9 @@ async def _publish_visual_digest_to_vk_once(
 
         upload_vk_photo_bytes_fn = main.upload_vk_photo_bytes  # type: ignore[attr-defined]
 
-    if issue_id is None:
+    if review_rows is not None:
+        rows = list(review_rows)
+    elif issue_id is None:
         built = await build_visual_digest_issue(db, max_cards=max_cards)
         issue_id = int(built["issue_id"])
         rows = list(built.get("items") or [])

@@ -533,6 +533,7 @@ async def _generate_json(
     temperature: float,
     candidate_key_ids: Sequence[str] | None,
     trace: dict[str, Any] | None = None,
+    max_output_tokens: int = 2400,
 ) -> dict[str, Any] | None:
     raw = None
     waited_seconds = 0.0
@@ -547,7 +548,7 @@ async def _generate_json(
                         "response_mime_type": "application/json",
                         "response_schema": schema,
                     },
-                    max_output_tokens=2400,
+                    max_output_tokens=max_output_tokens,
                     candidate_key_ids=list(candidate_key_ids) if candidate_key_ids else None,
                 ),
                 timeout=float(GUIDE_DIGEST_WRITER_LLM_TIMEOUT_SECONDS),
@@ -1088,7 +1089,7 @@ async def ask_vk_narrative(
                     continue
                 data = await asyncio.wait_for(
                     _generate_json(client, prompt, _VK_NARRATIVE_SCHEMA,
-                                   temperature=0.7, candidate_key_ids=keys, trace=trace),
+                                   temperature=0.7, candidate_key_ids=keys, trace=trace, max_output_tokens=8192),
                     timeout=max(GUIDE_DIGEST_WRITER_TOTAL_TIMEOUT_SECONDS, GUIDE_DIGEST_WRITER_LLM_TIMEOUT_SECONDS),
                 )
             if trace.get("model"):
@@ -1109,4 +1110,3 @@ async def ask_vk_narrative(
                         issue_id, provider, requested_model, trace.get("model"), attempt.get("outcome"))
     logger.warning("guide_vk_narrative issue_id=%s outcome=compact", issue_id)
     return None
-

@@ -799,3 +799,73 @@ def test_card_wording_update_cannot_requeue_old_issue():
     assert vd._visual_selection_reason(dict(row, published_visual_digest_state=old)) == ""
     assert vd._visual_selection_reason(dict(row, published_visual_digest_state=old,
                                            route_summary="Музей")) == "changed_place"
+
+
+@pytest.mark.asyncio
+async def test_projected_dates_use_current_announcements_and_leave_publication_history_intact(tmp_path):
+    from db import Database
+
+    db = Database(str(tmp_path / "forecast.sqlite"))
+    await db.init()
+    try:
+        async with db.raw_conn() as conn:
+            source = await conn.execute("INSERT INTO guide_source(username, source_kind) VALUES('outings', 'guide')")
+            source_id = source.lastrowid
+            posts = [
+                (1, 'Приходите на прогулку «Парк у ручья».\nРасписание:\n'
+                    '19.11 в 14:00 — «Городские деревья».\n21.11 в 11:00 — «Берег реки».'),
+                (2, 'Открытие завода в 12:00. В этот же день пройдёт экскурсия по заводу.'),
+                (3, 'Премьера: экскурсия по набережной.'),
+            ]
+            for post_id, text in posts:
+                await conn.execute("""
+                    INSERT INTO guide_monitor_post(id, source_id, message_id, post_date, source_url, text)
+                    VALUES(?,?,?,'2026-11-10',?,?)
+                """, (post_id, source_id, post_id, f"https://vk.com/wall-1_{post_id}", text))
+            rows = [
+                (1, "Парк у ручья", "2026-11-19", "14:00", 1),
+                (2, "Городские деревья", "2026-11-19", "14:00", 1),
+                (3, "Экскурсия по заводу", "2026-11-20", "12:00", 2),
+                (4, "Городские деревья", "2026-11-19", "14:00", 1),
+                (5, "Экскурсия по набережной", "2026-11-17", "10:00", 3),
+            ]
+            for occurrence_id, title, day, clock, post_id in rows:
+                await conn.execute("""
+                    INSERT INTO guide_occurrence(id,source_fingerprint,canonical_title,title_normalized,
+                        date,time,city,guide_names_json,organizer_names_json,primary_source_id)
+                    VALUES(?,?,?,?,?,?,'Калининград','["Ольга"]','["Парк"]',?)
+                """, (occurrence_id, f"post-{occurrence_id}", title, title.casefold(), day, clock, source_id))
+                await conn.execute("INSERT INTO guide_occurrence_source(occurrence_id,post_id,role) VALUES(?,?,'primary')",
+                                   (occurrence_id, post_id))
+            await conn.commit()
+
+        trees, = await vd.select_visual_digest_rows(db, max_items=1, as_of=date(2026, 11, 17))
+        assert trees["canonical_title"] == "Городские деревья" and trees["covered_visual_ids"] == [2, 4]
+        factory, = await vd.select_visual_digest_rows(db, max_items=1, as_of=date(2026, 11, 18),
+                                                     previous_ids=trees["covered_visual_ids"])
+        assert factory["id"] == 3 and factory["time"] is None
+        async with db.raw_conn() as conn:
+            cursor = await conn.execute("SELECT COUNT(*) FROM guide_digest_issue")
+            assert (await cursor.fetchone())[0] == 0
+            cursor = await conn.execute("SELECT COUNT(published_visual_digest_issue_id) FROM guide_occurrence")
+            assert (await cursor.fetchone())[0] == 0
+    finally:
+        await db.close()
+
+
+def test_same_departure_preserves_sources_and_reports_only_agreed_lunch_terms():
+    base = dict(date="2026-11-28", city="Калининград", time="09:00", guide_names=["Эмма Басова"],
+                organizer_names=["Хранители руин"], canonical_title="Самбийское кольцо")
+    rows = []
+    for occurrence_id, amount in [(740, 600), (741, 800)]:
+        fare = f"4000 рублей с человека, отдельно оплачивается обед — {amount} рублей"
+        rows.append(dict(base, id=occurrence_id, price_text=fare, route_summary="Самбийское кольцо",
+                         linked_posts=[{"url": f"https://vk.com/wall-1_{occurrence_id}", "text": f"Стоимость: {fare}."}]))
+    row, = vd._select_documented_departures(rows, rows)
+    assert row["covered_visual_ids"] == [740, 741]
+    assert row["price_text"] == "4000 рублей с человека, отдельно оплачивается обед"
+    assert [post["text"] for post in row["linked_posts"]] == [r["linked_posts"][0]["text"] for r in rows]
+    payload, _ = vd._vk_narrative_payload([row])
+    assert {src["text"] for src in payload["sources"]} == {f"Стоимость: {row['price_text']}."}
+    changed = dict(rows[1], price_text="5000 рублей")
+    assert len(vd._select_documented_departures([rows[0], changed], [rows[0], changed])) == 2
