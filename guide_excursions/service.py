@@ -2698,7 +2698,10 @@ async def _scan_and_import_source(
     }
     # External I/O must not retain the preceding source's SQLite writer.
     await conn.commit()
-    source_meta, posts = await scan_source_posts(client, username=username, limit=limit, days_back=days_back)
+    from source_avatars import telegram_portrait
+    known_avatar = _safe_json_object(source_row["flags_json"]).get("avatar")
+    hint = {"previous_avatar": known_avatar} if telegram_portrait(known_avatar) else {}
+    source_meta, posts = await scan_source_posts(client, username=username, limit=limit, days_back=days_back, **hint)
     enrich_targets: list[dict[str, Any]] = []
     template_ids_seen: set[int] = set()
     await _update_source_runtime_meta(
@@ -2709,6 +2712,8 @@ async def _scan_and_import_source(
         about_links=source_meta.about_links,
         last_scanned_message_id=max((post.message_id for post in posts), default=None),
     )
+    from source_avatars import import_telegram_portrait
+    await import_telegram_portrait(conn, int(source_row["id"]), getattr(source_meta, "avatar", None))
     source_context = dict(source_row)
     source_context["title"] = source_meta.source_title
     source_context["about_text"] = source_meta.about_text
@@ -3033,6 +3038,8 @@ async def _import_source_payload(
         about_links=_normalize_string_list(source_payload.get("about_links"), limit=16),
         last_scanned_message_id=max((int(item.get("message_id") or 0) for item in posts), default=None) or None,
     )
+    from source_avatars import import_telegram_portrait
+    await import_telegram_portrait(conn, int(source_row["id"]), source_payload.get("avatar"))
     source_context = dict(source_row)
     source_context["title"] = source_title
     source_context["about_text"] = collapse_ws(source_payload.get("about_text")) or None
@@ -3278,6 +3285,7 @@ async def _import_results_file_inner(
     }
     errors: list[str] = []
     source_reports: list[dict[str, Any]] = []
+    imported_source_ids = set()
     if data.get("run_error"):
         errors.append(str(data["run_error"]))
         metrics["errors"] += 1
@@ -3316,6 +3324,7 @@ async def _import_results_file_inner(
                 source_payload=source_payload,
                 results_path=results_path,
             )
+            imported_source_ids.add(int(source_row["id"]))
             metrics["sources_scanned"] += 1
             source_reports.append(source_report)
             occurrence_changes.extend(list(source_report.get("occurrence_changes") or []))
@@ -3325,7 +3334,9 @@ async def _import_results_file_inner(
                 errors.extend(source_errors)
                 metrics["errors"] += len(source_errors)
         await conn.commit()
+    avatars_checked = await _refresh_imported_guide_avatars(db, imported_source_ids)
     summary = {
+        "avatar_sources_checked": avatars_checked,
         "run_id": collapse_ws(data.get("run_id")),
         "scan_mode": collapse_ws(data.get("scan_mode")),
         "partial": bool(data.get("partial")),
@@ -3337,6 +3348,16 @@ async def _import_results_file_inner(
         "occurrence_changes": occurrence_changes,
     }
     return metrics, errors, summary
+
+
+async def _refresh_imported_guide_avatars(db, source_ids) -> int:
+    # All social provider I/O starts after the occurrence transaction commits.
+    from source_avatars import refresh_guide_avatars
+    try:
+        return await refresh_guide_avatars(db, source_ids)
+    except Exception as exc:
+        logger.warning("guide_avatar refresh_failed error_type=%s", type(exc).__name__, exc_info=True)
+        return 0
 
 
 async def _run_guide_media_retention_guard(
@@ -3845,6 +3866,7 @@ async def run_guide_monitor(
                     await conn.commit()
                     sources = await _get_enabled_sources(conn)
                 client = await create_telethon_runtime_client()
+                imported_source_ids = set()
                 async with db.raw_conn() as conn:
                     await _enable_row_factory(conn)
                     for source in sources:
@@ -3858,6 +3880,7 @@ async def run_guide_monitor(
                                 limit=limit,
                                 days_back=days_back,
                             )
+                            imported_source_ids.add(int(source["id"]))
                             run_details["source_reports"].append(source_report)
                             run_details["occurrence_changes"].extend(list(source_report.get("occurrence_changes") or []))
                             metrics["sources_scanned"] += 1
@@ -3868,6 +3891,7 @@ async def run_guide_monitor(
                             metrics["errors"] += 1
                             errors.append(f"@{source['username']}: {type(exc).__name__}: {exc}")
                     await conn.commit()
+                run_details["avatar_sources_checked"] = await _refresh_imported_guide_avatars(db, imported_source_ids)
         except RemoteTelegramSessionBusyError as exc:
             logger.warning(
                 "guide_monitor.remote_telegram_session_busy run_id=%s conflicts=%s",

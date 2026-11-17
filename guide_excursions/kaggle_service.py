@@ -289,12 +289,17 @@ async def _build_config_payload(
             """
         )
         rows = await cur.fetchall()
+    from source_avatars import telegram_portrait
     sources: list[dict[str, Any]] = []
     for row in rows:
         try:
-            flags = json.loads(row["flags_json"]) if row["flags_json"] else {}
-        except Exception:
+            flags = json.loads(row["flags_json"] or "{}")
+        except (TypeError, ValueError):
             flags = {}
+        if not isinstance(flags, dict):
+            flags = {}
+        state = flags.pop("avatar", None)
+        previous_avatar = {key: state[key] for key in ("peer_id", "photo_id")} if telegram_portrait(state) else None
         platform = str(row["platform"] or "telegram").strip().lower() or "telegram"
         username = str(row["username"] or "").strip()
         if platform == "vk":
@@ -310,7 +315,8 @@ async def _build_config_payload(
                 "source_kind": str(row["source_kind"] or "").strip() or None,
                 "trust_level": str(row["trust_level"] or "").strip() or None,
                 "priority_weight": float(row["priority_weight"] or 1.0),
-                "flags": flags if isinstance(flags, dict) else {},
+                "flags": flags,
+                **({"previous_avatar": previous_avatar} if previous_avatar else {}),
                 "base_region": str(row["base_region"] or "").strip() or None,
                 "last_scanned_message_id": int(row["last_scanned_message_id"]) if row["last_scanned_message_id"] is not None else None,
                 "display_name": str(row["display_name"] or "").strip() or None,

@@ -981,16 +981,16 @@ def _crop_circle(img: Image.Image, size: int) -> Image.Image:
     return out
 
 
-def _medallion_row(person: Mapping[str, Any]) -> dict[str, Any]:
-    return {"guide_names": [person["name"]], "source_title": person["name"],
+def _medallion_row(person: Mapping[str, Any], *, registered: bool = False) -> dict[str, Any]:
+    return {"guide_names": [person["name"]], "source_title": person["name"], "avatar_roles_resolved": registered,
             "source_avatar_path": person.get("path") or ""}
 
 
-def _shown_medallions(people: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+def _shown_medallions(people: Sequence[Mapping[str, Any]], *, registered: bool = False) -> list[Mapping[str, Any]]:
     """People with a picture; when nobody has one, a single initials badge (the guide first)."""
     def pictured(person: Mapping[str, Any]) -> bool:
         row = _medallion_row(person)
-        bundled = _AVATAR_FILES.get(_avatar_key(row), "")
+        bundled = "" if registered else _AVATAR_FILES.get(_avatar_key(row), "")
         return Path(str(row["source_avatar_path"])).is_file() or bool(bundled and (_AVATAR_DIR / bundled).is_file())
 
     shown = [person for person in people if pictured(person)]
@@ -1005,7 +1005,7 @@ def _draw_avatar(draw_img: Image.Image, row: Mapping[str, Any], x: int, y: int, 
     # subtle shadow
     d.ellipse((x - 4, y + 4, x + size + 4, y + size + 12), fill=(0, 0, 0, 34))
     d.ellipse((x - 4, y - 4, x + size + 4, y + size + 4), fill=_rgba(pal.card, 255), outline=_rgba(accent, 255), width=5)
-    key = _avatar_key(row)
+    key = "" if row.get("avatar_roles_resolved") else _avatar_key(row)
     path = _AVATAR_DIR / _AVATAR_FILES.get(key, "")
     dynamic = Path(str(row.get("source_avatar_path") or ""))
     if dynamic.is_file():
@@ -1179,7 +1179,7 @@ def render_visual_digest_card(
         rd = ImageDraw.Draw(row_layer)
         _draw_date_tile(rd, row, row_h, accent, palette)
         tx = 238
-        participants = _shown_medallions(row.get("participant_medallions") or [])
+        participants = _shown_medallions(row.get("participant_medallions") or [], registered=bool(row.get("avatar_roles_resolved")))
         av_size = 140
         avatar_step = round(av_size * 0.8)
         av_x = 820 - max(0, len(participants) - 1) * avatar_step
@@ -1222,7 +1222,7 @@ def render_visual_digest_card(
         if participants:
             for idx, person in enumerate(participants):
                 px = av_x + idx * avatar_step
-                _draw_avatar(img, _medallion_row(person), px, av_y, av_size, palette, accent)
+                _draw_avatar(img, _medallion_row(person, registered=bool(row.get("avatar_roles_resolved"))), px, av_y, av_size, palette, accent)
         elif not row.get("source_roles_checked"):
             _draw_avatar(img, row, av_x, av_y, av_size, palette, accent)
         modes = _modes_for(row)

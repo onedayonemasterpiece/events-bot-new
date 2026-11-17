@@ -34,6 +34,7 @@ def test_scanners_preserve_public_links_and_use_private_post_links(path, usernam
         return SimpleNamespace(message_id=290, post_date=now, source_url=f'https://t.me/{username}/290')
     namespace = dict(datetime=datetime, timedelta=timedelta, timezone=timezone,
                      _utc_now=lambda: now, _collapse_group=collapse,
+                     _telegram_source_avatar=AsyncMock(return_value=None),
                      GuideScannedSourceMeta=SimpleNamespace,
                      functions=SimpleNamespace(channels=SimpleNamespace(GetFullChannelRequest=lambda **kw: None)))
     exec(compile(ast.Module(body=[function], type_ignores=[]), path, 'exec'), namespace)

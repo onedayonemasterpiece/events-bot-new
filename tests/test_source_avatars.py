@@ -134,7 +134,7 @@ async def test_two_source_aliases_merge_after_vk_resolution_and_keep_other_peopl
     photo = tmp_path / 'public.webp'
     async def ensure(owner):
         return photo
-    monkeypatch.setattr(avatars, 'ensure_vk_avatar', ensure)
+    monkeypatch.setattr(avatars, 'avatar_path', lambda owner: photo)
     monkeypatch.setattr(avatars, 'avatar_metadata', lambda owner: {'name': '80 лет единства'})
     profiles = [{'display_name': 'Анна Орлова', 'facts_rollup_json': '{"vk_user_id":123}'}]
     participants = avatars.guide_participants
@@ -325,13 +325,14 @@ async def test_first_party_operator_community_works_from_telegram_and_a_third_pa
     async with db.raw_conn() as conn:
         await conn.executescript('''
             CREATE TABLE guide_profile (id, display_name, marketing_name, profile_kind, source_links_json, facts_rollup_json);
-            CREATE TABLE guide_source (primary_profile_id, title, about_text, platform);
+            CREATE TABLE guide_source (primary_profile_id, title, about_text, platform, flags_json);
             INSERT INTO guide_profile VALUES (1, 'Профи-тур', '', 'operator', '[]', '{}');
-            INSERT INTO guide_source VALUES (1, 'Экскурсии от «Профи-тур»', 'Мы ВКонтакте: https://vk.com/profi_tur39', 'telegram');
+            INSERT INTO guide_source VALUES (1, 'Экскурсии от «Профи-тур»', 'Мы ВКонтакте: https://vk.com/profi_tur39', 'telegram', '{}');
             INSERT INTO guide_profile VALUES (2, 'Клуб Прогулок', '', 'project', '["https://vk.com/club_walks"]', '{}');
         ''')
     image = tmp_path / 'portrait.webp'
     Image.new('RGB', (64,64), 'red').save(image)
+    monkeypatch.setattr(avatars, 'AVATAR_ROOT', tmp_path)
     handles = []
     async def resolve(handle):
         handles.append(handle)
@@ -344,9 +345,14 @@ async def test_first_party_operator_community_works_from_telegram_and_a_third_pa
                    source_about_text='Мы ВКонтакте: https://vk.com/profi_tur39', organizer_names=['Профи-тур'])
     secondary = dict(source_platform='vk', source_title='Завод OSQ', source_flags_json='{"vk_id":123}',
                      organizer_names=['Профи-тур', 'Клуб прогулок'], guide_names=['Татьяна'])
+    await avatars._prepare_guide_avatars([primary, secondary], db, refresh=True)
+    monkeypatch.setattr(avatars, 'avatar_path', lambda owner: image if owner in {-12286984,-46} else None)
+    async def offline(*args): pytest.fail("Digest contacted a provider")
+    monkeypatch.setattr(main, 'vk_resolve_group', offline)
+    monkeypatch.setattr(avatars, 'ensure_vk_avatar', offline)
     await avatars.prepare_guide_avatars([primary, secondary, dict(primary)], db)
     assert set(handles) == {'profi_tur39', 'club_walks'} and len(handles) == 2
-    assert primary['participant_medallions'] == [{'name':'Профи-тур','roles':['Организатор'],'owner':-12286984,'path':str(image)}]
+    assert primary['participant_medallions'] == [{'name':'Профи-тур','roles':['Организатор'],'owner':-12286984,'path':str(image),'avatar_platform':'vk'}]
     assert [p['owner'] for p in secondary['participant_medallions']] == [None,-12286984,-46]
 
 
@@ -359,15 +365,16 @@ async def test_first_party_operator_community_works_from_telegram_and_a_third_pa
     ('Мы ВКонтакте: https://vk.com/first и https://vk.com/second', 'Бюро', 'Бюро', 'group'),
     ('Мы ВКонтакте: https://vk.com/example/posts', 'Бюро', 'Бюро', 'group'),
 ])
-async def test_organizer_portrait_needs_an_unambiguous_first_party_group(monkeypatch, about, source, title, kind):
+async def test_organizer_portrait_needs_an_unambiguous_first_party_group(monkeypatch, tmp_path, about, source, title, kind):
     import main
+    monkeypatch.setattr(avatars, 'AVATAR_ROOT', tmp_path)
     async def resolve(handle): return 123, title, handle, kind
     async def no_portrait(owner): pytest.fail(f'Unexpected portrait request for {owner}')
     monkeypatch.setattr(main, 'vk_resolve_group', resolve)
     monkeypatch.setattr(avatars, 'ensure_vk_avatar', no_portrait)
     row = dict(source_platform='telegram', source_title=source, source_about_text=about,
                organizer_names=['Бюро'], guide_names=['Инга Петрова'])
-    await avatars.prepare_guide_avatars([row])
+    await avatars._prepare_guide_avatars([row], None, refresh=True)
     assert [p['owner'] for p in row['participant_medallions']] == [None, None]
 
 
@@ -380,3 +387,108 @@ async def test_competing_registered_and_declared_communities_remain_unassigned(m
     organizer = {'name':'Бюро', 'roles':['Организатор'], 'owner':None}
     await avatars._attach_organizer_communities(row, [organizer], {'бюро':{'first'}}, {})
     assert organizer['owner'] is None
+
+
+@pytest.mark.asyncio
+async def test_normal_empty_import_refreshes_telegram_entity_and_digest_is_offline(tmp_path, monkeypatch):
+    import base64
+    from db import Database
+    import main
+    from guide_excursions import service, visual_digest
+
+    db = Database(str(tmp_path / 'guide.sqlite'))
+    await db.init()
+    monkeypatch.setattr(avatars, 'AVATAR_ROOT', tmp_path / 'avatars')
+    async def vk_identity(handle): return 12286984, 'ПУТЕШЕСТВИЯ «ПРОФИ-ТУР»', handle, 'group'
+    async def no_vk_photo(owner): return None
+    monkeypatch.setattr(main, 'vk_resolve_group', vk_identity)
+    monkeypatch.setattr(avatars, 'ensure_vk_avatar', no_vk_photo)
+    source = dict(platform='telegram', username='excursions_profitour', source_status='ok',
+                  source_title='Экскурсии от «Профи-тур»', about_text='Мы ВКонтакте: https://vk.com/profi_tur39', posts=[])
+    file = tmp_path / 'monitor.json'
+    async def run(photo, day, color=None, peer=-10077, corrupt=False):
+        source['avatar'] = dict(peer_id=peer, photo_id=photo, observed_at=f'2026-11-{day}T08:00:00+00:00')
+        if color:
+            stream=io.BytesIO();Image.new('RGB',(60,60),color).save(stream,'PNG')
+            source['avatar']['image_base64']=base64.b64encode(stream.getvalue()).decode()
+        if corrupt: source['avatar']['image_base64']='%%%broken'
+        file.write_text(json.dumps({'run_id':'portrait-monitor','sources':[source]}))
+        _,_,report=await service._import_results_file_inner(db,results_path=str(file))
+        assert report['avatar_sources_checked']==1
+        async with db.raw_conn() as conn:
+            flags,=await (await conn.execute("SELECT flags_json FROM guide_source WHERE username='excursions_profitour'")).fetchone()
+        return json.loads(flags)['avatar']
+    try:
+        first=await run('100',10,'red')
+        again=await run('100',11)
+        assert first['sha256']==again['sha256'] and first['observed_at']<again['observed_at']
+        changed=await run('101',12,'blue')
+        assert changed['sha256']!=first['sha256']
+        assert (await run('102',13,corrupt=True))==changed
+        assert (await run('99',10,'green'))==changed
+        assert (await run('77',14,'black',peer=-10088))==changed
+        changed=await run('103',15,'navy')
+        assert len(list((avatars.AVATAR_ROOT/'telegram'/'-10077').glob('*.webp')))==2
+        assert not avatars.telegram_portrait(first)
+        async def offline(*a,**k): pytest.fail("Digest requested network")
+        monkeypatch.setattr(main,'vk_resolve_group',offline)
+        monkeypatch.setattr(main,'vk_api',offline)
+        monkeypatch.setattr(avatars,'ensure_vk_avatar',offline)
+        row=dict(canonical_title='Экскурсия на завод OSQ Group',date='2026-11-19',source_roles_checked=True,
+                 guide_names=['Анна Петрова'],organizer_names=['Профи-тур'],source_platform='vk',
+                 source_flags_json='{"vk_id":900}',source_title='Завод OSQ')
+        await avatars.prepare_guide_avatars([row],db)
+        guide,organizer=row['participant_medallions']
+        assert guide['owner'] is None and guide['path'] is None
+        assert (organizer['name'],organizer['owner'],organizer['avatar_platform'],organizer['avatar_peer_id'])==('Профи-тур',-12286984,'telegram',-10077)
+        assert Image.open(organizer['path']).getpixel((160,160))[2]>110
+        assert visual_digest._shown_medallions(row['participant_medallions'],registered=True)==[organizer]
+        assert visual_digest.render_visual_digest_cards([row],issue_id=350)[0].startswith(b'\xff\xd8')
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_vk_avatar_checks_changed_provider_revision_without_reuploading_unchanged_bytes(tmp_path, monkeypatch):
+    import main, yandex_storage
+    monkeypatch.setattr(avatars,'AVATAR_ROOT',tmp_path)
+    now=[1000000]; monkeypatch.setattr(avatars.time,'time',lambda:now[0])
+    urls=[]; uploads=[]; version=[1]; color=['red']
+    async def vk(_name,**kw):
+        if version[0] is None: raise OSError("offline")
+        return [{'id':42,'name':'Бюро','photo_200':'https://vk.example/test','crop_photo':{'photo':{'id':version[0]}}}]
+    class Response:
+        def __init__(self): self.content=self
+        async def __aenter__(self):return self
+        async def __aexit__(self,*a):pass
+        def raise_for_status(self):pass
+        async def iter_chunked(self,_):
+            data=io.BytesIO();Image.new('RGB',(64,64),color[0]).save(data,'PNG')
+            yield data.getvalue()
+    def fetch(url,**kw): urls.append(url);return Response()
+    monkeypatch.setattr(main,'vk_api',vk)
+    monkeypatch.setattr(main,'get_http_session',lambda:SimpleNamespace(get=fetch))
+    monkeypatch.setattr(yandex_storage,'upload_yandex_public_bytes',lambda data,**kw:uploads.append(kw['object_path']) or 'https://cdn.example/current.webp')
+    p=await avatars.ensure_vk_avatar(-42); old=p.read_bytes()
+    for revision,col in ((1,'red'),(2,'red'),(3,'blue'),(None,'green')):
+        now[0]+=86401;version[0]=revision;color[0]=col
+        assert await avatars.ensure_vk_avatar(-42)==p
+    assert len(urls)==3 and len(uploads)==2 and len(set(uploads))==1
+    assert p.read_bytes()!=old and Image.open(p).getpixel((160,160))[2]>240
+
+
+@pytest.mark.asyncio
+async def test_reassigned_short_handle_cannot_replace_a_registered_owner(tmp_path, monkeypatch):
+    import main
+    monkeypatch.setattr(avatars, 'AVATAR_ROOT', tmp_path)
+    now = [2000000]
+    monkeypatch.setattr(avatars.time, 'time', lambda: now[0])
+    owners = iter((42, 77))
+    async def resolve(handle):
+        return next(owners), 'Бюро', handle, 'group'
+    monkeypatch.setattr(main, 'vk_resolve_group', resolve)
+    assert (await avatars._vk_identity('bureau', {}, True))['owner'] == -42
+    assert (await avatars._vk_identity('bureau', {}, False))['owner'] == -42
+    now[0] += 86401
+    assert await avatars._vk_identity('bureau', {}, True) is None
+    assert await avatars._vk_identity('bureau', {}, False) is None
