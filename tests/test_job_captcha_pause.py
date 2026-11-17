@@ -8,6 +8,55 @@ from main import Database, Event, JobOutbox, JobTask, JobStatus
 
 
 @pytest.mark.asyncio
+async def test_captcha_recovery_delivers_documents_before_page_jobs(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "captcha-document-order.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    future = now + timedelta(hours=2)
+    marker = "captcha_wait:document-before-pages"
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now.astimezone(tz) if tz else now.replace(tzinfo=None)
+
+    monkeypatch.setattr(main, "datetime", FixedDateTime)
+    monkeypatch.setattr(main, "VK_CAPTCHA_RESUME_SPACING_SEC", 30)
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    specs = [
+        ("festival", JobTask.festival_pages, {}),
+        ("weekend", JobTask.weekend_pages, {}),
+        ("document", JobTask.vk_calendar_comment, {"publish_date": int(now.timestamp()) - 600}),
+        ("initial", JobTask.vk_sync, {}),
+        ("frozen", JobTask.vk_calendar_comment, {"relations": {"related": [{"id": 1}]}}),
+        ("future", JobTask.vk_calendar_comment, {"publish_date": int(future.timestamp())}),
+    ]
+    try:
+        async with db.get_session() as session:
+            event = Event(title="Future programme", description="d", source_text="src",
+                          date="2099-01-04", time="12:00", location_name="loc")
+            session.add(event)
+            await session.flush()
+            jobs = [JobOutbox(event_id=event.id, task=task, payload=payload,
+                             status=JobStatus.paused, last_error=marker,
+                             next_run_at=future, attempts=3)
+                    for _, task, payload in specs]
+            session.add_all(jobs)
+            await session.commit()
+            ids = [job.id for job in jobs]
+        assert await main._resume_vk_captcha_outbox(db, marker) == 5
+        async with db.get_session() as session:
+            jobs = {name: await session.get(JobOutbox, job_id)
+                    for (name, _, _), job_id in zip(specs, ids)}
+            for index, name in enumerate(("frozen", "initial", "document", "festival", "weekend")):
+                assert main._ensure_utc(jobs[name].next_run_at) == now + timedelta(seconds=30 * index), name
+            assert main._ensure_utc(jobs["future"].next_run_at) == future
+            assert all(job.status == JobStatus.pending and job.attempts == 3 for job in jobs.values())
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("status", [JobStatus.paused, JobStatus.pending])
 async def test_reimport_preserves_captcha_pause_and_resumed_slot(tmp_path, status):
     db = Database(str(tmp_path / "captcha-enqueue.sqlite"))
