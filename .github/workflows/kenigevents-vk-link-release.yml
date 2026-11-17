@@ -1,0 +1,42 @@
+name: kenigevents.ru/vk/ NFC link page release
+
+# Uploads only site/root-links/vk/index.html to the kenigevents.ru bucket key
+# vk/index.html. The root page and every other object stay untouched.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Full origin/main SHA to publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID || vars.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ secrets.KENIGEVENTS_SITE_YC_REGION || vars.KENIGEVENTS_SITE_YC_REGION || 'ru-central1' }}
+      ENDPOINT: ${{ secrets.KENIGEVENTS_SITE_YC_ENDPOINT || vars.KENIGEVENTS_SITE_YC_ENDPOINT || 'https://storage.yandexcloud.net' }}
+      BUCKET: ${{ secrets.KENIGEVENTS_SITE_YC_BUCKET || vars.KENIGEVENTS_SITE_YC_BUCKET }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 0
+      - name: Upload vk/index.html from exact main
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          test "$(git rev-parse HEAD)" = "${{ inputs.expected_sha }}"
+          test "$(git rev-parse origin/main)" = "${{ inputs.expected_sha }}"
+          aws --endpoint-url "$ENDPOINT" s3 cp site/root-links/vk/index.html "s3://$BUCKET/vk/index.html" \
+            --content-type 'text/html; charset=utf-8' --cache-control 'public, max-age=300' --no-progress
+          curl -fsS https://kenigevents.ru/vk/ | cmp - site/root-links/vk/index.html
+          echo "PUBLISHED_URL=https://kenigevents.ru/vk/"
