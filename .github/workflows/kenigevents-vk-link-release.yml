@@ -1,7 +1,7 @@
-name: kenigevents.ru/vk/ NFC link page release
+name: kenigevents.ru NFC link pages release
 
-# Uploads only site/root-links/vk/index.html to the kenigevents.ru bucket key
-# vk/index.html. The root page and every other object stay untouched.
+# Uploads only site/root-links/<name>/index.html to the kenigevents.ru bucket key
+# <name>/index.html. The root page and every other object stay untouched.
 on:
   workflow_dispatch:
     inputs:
@@ -30,13 +30,16 @@ jobs:
         with:
           ref: ${{ inputs.expected_sha }}
           fetch-depth: 0
-      - name: Upload vk/index.html from exact main
+      - name: Upload link pages from exact main
         run: |
           set -euo pipefail
           git fetch origin main --no-tags
           test "$(git rev-parse HEAD)" = "${{ inputs.expected_sha }}"
-          test "$(git rev-parse origin/main)" = "${{ inputs.expected_sha }}"
-          aws --endpoint-url "$ENDPOINT" s3 cp site/root-links/vk/index.html "s3://$BUCKET/vk/index.html" \
-            --content-type 'text/html; charset=utf-8' --cache-control 'public, max-age=300' --no-progress
-          curl -fsS https://kenigevents.ru/vk/ | cmp - site/root-links/vk/index.html
-          echo "PUBLISHED_URL=https://kenigevents.ru/vk/"
+          git merge-base --is-ancestor HEAD origin/main
+          for page in site/root-links/*/index.html; do
+            key="${page#site/root-links/}"
+            aws --endpoint-url "$ENDPOINT" s3 cp "$page" "s3://$BUCKET/$key" \
+              --content-type 'text/html; charset=utf-8' --cache-control 'public, max-age=300' --no-progress
+            curl -fsS "https://kenigevents.ru/${key%index.html}" | cmp - "$page"
+            echo "PUBLISHED_URL=https://kenigevents.ru/${key%index.html}"
+          done
