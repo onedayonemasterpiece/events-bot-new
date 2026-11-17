@@ -4985,8 +4985,6 @@ def build_related(
     )
     cache_valid = (
         cache_compatible
-        and (anchor_ids is not None or (cache.get("graph_reciprocity") or {}).get("policy") != "scoped_pgvector_candidates")
-        and (related_mode != "pgvector" or cache.get("related_corpus_revision") == related_corpus_revision)
         and (
             related_mode != "bge"
             or cache.get("shared_bge_artifact_sha256")
@@ -5005,7 +5003,8 @@ def build_related(
         if str(value).isdigit()
     }
     cached_raw_chains = cache.get("raw_chains") if isinstance(cache.get("raw_chains"), dict) else None
-    if gemma_verify or (anchor_ids is not None and related_mode == "pgvector"):
+    incomplete_verified_ids: set[int] = set()
+    if gemma_verify or related_mode == "pgvector":
         # Older builders marked a whole packet verified even when the model skipped IDs.
         audit_cache = cache.get("gemma_audit_cache") or {}
         eligible_verified_ids = set()
@@ -5019,6 +5018,7 @@ def build_related(
                 anchor_id=event_id, fingerprints=fingerprints, candidate_ids=top_ids)
             if not top_ids or gemma_audit_complete(audit_cache.get(full_key), top_ids):
                 eligible_verified_ids.add(event_id)
+        incomplete_verified_ids = cached_verified_event_ids - eligible_verified_ids
         cached_verified_event_ids = eligible_verified_ids
     gemma_cache_ready = bool(
         gemma_verify
@@ -5040,21 +5040,37 @@ def build_related(
     )
     raw_chains_for_cache: dict[str, list[dict[str, Any]]] | None = None
     unfinished_anchor_ids: set[int] = set()
-    if anchor_ids is not None and related_mode == "pgvector":
+    if related_mode == "pgvector":
         graph_meta = {"policy": "scoped_pgvector_candidates"}
+        if cache_valid:
+            graph_meta.update(copy.deepcopy(cache.get("graph_reciprocity") or {}))
         if not cache_compatible:
             cached_verified_event_ids.clear()
             # A different embedding recipe needs a fresh ranked shortlist.
             cached_raw_chains = None
         # First publications need their own anchors, not a cold audit of every
         # old page. Keep the complete catalog available to retrieval/verifier.
-        targets = set(anchor_ids) | (changed_event_ids if cache_compatible and previous_fingerprints else set())
+        if anchor_ids is not None:
+            targets = set(anchor_ids)
+        elif not previous_fingerprints or not cache_compatible:
+            targets = set(current_id_set)
+        else:
+            targets = set(incomplete_verified_ids) if gemma_verify else set()
+        if cache_compatible and previous_fingerprints:
+            targets.update(changed_event_ids)
         targets.difference_update(cached_verified_event_ids - changed_event_ids)
+        changed_current_ids = changed_event_ids & current_id_set
+        targets.update(
+            int(anchor) for anchor, chain in (cached_raw_chains or {}).items()
+            if int(anchor) not in cached_verified_event_ids
+            and any(int(item["event_id"]) in changed_current_ids for item in chain)
+        )
         targets.intersection_update(current_id_set)
         chains = copy.deepcopy(cache.get("chains") or {}) if cache_compatible else {}
         raw_chains_for_cache = copy.deepcopy(cached_raw_chains or chains)
         fresh = build_pgvector_related_chain(
-            events, current_date=current_date, anchor_ids=targets,
+            events, current_date=current_date,
+            anchor_ids=None if anchor_ids is None and targets == current_id_set else targets,
             embedding_model=embedding_model,
             embedding_doc_kind=embedding_doc_version,
             graph_meta_out=graph_meta, retrieval_receipt_out=retrieval_receipt,
@@ -5077,7 +5093,13 @@ def build_related(
         if gemma_verify:
             gemma_meta["status"] = "ok" if current_id_set.issubset(set(gemma_meta["verified_event_ids"])) and not gemma_meta["errors"] else ("partial" if gemma_meta["verified_event_ids"] else "failed")
         unfinished_anchor_ids = targets - set(gemma_meta["verified_event_ids"]) if gemma_verify else set()
-        cache_state = "incremental"
+        unfinished_anchor_ids.update(
+            int(item["event_id"]) for anchor in list(unfinished_anchor_ids)
+            for item in (cached_raw_chains or {}).get(str(anchor), [])
+            if int(item["event_id"]) in changed_current_ids
+        )
+        retrieval_receipt["source"] = "compact_rpc" if targets else "cache"
+        cache_state = "incremental" if targets else "hit"
     elif cache_valid and (not gemma_verify or gemma_cache_ready):
         chains = cache["chains"]
         raw_chains_for_cache = copy.deepcopy(cached_raw_chains or chains)
@@ -5118,21 +5140,7 @@ def build_related(
     else:
         salt = hashlib.sha1(json.dumps({"ids": event_ids, "fp": fingerprints}, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:12]
         log_stage(f"{related_mode}_rebuild_start", event_count=len(events), cache_salt=salt, changed_event_count=len(changed_event_ids), embedding_model=embedding_model)
-        if related_mode == "pgvector":
-            graph_meta = {}
-            chains = build_pgvector_related_chain(
-                events,
-                current_date=current_date,
-                embedding_model=embedding_model,
-                embedding_doc_kind=os.getenv("STATIC_SITE_PGVECTOR_RELATED_DOC_KIND", "related_v1") or "related_v1",
-                graph_meta_out=graph_meta,
-                retrieval_receipt_out=retrieval_receipt,
-                response_max_bytes=related_response_max_bytes,
-                total_response_max_bytes=related_total_response_max_bytes,
-                programme_members=programme_members,
-            )
-            retrieval_receipt["source"] = "compact_rpc"
-        elif related_mode == "bge":
+        if related_mode == "bge":
             if not shared_bge_artifact:
                 raise RuntimeError("BGE related mode requires the shared in-memory vector artifact")
             graph_meta = {
@@ -6963,7 +6971,8 @@ def main() -> int:
             else None
         ),
     )
-    if args.catalog_mode == "full" and args.related_mode == "pgvector" and args.related_anchor_ids is None:
+    if (args.catalog_mode == "full" and args.related_mode == "pgvector" and args.related_anchor_ids is None
+            and (related_payload.get("graph_reciprocity") or {}).get("policy") != "scoped_pgvector_candidates"):
         validate_pgvector_graph_release(related_payload.get("graph_reciprocity") or {})
     (out_dir / "preview-related.json").write_text(json.dumps(related_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Exported {len(events)} events to {out_dir}")
