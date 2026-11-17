@@ -130,13 +130,66 @@ async def test_authoritative_empty_roles_clear_old_roles_on_normal_reimport(tmp_
             'prefilter_passed': True, 'llm_status': 'ok', 'occurrences': [occurrence]}]}]}
     results = tmp_path / 'results.json'
     try:
-        for roles in (['Старый организатор'], []):
-            occurrence['organizer_names'] = roles
+        for guides, organizers in ((['Гид'], ['Старый организатор']), ([], [])):
+            occurrence['guide_names'] = guides
+            occurrence['organizer_names'] = organizers
             results.write_text(json.dumps(payload))
             await service._import_results_file_inner(db, results_path=str(results))
         async with db.raw_conn() as conn:
             row = await (await conn.execute('SELECT guide_names_json,organizer_names_json FROM guide_occurrence')).fetchone()
-        assert json.loads(row[0]) == ['Гид']
+        assert json.loads(row[0]) == []
         assert json.loads(row[1]) == []
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('eligible,reason,expected', [
+    (False, 'Предложение для организованной группы, а не индивидуальных участников.', 0),
+    (False, None, 0),
+    (True, None, 1),
+    (True, 'sold_out', 0),
+])
+async def test_normal_import_preserves_model_exclusion_despite_rich_facts(
+    tmp_path, monkeypatch, eligible, reason, expected,
+):
+    # OSQ post 982 supplied an explicit negative model decision alongside
+    # a date, city, summary and booking phone. Import must not promote it.
+    async def no_enrichment(_rows):
+        return {}
+
+    monkeypatch.setattr(service, 'apply_occurrence_enrichment', no_enrichment)
+    monkeypatch.setattr(service, 'apply_profile_enrichment', no_enrichment)
+    occurrence = {
+        'canonical_title': 'Завод OSQ Group', 'date': '2099-11-19',
+        'city': 'Калининград', 'status': 'available',
+        'summary_one_liner': 'Посещение производства для организованной группы старшеклассников.',
+        'booking_text': '+7 962 255-54-91 Татьяна',
+        'availability_mode': 'scheduled_public',
+        'digest_eligible': eligible, 'digest_eligibility_reason': reason,
+    }
+    payload = {'run_id': 'eligibility-import-fixture', 'sources': [{
+        'platform': 'telegram', 'username': 'excursions_profitour',
+        'source_status': 'ok', 'posts': [{
+            'message_id': 982, 'source_url': 'https://t.me/excursions_profitour/982',
+            'text': '19 ноября для организованной группы старшеклассников: завод OSQ Group.',
+            'prefilter_passed': True, 'post_kind': 'announce_single',
+            'llm_status': 'ok', 'occurrences': [occurrence],
+        }],
+    }]}
+    result = tmp_path / 'results.json'
+    result.write_text(json.dumps(payload, ensure_ascii=False))
+    db = Database(str(tmp_path / 'guide.sqlite'))
+    await db.init()
+    try:
+        _, errors, _ = await service._import_results_file_inner(db, results_path=str(result))
+        assert not errors
+        async with db.raw_conn() as conn:
+            row = await (await conn.execute(
+                'SELECT digest_eligible, digest_eligibility_reason FROM guide_occurrence'
+            )).fetchone()
+        assert row[0] == expected
+        if reason:
+            assert row[1] == reason
     finally:
         await db.close()

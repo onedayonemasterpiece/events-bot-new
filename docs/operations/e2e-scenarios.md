@@ -6,6 +6,10 @@ The static browser release gate logs bounded source/target specimen diagnostics 
 
 - Guide visual digest MAX: invoke the standard daily generator/fan-out on the already published current backend edition; verify only missing MAX delivery, full named links and shared card, stable request/operation after restart, unchanged TG/VK receipts and edition count. Offline contracts: `tests/test_guide_max_delivery.py`, `tests/test_guide_max_pipeline.py`; configuration and recovery: [digest delivery spec](../backlog/features/guide-excursions-monitoring/digest-spec.md#native-max-delivery-2026-10). Live publication is an explicit owner acceptance, never a hidden test post.
 
+Для редакционной приёмки VK-дайджеста на стенде используется обычная команда
+`python scripts/guide_visual_digest.py --db <копия.sqlite> publish --group-id 243343951 --test-mention 858363572 --publish-date 0 --review-dir artifacts/codex/guide-review`.
+Ей можно передать `--issue-id` для известной подборки. Без этого параметра она сама отбирает выезды. Команда сразу размещает тестовый пост. В отдельном подкаталоге запуска сохраняются `generation.json` (вход, попытки, сырой ответ), `wall-text.txt`, отправленные PNG и `receipt.json`. Для сверки упоминаний использовать `guide_mentions.eligible` и `substituted`. Служебное имя тестового получателя в эти числа не входит. Прочитать опубликованную запись по URL квитанции и сверить текст и карточку до повторного запуска. Для принятия решения о ежедневной публикации сравнить с источниками три последовательных выпуска, включая короткую строку расписания и подборку из пяти выездов. [Устройство VK-дайджеста](../features/guide-excursions-monitoring/README.md)
+
 Канонический реестр E2E/BDD сценариев проекта.
 
 Focus email has two distinct gates. The fixed

@@ -1,5 +1,23 @@
 # RunCoveer deployment
 
+## Автор ежедневного VK-дайджеста экскурсий
+
+Events передаёт номер и данные выпуска через `/data/guide-sol/writer.sock`.
+На DevCoveer сокет обслуживают user units из `deploy/runcoveer/guide-writer/`;
+вход Codex и сам клиент остаются на DevCoveer. Обработчик собирает инструкцию
+из той же версии кода, запускает текстовую модель и возвращает ответ на
+обычную валидацию в Events.
+
+При обновлении установите модули `guide_excursions` из Git-ревизии образа в
+`~/.local/share/events-guide-sol/current` (пакет находится внутри `current/`).
+Установите units в `~/.config/systemd/user/`, выполните
+`systemctl --user daemon-reload` и включите `events-guide-sol.socket` и
+`events-guide-sol-forward.service`. Каталог сокета на RunCoveer —
+`/var/lib/runcoveer/events/data/guide-sol`, владелец `deploy`, права `0700`.
+Проверяйте соединение вызовом `ask_vk_narrative` с реальным набором экскурсий
+из контейнера Events. Журнал успешной попытки содержит
+`provider=codex model=gpt-6.1-sol outcome=written`.
+
 **Current production authority:** Events Bot runs here. Read the actual container
 image/revision and `/app/.static-site-repo-sha` before any change. Dated releases
 below are history, not a substitute for runtime readback. Legacy Fly is not the
