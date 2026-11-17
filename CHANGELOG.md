@@ -1,5 +1,7 @@
 ## 2026-11-17
 
+- Smart Update: retain semantic source updates across venue labels at the same structured address and city; preserve canonical logistics and other identity conflicts.
+
 - VK import: keep missing venues in multi-event carriers separate from the source-wide default; retain the single-event fallback.
 
 - CAPTCHA recovery schedules due calendar documents before festival and weekend pages, retaining frozen comments first, new announcements next and the existing spacing.
