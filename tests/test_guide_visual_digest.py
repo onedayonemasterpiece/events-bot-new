@@ -953,3 +953,66 @@ def test_past_project_can_independently_coorganize_the_same_dated_departure():
         brief = dict(base,id=705,linked_posts=[poster])
         edition, = vd._select_documented_departures([detailed],[brief,detailed])
         assert edition["organizer_names"] == expected
+
+
+@pytest.mark.asyncio
+async def test_immediate_story_retries_upload_without_resending_wall_or_uncertain_save(tmp_path, monkeypatch):
+    import io
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    import main
+    from db import Database
+    from PIL import Image
+
+    db = Database(str(tmp_path / "story.sqlite"))
+    await db.init()
+    try:
+        async with db.raw_conn() as conn:
+            await conn.execute("INSERT INTO guide_digest_issue(id,family) VALUES(351,?)", (vd.VISUAL_DIGEST_FAMILY,))
+            await conn.commit()
+        card = io.BytesIO()
+        Image.new("RGB", (64, 64)).save(card, "JPEG")
+        monkeypatch.setattr(vd, "render_visual_digest_cards", lambda *a, **kw: [card.getvalue()])
+        monkeypatch.setattr(vd, "render_visual_digest_story_image", lambda image: image)
+        monkeypatch.setattr(vd, "load_visual_digest_issue", AsyncMock(return_value={"items": SAMPLE_ROWS}))
+        monkeypatch.setattr(vd, "build_visual_digest_vk_text", AsyncMock(return_value="Выпуск"))
+        monkeypatch.setattr(vd, "_resolve_live_vk_wall_post_id", AsyncMock(return_value=414))
+        monkeypatch.setattr(vd, "VISUAL_DIGEST_STORIES_ENABLED", True)
+
+        actors = [SimpleNamespace(kind="user", token=key) for key in ("first", "second")]
+        monkeypatch.setattr(main, "choose_vk_actor", lambda *args: actors)
+        upload_reply = AsyncMock(return_value={})
+        session = MagicMock()
+        session.post.return_value.__aenter__.return_value.json = upload_reply
+        monkeypatch.setattr(main, "get_http_session", lambda: session)
+        async def story_api(method, params, *_args, **_kwargs):
+            if method == "stories.getPhotoUploadServer":
+                assert params["link_url"] == "https://vk.com/wall-11_414" and params["link_text"] == "more"
+                return {"response": {"upload_url": "https://example.test/upload"}}
+            assert method == "stories.save"
+            raise TimeoutError("no save response")
+        api = AsyncMock(side_effect=story_api)
+        monkeypatch.setattr(main, "_vk_api", api)
+        wall = AsyncMock(return_value="https://vk.com/wall-11_414")
+        receipt = await vd.publish_visual_digest_to_vk(db, issue_id=351, group_id=11, publish_date=0,
+            vk_api_fn=api, post_to_vk_fn=wall, upload_vk_photo_bytes_fn=AsyncMock(return_value="photo-11_5"))
+        assert receipt["story"]["pending"] and receipt["story"]["reason"] == "VK story upload returned no upload_result"
+        assert all(call.args[0] != "stories.save" for call in api.await_args_list)
+
+        due = receipt["story"]["retry_after"]
+        upload_reply.side_effect = ValueError("HTTP 500 returned HTML")
+        await vd.publish_due_visual_digest_vk_stories(db, now_ts=due)
+        assert all(call.args[0] != "stories.save" for call in api.await_args_list)
+        upload_reply.side_effect = None
+        upload_reply.return_value = {"response": {"upload_result": "ready"}}
+        await vd.publish_due_visual_digest_vk_stories(db, now_ts=due + 900)
+        await vd.publish_due_visual_digest_vk_stories(db, now_ts=due + 1800)
+        assert [call.args[0] for call in api.await_args_list].count("stories.save") == 1
+        wall.assert_awaited_once()
+        async with db.raw_conn() as conn:
+            stored, = await (await conn.execute("SELECT published_targets_json FROM guide_digest_issue WHERE id=351")).fetchone()
+        story = next(iter(json.loads(stored).values()))["story"]
+        assert not story["pending"] and story["last_error"] == "no save response"
+    finally:
+        await db.close()

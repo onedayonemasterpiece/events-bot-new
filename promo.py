@@ -5285,6 +5285,10 @@ async def _build_vk_story_image_bytes(ev: Event, *, source_url: str) -> bytes:
     return await _download_story_source_image(photo_url)
 
 
+class VKStoryUploadError(RuntimeError):
+    """No stories.save request was made for this photo."""
+
+
 async def _publish_vk_story_photo(
     db: Database,
     bot: object | None,
@@ -5309,7 +5313,7 @@ async def _publish_vk_story_photo(
 
         actors = [SimpleNamespace(kind="user", token=None, label="user")]
     if not actors:
-        raise RuntimeError("VK user token missing for community story")
+        raise VKStoryUploadError("VK user token missing for community story")
 
     params: dict[str, Any] = {
         "group_id": abs(int(target_group_id)),
@@ -5320,6 +5324,7 @@ async def _publish_vk_story_photo(
         params["link_text"] = link_text or "Подробнее"
 
     last_error: Exception | None = None
+    saving = False
     for actor in actors:
         token = getattr(actor, "token", None) or VK_USER_TOKEN
         try:
@@ -5353,6 +5358,7 @@ async def _publish_vk_story_photo(
                 upload_result = upload_result or upload_result_data.get("upload_result")
             if not upload_result:
                 raise RuntimeError("VK story upload returned no upload_result")
+            saving = True
             saved = await _vk_api(
                 "stories.save",
                 {"upload_results": upload_result, "extended": 1},
@@ -5378,6 +5384,8 @@ async def _publish_vk_story_photo(
                 "raw_count": count,
             }
         except Exception as exc:
+            if saving:
+                raise  # VK may have saved the story before the response was lost.
             last_error = exc
             logger.warning(
                 "promo.vk story actor failed group_id=%s actor=%s error=%s",
@@ -5385,7 +5393,7 @@ async def _publish_vk_story_photo(
                 getattr(actor, "label", "user"),
                 exc,
             )
-    raise last_error or RuntimeError("VK story publish failed")
+    raise VKStoryUploadError(str(last_error) or "VK story upload failed") from last_error
 
 
 async def _recent_campaign_source_wall_candidates(
