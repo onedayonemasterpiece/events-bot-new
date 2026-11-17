@@ -57,7 +57,9 @@
       });
       window.addEventListener('pagehide', () => { leftPage = true; }, { once: true });
       window.setTimeout(() => {
-        if (!leftPage && document.visibilityState === 'visible') window.location.replace(website);
+        if (!leftPage && document.visibilityState === 'visible') {
+          document.getElementById('message').textContent = 'Не открылось автоматически? Нажмите «Открыть сообщество в приложении». Если ВК не установлен, выберите «Открыть сообщество в браузере».';
+        }
       }, 2700);
 
       // Some browsers prohibit automatic app launching from NFC/browser navigation.
