@@ -34,7 +34,7 @@ from telegram_sources import canonicalize_tg_url, parse_tg_post_url
 from .dedup import deduplicate_occurrence_rows
 from .digest import RU_MONTH_GEN, format_date_time
 from .digest_writer import VK_NAME_MARK_RE, ask_vk_narrative
-from .parser import collapse_ws, extract_date_iso, normalize_title_key, occurrence_fare, price_for_publication, split_occurrence_blocks
+from .parser import collapse_ws, extract_date_iso, names_for_source_role, normalize_title_key, occurrence_fare, price_for_publication, split_occurrence_blocks
 from .route_history import load_materialized_history, load_cached_background, needs_background
 
 logger = logging.getLogger(__name__)
@@ -764,7 +764,18 @@ def _apply_published_facts(row: dict[str, Any], posts: Sequence[Mapping[str, Any
     for key, supported in roles.items():
         names = [n for n in pack.get(key, row.get(key, [])) or [] if isinstance(n, str) and n.casefold() in supported]
         row[key] = pack[key] = names
-    if roles:
+    # Some historical rows have no retained structured extraction. The original post
+    # still distinguishes the booking contact and past projects from today's participants.
+    original_texts = [post.get("text") for post in posts if post.get("text")]
+    corrected = False
+    for key in ("guide_names", "organizer_names"):
+        names = pack.get(key, row.get(key)) or []
+        checked = names_for_source_role(names, original_texts, organizer=key == "organizer_names")
+        if checked != names:
+            row.setdefault("unconfirmed_source_roles", {})[key] = [name for name in names if name not in checked]
+            row[key] = pack[key] = checked
+            corrected = True
+    if roles or corrected:
         row["source_roles_checked"] = True
         # Frozen editions can already contain resolved portraits. Normal editions resolve them next.
         if isinstance(row.get("participant_medallions"), list):
@@ -1505,6 +1516,18 @@ def _select_documented_departures(requested: Sequence[dict[str, Any]], peers: Se
             representative["covered_visual_states"] = {str(m["id"]): _visual_item_state(m) for m in members}
         representative["covered_visual_ids"] = sorted(m["id"] for m in members)
         representative["linked_posts"] = [post for member in members for post in member["linked_posts"]]
+        if len(members) > 1:
+            # A guide's past project may also explicitly co-organize this same departure
+            # in another linked announcement. Reconcile after resolving the dated peers.
+            for role in ("guide_names", "organizer_names"):
+                deferred = [n for m in members for n in (m.get("unconfirmed_source_roles") or {}).get(role, [])]
+                if deferred:
+                    blocks = (block for member in members
+                              for block in _card_source_blocks(member, member["canonical_title"]))
+                    names = names_for_source_role(deferred, blocks, organizer=role == "organizer_names",
+                                                  require_mention=True)
+                    representative[role] = representative["fact_pack"][role] = list(
+                        dict.fromkeys([*representative.get(role, []), *names]))
         if agreed_fare:
             representative["price_line"] = representative["price_text"] = agreed_fare
             representative["fact_pack"] = {**(representative.get("fact_pack") or {}), "price_text": agreed_fare}

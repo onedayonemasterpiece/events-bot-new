@@ -193,3 +193,19 @@ async def test_normal_import_preserves_model_exclusion_despite_rich_facts(
             assert row[1] == reason
     finally:
         await db.close()
+
+
+def test_new_import_ignores_booking_name_in_both_extraction_and_fact_pack():
+    from datetime import datetime, timezone
+    post = SimpleNamespace(text="Школьники посетят завод упаковки. Запись: +7 999 555-44-33 Татьяна",
+                           post_date=datetime(2026,11,15,tzinfo=timezone.utc),source_url="https://t.me/example/9",
+                           message_id=9,views=1,reactions_total=0,media_refs=[],media_assets=[])
+    payload = dict(canonical_title="Экскурсия на завод",date="2026-11-19",guide_names=["Татьяна"],
+                   organizer_names=["Турбюро"],booking_text="Запись у Татьяны",digest_eligible=True)
+    source_row = {"username":"example","source_kind":"excursion_operator"}
+    occurrence = service._coerce_occurrence_from_payload(payload,post=post,source_row=source_row)
+    stored = service._build_occurrence_fact_pack(occurrence,post=post,source_row=source_row,
+                                                 extra={"guide_names":["Татьяна"]})
+    assert occurrence.guide_names == stored["guide_names"] == []
+    assert occurrence.organizer_names == stored["organizer_names"] == ["Турбюро"]
+    assert occurrence.booking_text == "Запись у Татьяны"
