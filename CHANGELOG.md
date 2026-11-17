@@ -56,6 +56,7 @@
 - Guide visual VK digest (owner request 2026-11-16): the post text was a numbered list `title — link`; it is now a connected first-person editorial story written by one LLM request per edition, with exact titles in caps, dates, price, booking contact, brand line and hashtags added from stored rows. The compact list remains the text when the writer is unavailable or its answer is rejected. Personal guide mentions `[id…|name]` exist behind `GUIDE_VISUAL_DIGEST_VK_MENTIONS` (default off, sandbox testing only).
 
 ### Fixed
+- Long VK excursion digest text separates each excursion heading, story and logistics with one blank line, keeping schedule and booking lines together.
 - Related events keep the verified Gemma decisions from partial batches and request the missing candidates before marking an event ready for VK publication.
 - The static related verifier may ask Gemini 3.5 Flash-Lite once for IDs still missing from a partially answered Gemma batch after normal retries; recorded low scores are not reopened, and model provenance stays in the existing cache.
 

@@ -357,11 +357,12 @@ async def test_vk_text_wraps_written_story_with_exact_dates_contacts_and_plain_n
 
     assert text.startswith("ЭКСКУРСИИ 17–22 НОЯБРЯ\nЧто растёт вдоль ручья? У Нозы Усмановой — другой маршрут, на ферме — осетры.\n\n")
     assert "дайджест экскурсий по Калининградской области от «Ух ты, Калининград!»" in text
-    assert ("ЗЕЛЁНЫЕ ИСТОРИИ\nВдоль ручья пройдёмся с Ольгой Рубцовой.\n"
+    assert ("ЗЕЛЁНЫЕ ИСТОРИИ\n\nВдоль ручья пройдёмся с Ольгой Рубцовой.\n\n"
             "17 ноября (вт), 14:00 · 21 ноября (сб), 11:00\n💳 500 руб. · 🔗 Запись: vk.cc/d3XqaE") in text
-    assert "РАССВЕТ НАД БАЛТИКОЙ\nУ Нозы Усмановой другая отправная точка.\n20 ноября (пт), 14:00\n" in text
+    assert "РАССВЕТ НАД БАЛТИКОЙ\n\nУ Нозы Усмановой другая отправная точка.\n\n20 ноября (пт), 14:00\n" in text
     # Unknown time and price stay absent; the phone is the booking contact.
-    assert ("с Марией Морозовой.\n22 ноября (вс)\n☎ Запись по телефону: +7 (911) 858-58-49") in text
+    assert ("с Марией Морозовой.\n\n22 ноября (вс)\n☎ Запись по телефону: +7 (911) 858-58-49") in text
+    assert "\n\n\n" not in text
     assert "[" not in text and "docs.google.com" not in text
     assert text.rstrip().endswith("#экскурсия #Калининград #УхтыКалининград")
 
@@ -597,9 +598,9 @@ async def test_vk_writer_heading_is_removed_only_when_it_is_a_separate_matching_
     monkeypatch.setattr(dw, "_generate_json", generated)
     monkeypatch.setattr(vd, "ask_vk_narrative", dw.ask_vk_narrative)  # undo the autouse stub
     text = await build_visual_digest_vk_text(EDITION_349, issue_id=349, vk_api_fn=_fake_shortener)
-    assert "ЗЕЛЁНЫЕ ИСТОРИИ\nПройдёмся от Зубров вдоль ручья." in text
+    assert "ЗЕЛЁНЫЕ ИСТОРИИ\n\nПройдёмся от Зубров вдоль ручья." in text
     assert text.count("ЗЕЛЁНЫЕ ИСТОРИИ") == 1
-    assert "РАССВЕТ НАД БАЛТИКОЙ\nРАССВЕТ НАД БАЛТИКОЙ проходит в городе." in text
+    assert "РАССВЕТ НАД БАЛТИКОЙ\n\nРАССВЕТ НАД БАЛТИКОЙ проходит в городе." in text
     assert "ДРУГОЙ ЗАГОЛОВОК На ферме покажут осетров." in text
 
 
