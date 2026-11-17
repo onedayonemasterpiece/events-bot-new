@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vk-related-distinct-programmes-20261117
+    image: runcoveer/events:related-verdict-coverage-20261117
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
