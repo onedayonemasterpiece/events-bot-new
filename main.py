@@ -18600,7 +18600,6 @@ async def add_events_from_text(
                 is_free=event.is_free,
                 pushkin_card=event.pushkin_card,
                 search_digest=event.search_digest,
-                raw_excerpt=event.description,
                 posters=poster_candidates,
                 source_chat_id=source_chat_id,
                 source_message_id=source_message_id,
