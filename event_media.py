@@ -672,6 +672,7 @@ async def ensure_event_media_reviews(session: Any, event_id: int) -> int:
             .where(
                 EventPoster.event_id == int(event_id),
                 EventPoster.review_status.in_((APPROVED, PENDING_REVIEW)),
+                func.coalesce(EventPoster.review_reason, "") != "cdn_mirror_pending",
             )
             .order_by(EventPoster.display_order.asc(), EventPoster.id.asc())
         )
@@ -2417,6 +2418,7 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
         rows = list((await session.execute(select(EventPoster).where(
             EventPoster.event_id == int(event_id),
             EventPoster.review_status.in_((APPROVED, PENDING_REVIEW)),
+            func.coalesce(EventPoster.review_reason, "") != "cdn_mirror_pending",
         ).order_by(EventPoster.display_order, EventPoster.id).limit(8))).scalars())
         if not any(row.review_status == PENDING_REVIEW for row in rows):
             await session.commit()
