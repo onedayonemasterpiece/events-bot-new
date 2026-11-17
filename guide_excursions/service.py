@@ -59,6 +59,7 @@ from .parser import (
     build_source_fingerprint,
     collapse_ws,
     normalize_title_key,
+    names_for_source_role,
     occurrence_fare,
     parse_post_occurrences,
     price_for_publication,
@@ -1348,7 +1349,11 @@ def _build_occurrence_fact_pack(
         "media_refs": list(post.media_refs or []),
         "media_assets": list(post.media_assets or []),
     }
-    return _merge_json_objects(pack, dict(extra or {}))
+    pack = _merge_json_objects(pack, dict(extra or {}))
+    for field in ("guide_names", "organizer_names"):
+        if isinstance(pack.get(field), list):
+            pack[field] = names_for_source_role(pack[field], [post.text], organizer=field == "organizer_names")
+    return pack
 
 
 def _default_claim_role(fact_key: str) -> str:
@@ -2978,8 +2983,8 @@ def _coerce_occurrence_from_payload(
         is_last_call=bool(payload.get("is_last_call")),
         post_kind=collapse_ws(payload.get("post_kind")) or "announce_single",
         availability_mode=collapse_ws(payload.get("availability_mode")) or "scheduled_public",
-        guide_names=_normalize_string_list(payload.get("guide_names"), limit=4),
-        organizer_names=_normalize_string_list(payload.get("organizer_names"), limit=4),
+        guide_names=names_for_source_role(_normalize_string_list(payload.get("guide_names"), limit=4), [post.text]),
+        organizer_names=names_for_source_role(_normalize_string_list(payload.get("organizer_names"), limit=4), [post.text], organizer=True),
         source_fingerprint=collapse_ws(payload.get("source_fingerprint"))
         or build_source_fingerprint(title_normalized=title_normalized, date_iso=date_iso, time_text=time_text),
     )

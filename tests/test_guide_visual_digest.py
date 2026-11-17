@@ -912,3 +912,44 @@ def test_bundled_card_font_distinguishes_numero_from_missing_glyph():
     runs = list(vd._card_text_runs("Форт № 11", main_font))
     assert [(part, face.getname()) for part, face in runs] == [
         ("Форт ", main_font.getname()), ("№", font.getname()), (" 11", main_font.getname())]
+
+
+def test_registration_contact_and_biographical_project_do_not_become_participants():
+    from guide_excursions import parser
+    from source_avatars import guide_participants
+    booking = "Завод упаковки приглашает школьников.\nЗапись и подробная информации:\n+7 999 555-44-33 Татьяна\nСледом узнаем о производстве."
+    byline = "Проводником станет Эмма Басова. Эмма — гид-экскурсовод и координатор совершенно прекрасного проекта «Историк 39»! Эмма участвовала в создании 65 фильмов в рамках проекта «История. Люди. Память» об истории области."
+    for text, names, orgs, expected in [
+        (booking, ["Татьяна"], ["Профи-тур"], ([], ["Профи-тур"])),
+        (byline, ["Эмма Басова"], ["Хранители руин","История. Люди. Память","Историк 39"], (["Эмма Басова"], ["Хранители руин"])),
+    ]:
+        row = dict(id=769, canonical_title="Экскурсия на завод", date="2026-11-19",
+                   guide_names=names, organizer_names=orgs, booking_text="Запись по телефону +7 999 555-44-33",
+                   fact_pack={"guide_names":names,"organizer_names":orgs})
+        post = dict(text=text,post_date="2026-11-15",raw_facts_json=None)
+        row["linked_posts"] = [post]
+        vd._apply_published_facts(row, [post])
+        row["participant_medallions"] = guide_participants(row, [])
+        item = vd._vk_narrative_payload([row])[0]["excursions"][0]
+        assert (item["guides"], item["organizers"]) == expected
+        assert vd._source_name(row) == ", ".join([*expected[0], *expected[1]])
+    assert parser.names_for_source_role(["Татьяна"],[booking,"Экскурсию проведёт Татьяна."]) == ["Татьяна"]
+    assert parser.names_for_source_role(["Татьяна"],[booking,"Экскурсия с Татьяной."]) == ["Татьяна"]
+    assert parser.names_for_source_role(["История. Люди. Память"],[byline,"Поездку организует проект «История. Люди. Память»."],organizer=True) == ["История. Люди. Память"]
+
+
+def test_past_project_can_independently_coorganize_the_same_dated_departure():
+    base = dict(date="2026-11-28", time="09:00", city="Калининград", guide_names=["Эмма Басова"],
+                organizer_names=["Хранители руин"], canonical_title="Самбийское кольцо",
+                route_summary="Самбийское кольцо")
+    bio = {"url":"https://t.me/example/1","post_date":"2026-11-15","text":
+           "28 ноября — «Самбийское кольцо». Эмма участвовала в создании 65 фильмов в рамках проекта «История. Люди. Память»."}
+    detailed = dict(base,id=740,organizer_names=[*base["organizer_names"],"История. Люди. Память"],linked_posts=[bio])
+    vd._apply_published_facts(detailed,[bio])
+    assert detailed["organizer_names"] == base["organizer_names"]
+    for date, expected in [(28,["Хранители руин","История. Люди. Память"]), (29,["Хранители руин"])]:
+        poster = dict(url="https://t.me/example/2",post_date="2026-11-01",text=
+                      f"{date} ноября — «Самбийское кольцо» с гидом Эммой Басовой. Совместное путешествие «Хранителей руин» и проекта «История. Люди. Память».")
+        brief = dict(base,id=705,linked_posts=[poster])
+        edition, = vd._select_documented_departures([detailed],[brief,detailed])
+        assert edition["organizer_names"] == expected
