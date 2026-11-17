@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vk-gallery-child-relevance-20261117
+    image: runcoveer/events:compact-relations-20261117
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
