@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:frozen-ambiguity-20261117
+    image: runcoveer/events:vk-calendar-before-pages-20261117
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
