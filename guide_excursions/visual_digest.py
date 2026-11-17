@@ -2881,22 +2881,24 @@ async def _publish_visual_digest_to_vk_once(
                 "delay_seconds": VISUAL_DIGEST_VK_STORY_DELAY_SECONDS,
             }
         else:
-            try:
-                from promo import _publish_vk_story_photo
+            from promo import VKStoryUploadError, _publish_vk_story_photo
 
+            try:
                 story_payload = await _publish_vk_story_photo(
                     db,
                     bot,
                     target_group_id=int(group),
                     image_bytes=render_visual_digest_story_image(card_bytes[0]),
                     source_url=url,
-                    link_text="К дайджесту",
+                    link_text="more",
                     include_source_link=True,
                 )
                 story_payload["published"] = True
             except Exception as exc:  # pragma: no cover - production integration
                 logger.warning("guide_visual_digest_story_failed issue_id=%s: %s", issue_id, exc, exc_info=True)
                 story_payload = {"published": False, "reason": str(exc) or type(exc).__name__}
+                if isinstance(exc, VKStoryUploadError):
+                    story_payload.update(pending=True, attempts=1, retry_after=int(time.time()) + 900)
 
     occurrence_ids = list(dict.fromkeys(i for row in rows for i in row.get("covered_visual_ids", [row["id"]])))
     async with db.raw_conn() as conn:
@@ -3169,16 +3171,16 @@ async def publish_due_visual_digest_vk_stories(
                 continue
             if issue_card is None:
                 issue_card = render_visual_digest_cards(issue_rows, issue_id=issue_id)[0]
-            try:
-                from promo import _publish_vk_story_photo
+            from promo import VKStoryUploadError, _publish_vk_story_photo
 
+            try:
                 result = await _publish_vk_story_photo(
                     db,
                     bot,
                     target_group_id=group_id,
                     image_bytes=render_visual_digest_story_image(issue_card),
                     source_url=post_url,
-                    link_text="К дайджесту",
+                    link_text="more",
                     include_source_link=True,
                 )
                 story.update(result)
@@ -3189,7 +3191,7 @@ async def publish_due_visual_digest_vk_stories(
                 published.append({"issue_id": issue_id, "target": str(target_key), "url": result.get("url")})
             except Exception as exc:  # pragma: no cover - production integration
                 logger.warning("guide_visual_digest_due_story_failed issue_id=%s target=%s: %s", issue_id, target_key, exc, exc_info=True)
-                story["pending"] = True
+                story["pending"] = isinstance(exc, VKStoryUploadError)
                 story["published"] = False
                 story["last_error"] = str(exc) or type(exc).__name__
                 story["attempts"] = int(story.get("attempts") or 0) + 1
