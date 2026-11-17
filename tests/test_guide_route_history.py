@@ -191,3 +191,49 @@ def test_destination_only_needs_a_named_route_and_one_off_needs_its_date():
     row=dict(canonical_title=TITLE,date="2026-11-22",guide_names_json='["Ольга Рубцова"]',route_history={"kind":"one_off"})
     old=dict(url="https://t.me/masterguide/5",post_date="2026-08-01",text=OWN+"\nВыезд 15 августа.")
     assert not rh._first_party(row,SOURCE,old,provider_verified=True)
+
+
+def test_registered_profile_alias_can_repeat_same_program_without_merging_other_organizers():
+    current=dict(id=693,canonical_title="Под сенью ангелов: истории о переселенцах",title_normalized="под сенью ангелов",
+                 primary_source_id=12,template_id=437,guide_names_json='["Юлия Гришанова","Владимир Власов"]',
+                 organizer_names_json='["Юлия Гришанова"]')
+    previous=dict(current,id=651,guide_names_json='["Владимир Власов","Гришанова Юлия"]',
+                  organizer_names_json='["Amber Fringilla"]')
+    own=dict(source_kind="guide_personal",profile_name="Amber Fringilla",marketing_name="Amber Fringilla",title="Путешествия по пРуссии")
+    assert rh._same_route(current, previous, own)
+    assert not rh._same_route(current,dict(previous,organizer_names_json='["Чужой оператор"]'),own)
+    assert not rh._same_route(current,dict(previous,primary_source_id=13),own)
+    assert not rh._same_route(current,dict(previous,guide_names_json='["Владимир Власов"]'),own)
+    assert rh._same_route(dict(current,canonical_title='Экскурсия в «Планету Океан»'),
+                          dict(current,canonical_title="Планета Океан"),own)
+    assert not rh._same_route(dict(current,canonical_title='Экскурсия в «Планету Океан»'),
+                              dict(current,canonical_title="Планета Океан",template_id=0),own)
+
+
+def test_named_route_in_opening_matches_timetable_without_inheriting_a_bike_ride():
+    title="Прогулка с русским путешественником в XIX веке"
+    timetable=f"Расписание групповых экскурсий\n(Тема «{title}» для всех дат, где указан только Зеленоградск)\n• 10 мая — Зеленоградск"
+    actual="Взглянем на город его глазами: поговорим о возникновении курорта, архитектуре и истории, а ещё коснёмся современного Зеленоградска."
+    intro="Уже сегодня, 10 мая, в 17:00 жду вас на прогулку с русским путешественником конца XIX века. "+actual
+    def excerpt(first):
+        post=dict(text=first+"\n\n"+timetable,post_kind="announce_multi",post_date="2026-05-10")
+        return rh._stable_excerpt(rh._focus(post,title,linked=True),title)
+    assert excerpt(intro) == actual
+    assert not excerpt("Солнце, май, одуванчики, море и велодорожка! Прокатилась до Пионерского и сняла видео.")
+    assert not rh._stable_excerpt("Спешим сообщить, что с нами можно коллективно посетить",title)
+
+
+@pytest.mark.asyncio
+async def test_pruning_cache_preserves_cross_season_source_evidence(tmp_path):
+    db = await make_db(tmp_path / "e.sqlite")
+    async with db.raw_conn() as con:
+        await con.execute(rh._MATERIAL)
+        await con.execute("INSERT INTO guide_occurrence SELECT 4,canonical_title,title_normalized,'2025-05-10',primary_source_id,guide_names_json,organizer_names_json,status,digest_eligible FROM guide_occurrence WHERE id=3")
+        await con.execute("INSERT INTO guide_monitor_post VALUES (4,4,?,'2025-05-09','https://t.me/masterguide/4','announce_single')",(OWN,))
+        await con.execute("INSERT INTO guide_occurrence_source VALUES (4,4)")
+        await con.execute("INSERT INTO guide_route_material VALUES (4,'expired','{}'),(999,'removed','{}')")
+        await con.commit()
+    await rh.refresh_route_history(db,now=NOW,external=False)
+    async with db.raw_conn() as con:
+        [(key, history)] = await con.execute_fetchall("SELECT occurrence_id,history_json FROM guide_route_material")
+        assert key == 3 and json.loads(history)["earlier"][0]["url"] == "https://t.me/masterguide/4"
