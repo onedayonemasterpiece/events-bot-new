@@ -872,7 +872,19 @@ async def test_vk_lifecycle_cancel_replay_finds_cancelled_target_not_same_locati
 
 
 @pytest.mark.asyncio
-async def test_vk_auto_import_marks_inbox_imported_and_links_multiple_events(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "draft_venues, expected_venues",
+    [
+        ([None, "Музей Мирового океана"], [None, "Музей Мирового океана"]),
+        ([None, None], [None, None]),
+        ([None], ["Научная библиотека, Мира 9, Калининград"]),
+        (["Научная библиотека", "Научная библиотека"],
+         ["Научная библиотека", "Научная библиотека"]),
+    ],
+)
+async def test_vk_auto_import_preserves_child_venues_and_links_events(
+    tmp_path, monkeypatch, draft_venues, expected_venues
+):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -898,23 +910,29 @@ async def test_vk_auto_import_marks_inbox_imported_and_links_multiple_events(tmp
         )
 
     async def fake_build_event_drafts(*_args, **_kwargs):
-        d1 = vk_intake.EventDraft(title="E1", date="2026-12-31", time="18:30", venue="Научная библиотека")
-        d2 = vk_intake.EventDraft(title="E2", date="2026-12-31", time="18:30", venue="Научная библиотека")
+        drafts = [
+            vk_intake.EventDraft(
+                title=f"E{i + 1}", date="2026-12-31", time="18:30", venue=venue,
+                city="Светлогорск" if i == 0 and len(draft_venues) > 1 else "Калининград",
+            )
+            for i, venue in enumerate(draft_venues)
+        ]
         decision = SourceParseDecision(
-            [{"title": "E1"}, {"title": "E2"}],
+            [{"title": d.title} for d in drafts],
             disposition=SourceDisposition.EVENTS_FOUND,
             evidence_manifest=EvidenceManifest.complete_source(
                 "text", ["poster OCR"], attachment_count=1
             ),
         )
-        return vk_intake.DraftParseResult([d1, d2], decision=decision), None
+        return vk_intake.DraftParseResult(drafts, decision=decision), None
 
     # Persist stub: we only need deterministic ids to verify mapping table; the events
     # themselves are not required for this unit test.
-    counter = {"n": 0, "persist_kwargs": []}
+    counter = {"n": 0, "persist_kwargs": [], "draft_fields": []}
 
     async def fake_persist(*_args, **_kwargs):
         counter["n"] += 1
+        counter["draft_fields"].append((_args[0].venue, _args[0].city))
         counter["persist_kwargs"].append(dict(_kwargs))
         return vk_intake.PersistResult(
             event_id=1000 + counter["n"],
@@ -949,8 +967,14 @@ async def test_vk_auto_import_marks_inbox_imported_and_links_multiple_events(tmp
             "SELECT event_id FROM vk_inbox_import_event WHERE inbox_id=1 ORDER BY event_id"
         )
         rows = await cur.fetchall()
-    assert [r[0] for r in rows] == [1001, 1002]
-    assert len(counter["persist_kwargs"]) == 2
+    assert [r[0] for r in rows] == list(range(1001, 1001 + len(draft_venues)))
+    assert [venue for venue, _city in counter["draft_fields"]] == expected_venues
+    assert [city for _venue, city in counter["draft_fields"]] == [
+        "Светлогорск" if i == 0 and len(draft_venues) > 1 else "Калининград"
+        for i in range(len(draft_venues))
+    ]
+    assert len(counter["persist_kwargs"]) == len(draft_venues)
+    assert [k["producer_ordinal"] for k in counter["persist_kwargs"]] == list(range(len(draft_venues)))
     for persist_kwargs in counter["persist_kwargs"]:
         assert persist_kwargs["source_disposition"] == "EVENTS_FOUND"
         assert persist_kwargs["source_parse_version"] == "source-parse-v1"

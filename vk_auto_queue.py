@@ -2921,9 +2921,8 @@ async def _process_vk_inbox_row(
     # Deterministic warnings have no authority to delete a positive LLM child
     # or its siblings.
 
-    # If LLM returned drafts without location, use the source-level hint as a fallback.
-    # This prevents Smart Update from rejecting otherwise valid events due to missing location.
-    if (location_hint_val or "").strip():
+    # A source-wide venue can fill one child, but cannot locate multiple children.
+    if len(drafts) == 1 and (location_hint_val or "").strip():
         for draft in drafts:
             if not (getattr(draft, "venue", None) or "").strip():
                 draft.venue = str(location_hint_val).strip()
