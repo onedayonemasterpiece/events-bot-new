@@ -131,6 +131,9 @@ def clean_search_digest(digest: str | None) -> str | None:
     if not raw:
         return None
 
+    # Reject visible writer meta-text (e.g. the live Rammstein card's '(138 символов)').
+    if re.search(r"\(\s*\d+\s*символ(?:ов|а)?\s*\)\s*$", raw, re.I):
+        return None
     # Reject "truncated preview" style digests. These are usually cut mid-sentence and degrade UX.
     if "…" in raw or "..." in raw:
         return None
