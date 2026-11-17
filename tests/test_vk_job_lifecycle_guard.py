@@ -452,3 +452,61 @@ async def test_normal_scheduler_does_not_probe_or_requeue_managed_post(db, monke
     await main.schedule_event_update_tasks(db, event)
     probe.assert_not_awaited()
     assert all(call.args[2] != main.JobTask.vk_sync for call in enqueue.await_args_list)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('case', ['frozen', 'document', 'sync', 'missing', 'transport', 'value_error'])
+async def test_frozen_ambiguity_finishes_without_retrying_other_failures(db, monkeypatch, case):
+    from datetime import datetime, timedelta, timezone
+
+    clock = [datetime.now(timezone.utc)]
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock[0].astimezone(tz) if tz else clock[0].replace(tzinfo=None)
+
+    monkeypatch.setattr(main, 'datetime', Clock)
+    monkeypatch.setattr(main, '_vk_captcha_needed', False)
+    event = await save_event(db, vk_source_hash='known', source_vk_post_url='https://vk.com/wall-231920894_10')
+    task = main.JobTask.vk_sync if case == 'sync' else main.JobTask.vk_calendar_comment
+    payload = {} if case == 'document' else {'relations': {'related': [{'id': 9}]}}
+    reason = {'missing': 'vk_relations_post_missing', 'transport': 'offline_transport'}.get(case, 'vk_live_id_ambiguous')
+    exception = ValueError(reason) if case == 'value_error' else RuntimeError(reason)
+    calls, healthy = [], []
+
+    async def failed(event_id, *args):
+        calls.append(event_id)
+        raise exception
+
+    async def succeeded(event_id, *args):
+        healthy.append(event_id)
+        return True
+
+    async def forbidden_api(*args, **kwargs):
+        raise AssertionError('External VK API must not run in this regression')
+
+    monkeypatch.setitem(main.JOB_HANDLERS, task.value, failed)
+    monkeypatch.setitem(main.JOB_HANDLERS, 'telegraph_build', succeeded)
+    monkeypatch.setattr(main, '_vk_api', forbidden_api)
+    async with db.get_session() as session:
+        row = main.JobOutbox(event_id=event.id, task=task, payload=payload, attempts=2,
+                             next_run_at=clock[0] - timedelta(seconds=1))
+        session.add(row)
+        session.add(main.JobOutbox(event_id=event.id, task=main.JobTask.telegraph_build,
+                                   next_run_at=clock[0] - timedelta(seconds=1)))
+        await session.flush()
+        job_id = row.id
+        await session.commit()
+    assert await main._run_due_jobs_once(db, None) == 2
+    async with db.get_session() as session:
+        row = await session.get(main.JobOutbox, job_id)
+        terminal = case == 'frozen'
+        assert row.status == main.JobStatus.error
+        assert row.terminal_reason == ('failed' if terminal else None)
+        assert row.attempts == (2 if terminal else 3)
+        assert row.payload == payload and row.last_error == reason
+        clock[0] = main._ensure_utc(row.next_run_at) + timedelta(seconds=1)
+    assert await main._run_due_jobs_once(db, None) == (0 if terminal else 1)
+    assert len(calls) == (1 if terminal else 2)
+    assert healthy == [event.id] and main._vk_captcha_needed is False

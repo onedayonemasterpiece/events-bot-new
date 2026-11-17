@@ -1,5 +1,7 @@
 ## 2026-11-17
 
+- Frozen related comments stop automatic retries when live-post identity is ambiguous; the resolver continues to reject an unsafe target. Other retry classes are unchanged.
+
 - CAPTCHA pause preserves future independent VK retry and comment delays. Exhausted jobs retain the shared pause across restart until recovery, then remain terminal without another write attempt.
 
 - NFC-страницы: `kenigevents.ru/vk/` подписана «Полюбить Калининград Афиша — Самая большая афиша событий региона»; новая `kenigevents.ru/uhty/` по той же схеме открывает сообщество «Ух ты, Калининград!» (дайджесты экскурсий). Workflow выгружает все страницы `site/root-links/*/` и принимает SHA, уже вошедший в main.
