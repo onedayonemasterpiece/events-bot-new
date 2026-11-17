@@ -4566,7 +4566,7 @@ def maybe_apply_gemma_audit(
             fingerprints=fingerprints, candidate_ids=top_ids,
         )
         cached = audit_cache.get(cache_key)
-        if cached:
+        if cached and set(top_ids).issubset(map(int, cached)):
             meta["cache_hits"] += 1
             audit = {int(k): v for k, v in cached.items()}
             meta["verified_event_ids"].append(anchor_int_id)
@@ -4593,7 +4593,7 @@ def maybe_apply_gemma_audit(
                     pass_key = gemma_related_audit_cache_key(
                         model=model, policy_signature=policy_signature, anchor_id=anchor_id,
                         fingerprints=fingerprints, candidate_ids=[event["id"] for event in pass_candidates])
-                    if pass_key in audit_cache:
+                    if pass_key in audit_cache and {event["id"] for event in pass_candidates}.issubset(map(int, audit_cache[pass_key])):
                         audit.update({int(k): v for k, v in audit_cache[pass_key].items()})
                         successful_passes += 1
                         log_stage("gemma_audit_pass_cache_hit", anchor_event_id=anchor_int_id, pass_index=pass_index + 1)
@@ -4626,7 +4626,7 @@ def maybe_apply_gemma_audit(
                             elapsed_ms = int((time.monotonic() - started) * 1000)
                             audit.update(pass_audit)
                             audit_cache[pass_key] = {str(k): v for k, v in pass_audit.items()}
-                            successful_passes += 1
+                            successful_passes += int({event["id"] for event in pass_candidates}.issubset(pass_audit))
                             meta["provider_calls"] += 1
                             meta["attempts"].append({
                                 "anchor_event_id": anchor_int_id,
@@ -4642,6 +4642,7 @@ def maybe_apply_gemma_audit(
                             })
                             log_stage(
                                 "gemma_audit_call_complete",
+                                missing_candidate_count=len({event["id"] for event in pass_candidates} - pass_audit.keys()),
                                 anchor_event_id=anchor_int_id,
                                 model=model,
                                 attempt=attempt,
@@ -4697,7 +4698,7 @@ def maybe_apply_gemma_audit(
                         "error": "partial_gemma_pass_failure",
                         "pass_failures": pass_failures,
                     })
-                if successful_passes == expected_passes:
+                if successful_passes == expected_passes and set(top_ids).issubset(audit):
                     audit_cache[cache_key] = {str(k): v for k, v in audit.items()}
                     meta["verified_event_ids"].append(anchor_int_id)
             except Exception as exc:
@@ -4942,6 +4943,22 @@ def build_related(
         for value in (cache.get("gemma_verified_event_ids") or [])
         if str(value).isdigit()
     }
+    cached_raw_chains = cache.get("raw_chains") if isinstance(cache.get("raw_chains"), dict) else None
+    cached_verified_event_ids = {
+        event_id for event_id in cached_verified_event_ids
+        if str(event_id) in (cached_raw_chains or {}) and (
+            not cached_raw_chains[str(event_id)] or {
+                int(item["event_id"])
+                for item in cached_raw_chains[str(event_id)][:candidate_limit * pass_count]
+            }.issubset(map(int, (cache.get("gemma_audit_cache") or {}).get(
+                gemma_related_audit_cache_key(
+                    model=gemma_model, policy_signature=gemma_policy_signature,
+                    anchor_id=event_id, fingerprints=fingerprints,
+                    candidate_ids=[int(item["event_id"]) for item in cached_raw_chains[str(event_id)][:candidate_limit * pass_count]],
+                ), {}
+            )))
+        )
+    }
     gemma_cache_ready = bool(
         gemma_verify
         and cache.get("gemma_verified_model") == gemma_model
@@ -4961,22 +4978,11 @@ def build_related(
         algorithm=algorithm,
     )
     raw_chains_for_cache: dict[str, list[dict[str, Any]]] | None = None
-    cached_raw_chains = cache.get("raw_chains") if isinstance(cache.get("raw_chains"), dict) else None
     unfinished_anchor_ids: set[int] = set()
     if anchor_ids is not None and related_mode == "pgvector":
         if not cache_compatible:
             cached_verified_event_ids = set()
             cached_raw_chains = None
-        cached_verified_event_ids = {
-            event_id for event_id in cached_verified_event_ids
-            if str(event_id) in (cached_raw_chains or {}) and (
-                not cached_raw_chains[str(event_id)] or gemma_related_audit_cache_key(
-                    model=gemma_model, policy_signature=gemma_policy_signature,
-                    anchor_id=event_id, fingerprints=fingerprints,
-                    candidate_ids=[int(item["event_id"]) for item in cached_raw_chains[str(event_id)][:candidate_limit * pass_count]],
-                ) in (cache.get("gemma_audit_cache") or {})
-            )
-        }
         # First publications need their own anchors, not a cold audit of every
         # old page. Keep the complete catalog available to retrieval/verifier.
         targets = set(anchor_ids) | (changed_event_ids if previous_fingerprints else set())
