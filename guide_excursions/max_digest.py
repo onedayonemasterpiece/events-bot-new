@@ -116,6 +116,11 @@ async def _publish_max_target(db, *, issue_id, target, snapshot, client_factory)
                          _tg_link("Telegram", telegram_url), _tg_link("Вконтакте", VISUAL_DIGEST_TG_VK_URL)])
     content = {"paragraphs": list(snapshot["content"]["paragraphs"]) + html_content(footer)["paragraphs"]}
     payload = dict(snapshot, content=content, alias=alias, native_id=native_id, binding_revision=target["binding_revision"])
+    if payload.get("image_b64") and payload.get("image_sha256"):
+        # All targets share the same immutable edition snapshot. Keep target-specific
+        # content and binding in the intent, and reference the frozen picture once.
+        payload.pop("image_b64")
+        payload["snapshot_image_issue_id"] = issue_id
     row = await prepare_delivery(db, issue_id=issue_id, provider="max", target_id=native_id, payload=payload)
     client = client_factory(row["payload"])
     result = await drive_delivery(db, row, client)

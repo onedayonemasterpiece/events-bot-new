@@ -55,7 +55,17 @@ async def get_delivery(db, key: str) -> dict[str, Any]:
         if row is None:
             raise LookupError("delivery_not_found")
         result = dict(zip([col[0] for col in cur.description], row))
-    result["payload"] = json.loads(result.pop("payload_json"))
+        payload = json.loads(result.pop("payload_json"))
+        if "snapshot_image_issue_id" in payload:
+            if result["provider"] != "max" or payload["snapshot_image_issue_id"] != result["issue_id"]:
+                raise ValueError("Invalid frozen picture reference")
+            snap = await conn.execute_fetchall(
+                "SELECT json_extract(payload_json,'$.image_b64'), json_extract(payload_json,'$.image_sha256') "
+                "FROM guide_visual_snapshot WHERE issue_id=?", (result["issue_id"],))
+            if not snap or not snap[0][0] or snap[0][1] != payload.get("image_sha256"):
+                raise ValueError("Frozen picture unavailable for this edition")
+            payload["image_b64"] = snap[0][0]
+    result["payload"] = payload
     result["receipt"] = json.loads(result.pop("receipt_json") or "{}")
     return result
 
