@@ -31,6 +31,7 @@
 - Guide visual VK digest (owner request 2026-11-16): the post text was a numbered list `title — link`; it is now a connected first-person editorial story written by one LLM request per edition, with exact titles in caps, dates, price, booking contact, brand line and hashtags added from stored rows. The compact list remains the text when the writer is unavailable or its answer is rejected. Personal guide mentions `[id…|name]` exist behind `GUIDE_VISUAL_DIGEST_VK_MENTIONS` (default off, sandbox testing only).
 
 ### Fixed
+- Групповое сравнение исходных изображений отличает общую обложку фестиваля от афиши другого входящего в него события.
 - Keep media review for an ongoing exhibition eligible for a waiting initial VK announcement through its canonical end date, including date ranges.
 - Карточка дайджеста сверяет пункты маршрута с анонсом конкретного выезда и показывает сохранённый тематический хук. Удалены подписи, которые выводились по ключевым словам названия или по типу аудитории.
 - Guide import preserves the extractor's negative digest eligibility decision instead of promoting it from filled logistics fields, including offers restricted to an organized group.
