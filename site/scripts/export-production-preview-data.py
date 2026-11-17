@@ -4698,7 +4698,7 @@ def maybe_apply_gemma_audit(
                         "error": "partial_gemma_pass_failure",
                         "pass_failures": pass_failures,
                     })
-                if successful_passes == expected_passes:
+                if successful_passes == expected_passes and set(top_ids).issubset(audit):
                     audit_cache[cache_key] = {str(k): v for k, v in audit.items()}
                     meta["verified_event_ids"].append(anchor_int_id)
             except Exception as exc:

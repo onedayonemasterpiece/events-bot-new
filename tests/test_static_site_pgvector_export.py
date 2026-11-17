@@ -908,3 +908,19 @@ def test_partial_verdict_ids_do_not_complete_full_or_scoped_cache(state, tmp_pat
         calls.clear()
         assert run()['related']['1']['strict_verified']
         assert not calls
+
+
+def test_missing_catalog_candidate_does_not_complete_requested_audit(monkeypatch):
+    exporter = _load_exporter_module()
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
+    events = [{'id': 1, 'title': 'Anchor'}, {'id': 2, 'title': 'Known peer'}]
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', lambda **kwargs: {
+        e['id']: {'llm_semantic_score': .8, 'confidence': .9, 'reject': False,
+                  'similarity_class': 'highly_similar'} for e in kwargs['candidates']})
+    chains = {'1': [{'event_id': i, 'related_score': .8, 'vector_similarity': .8,
+                     'slot_type': 'pure_related'} for i in (2, 999)]}
+    result, meta = exporter.maybe_apply_gemma_audit(events, chains, enabled=True,
+        model='models/gemma-4-26b-a4b-it', key_env='GOOGLE_API_KEY4', cache={}, max_anchors=0)
+    assert 1 not in meta['verified_event_ids']
+    assert 2 in meta['verified_event_ids']
+    assert next(item for item in result['1'] if item['event_id'] == 2)['llm_semantic_score'] == .8
