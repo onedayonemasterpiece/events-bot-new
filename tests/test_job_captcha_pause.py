@@ -175,12 +175,13 @@ async def test_vk_flood_defers_outbox_without_immediate_retry(tmp_path, monkeypa
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "blocked_start,blocked_end,range_date",
-    [(3, None, False), (-20, 8, False), (-20, 0, False), (-20, 8, True), (-20, -1, False)],
-    ids=["future", "ongoing", "ends-today", "date-range", "expired"],
+    "blocked_start,blocked_end,range_date,inferred_end",
+    [(3, None, False, False), (-20, 8, False, False), (-20, 0, False, False),
+     (-20, 8, True, False), (-20, -1, False, False), (-20, 8, False, True)],
+    ids=["future", "ongoing", "ends-today", "date-range", "expired", "inferred-end"],
 )
 async def test_media_review_budget_prioritizes_blocked_vk_and_future_events(
-    tmp_path, monkeypatch, blocked_start, blocked_end, range_date
+    tmp_path, monkeypatch, blocked_start, blocked_end, range_date, inferred_end
 ):
     db = Database(str(tmp_path / "media-priority.sqlite"))
     await db.init()
@@ -209,6 +210,7 @@ async def test_media_review_budget_prioritizes_blocked_vk_and_future_events(
                     event.date += ".." + end
                 else:
                     event.end_date = end
+                event.end_date_is_inferred = inferred_end
             session.add(event)
             await session.flush()
             ids[name] = int(event.id)
@@ -236,7 +238,7 @@ async def test_media_review_budget_prioritizes_blocked_vk_and_future_events(
     monkeypatch.setitem(main.JOB_HANDLERS, "vk_sync", record)
     assert await main._run_due_jobs_once(db, None) == 5
     await db.engine.dispose()
-    names = ("publish", "near", "later", "past", "blocked") if blocked_end == -1 else ("blocked", "publish", "near", "later", "past")
+    names = ("publish", "near", "later", "past", "blocked") if blocked_end == -1 or inferred_end else ("blocked", "publish", "near", "later", "past")
     assert order == [ids[name] for name in names]
 
 

@@ -6,7 +6,7 @@ Service: Events JobOutbox / initial VK publishing
 Opened: 2026-11-17
 Closed: —
 Owners: KenigEvents (codex)
-Related incidents: INC-2026-11-10-vk-event-multiphoto
+Related incidents: INC-2026-11-10-vk-event-multiphoto, INC-2026-06-28-vk-stale-event-publication
 Related docs: [VK publishing](../../features/vk-publishing/README.md), [release governance](../../operations/release-governance.md)
 
 ## Summary and impact
@@ -21,6 +21,7 @@ while the publication repeatedly deferred on that existing dependency.
 - 2026-11-17 07:12 UTC: read-only investigation found VK job 160191 repeatedly waiting on that review.
 - 2026-11-17 07:16 UTC: actual container source matched main 193578780; targeted logs showed future reviews running while the ongoing exhibition was never picked.
 - Baseline regression: ongoing, ends-today and date-range cases failed; future and expired controls passed.
+- Technical review found that an inferred future end date could promote an already-started one-day event. The added inferred-end control failed before correction (1 FAIL / 5 PASS).
 
 ## Root cause and classification
 
@@ -42,7 +43,7 @@ The existing JobOutbox due-job sort; no queue schema, configuration or provider 
 
 ### Mandatory checks before closure or deploy
 
-- Actual due runner: future, ongoing, ends-today, canonical date range and expired event controls.
+- Actual due runner: future, ongoing, ends-today, canonical date range, expired and inferred-end event controls.
 - Existing CAPTCHA pause, fresh worker selection and due-filter tests.
 - Required CI and normal exact-main Events-only release.
 - Observe ordinary review completion and initial publication, without manual queue reset or replay.
@@ -55,7 +56,10 @@ Retained investigation and baseline/fixed logs under the existing
 ## Corrective actions and prevention
 
 Select the canonical end date and reuse `_event_vk_publish_end_date` for media
-eligibility. Preserve the existing start-date ordering, dependency and rate
+eligibility. Select time and inferred-end provenance so the existing
+`_event_start_has_passed_for_publication` rule excludes already-started timed
+one-day events, matching the stale-publication incident's existing contract.
+Preserve the existing start-date ordering, dependency and rate
 limits. Extend the existing due-runner test with the distinguishing cases.
 No manual mitigation or production data changes were performed.
 
