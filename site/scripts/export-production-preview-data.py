@@ -4327,11 +4327,19 @@ async def call_gemma_related_audit_async(
         raise RuntimeError("Gemma related audit returned empty text after thought filtering")
     parsed = parse_gemma_json_object(str(text).strip())
     out: dict[int, dict[str, Any]] = {}
+    requested_ids = {candidate["id"] for candidate in candidates}
+    seen_ids = set()
     for item in parsed.get("ranked") or []:
         try:
             event_id = int(item.get("event_id"))
         except Exception:
             continue
+        if event_id not in requested_ids:
+            continue
+        if event_id in seen_ids:
+            out.pop(event_id, None)
+            continue
+        seen_ids.add(event_id)
         out[event_id] = item
     return out
 
@@ -4471,6 +4479,10 @@ def gemma_related_audit_cache_key(*, model, policy_signature, anchor_id, fingerp
     }, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
 
+def gemma_audit_complete(verdicts: Any, candidate_ids: Iterable[int]) -> bool:
+    return isinstance(verdicts, dict) and set(verdicts) == {str(cid) for cid in candidate_ids}
+
+
 def maybe_apply_gemma_audit(
     events: list[dict[str, Any]],
     chains: dict[str, list[dict[str, Any]]],
@@ -4566,7 +4578,7 @@ def maybe_apply_gemma_audit(
             fingerprints=fingerprints, candidate_ids=top_ids,
         )
         cached = audit_cache.get(cache_key)
-        if cached and set(top_ids).issubset(map(int, cached)):
+        if gemma_audit_complete(cached, top_ids):
             meta["cache_hits"] += 1
             audit = {int(k): v for k, v in cached.items()}
             meta["verified_event_ids"].append(anchor_int_id)
@@ -4590,11 +4602,16 @@ def maybe_apply_gemma_audit(
                     pass_candidates = candidate_events[pass_index * candidate_limit : (pass_index + 1) * candidate_limit]
                     if not pass_candidates:
                         continue
+                    pass_ids = {event["id"] for event in pass_candidates}
                     pass_key = gemma_related_audit_cache_key(
                         model=model, policy_signature=policy_signature, anchor_id=anchor_id,
-                        fingerprints=fingerprints, candidate_ids=[event["id"] for event in pass_candidates])
-                    if pass_key in audit_cache and {event["id"] for event in pass_candidates}.issubset(map(int, audit_cache[pass_key])):
-                        audit.update({int(k): v for k, v in audit_cache[pass_key].items()})
+                        fingerprints=fingerprints, candidate_ids=pass_ids)
+                    saved_pass = audit_cache.get(pass_key) or {}
+                    pass_audit = {cid: saved_pass[str(cid)] for cid in pass_ids if str(cid) in saved_pass}
+                    audit.update(pass_audit)
+                    if pass_audit.keys() == pass_ids:
+                        if len(saved_pass) != len(pass_audit):
+                            audit_cache[pass_key] = {str(cid): verdict for cid, verdict in pass_audit.items()}
                         successful_passes += 1
                         log_stage("gemma_audit_pass_cache_hit", anchor_event_id=anchor_int_id, pass_index=pass_index + 1)
                         continue
@@ -4602,10 +4619,11 @@ def maybe_apply_gemma_audit(
                     for attempt in range(1, max_attempts + 1):
                         started = time.monotonic()
                         try:
+                            missing = [event for event in pass_candidates if event["id"] not in pass_audit]
                             log_stage(
                                 "gemma_audit_call",
                                 anchor_event_id=anchor_int_id,
-                                candidate_count=len(pass_candidates),
+                                candidate_count=len(missing),
                                 candidate_limit=candidate_limit,
                                 total_candidate_limit=total_candidate_limit,
                                 pass_index=pass_index + 1,
@@ -4615,19 +4633,22 @@ def maybe_apply_gemma_audit(
                                 attempt=attempt,
                                 max_attempts=max_attempts,
                             )
-                            pass_audit = call_gemma_related_audit(
+                            response = call_gemma_related_audit(
                                 model=model,
                                 key_env=key_env,
                                 anchor=anchor,
-                                candidates=pass_candidates,
+                                candidates=missing,
                                 timeout_seconds=int(meta["retry_policy"]["timeout_seconds"]),
                                 candidate_limit=candidate_limit,
                             )
                             elapsed_ms = int((time.monotonic() - started) * 1000)
+                            meta["provider_calls"] += 1
+                            pass_audit.update({e["id"]: response[e["id"]] for e in missing if e["id"] in response})
                             audit.update(pass_audit)
                             audit_cache[pass_key] = {str(k): v for k, v in pass_audit.items()}
-                            successful_passes += int({event["id"] for event in pass_candidates}.issubset(pass_audit))
-                            meta["provider_calls"] += 1
+                            if pass_audit.keys() != pass_ids:
+                                raise ValueError(f"Missing Gemma verdicts: {sorted(pass_ids - pass_audit.keys())}")
+                            successful_passes += 1
                             meta["attempts"].append({
                                 "anchor_event_id": anchor_int_id,
                                 "attempt": attempt,
@@ -4636,7 +4657,7 @@ def maybe_apply_gemma_audit(
                                 "model": model,
                                 "status": "ok",
                                 "elapsed_ms": elapsed_ms,
-                                "candidate_count": len(pass_candidates),
+                                "candidate_count": len(missing),
                                 "candidate_limit": candidate_limit,
                                 "total_candidate_limit": total_candidate_limit,
                             })
@@ -4944,21 +4965,21 @@ def build_related(
         if str(value).isdigit()
     }
     cached_raw_chains = cache.get("raw_chains") if isinstance(cache.get("raw_chains"), dict) else None
-    cached_verified_event_ids = {
-        event_id for event_id in cached_verified_event_ids
-        if str(event_id) in (cached_raw_chains or {}) and (
-            not cached_raw_chains[str(event_id)] or {
-                int(item["event_id"])
-                for item in cached_raw_chains[str(event_id)][:candidate_limit * pass_count]
-            }.issubset(map(int, (cache.get("gemma_audit_cache") or {}).get(
-                gemma_related_audit_cache_key(
-                    model=gemma_model, policy_signature=gemma_policy_signature,
-                    anchor_id=event_id, fingerprints=fingerprints,
-                    candidate_ids=[int(item["event_id"]) for item in cached_raw_chains[str(event_id)][:candidate_limit * pass_count]],
-                ), {}
-            )))
-        )
-    }
+    if gemma_verify or (anchor_ids is not None and related_mode == "pgvector"):
+        # Older builders marked a whole packet verified even when the model skipped IDs.
+        audit_cache = cache.get("gemma_audit_cache") or {}
+        eligible_verified_ids = set()
+        for event_id in cached_verified_event_ids:
+            chain = (cached_raw_chains or {}).get(str(event_id))
+            if chain is None:
+                continue
+            top_ids = [int(item["event_id"]) for item in chain[:candidate_limit * pass_count]]
+            full_key = gemma_related_audit_cache_key(
+                model=gemma_model, policy_signature=gemma_policy_signature,
+                anchor_id=event_id, fingerprints=fingerprints, candidate_ids=top_ids)
+            if not top_ids or gemma_audit_complete(audit_cache.get(full_key), top_ids):
+                eligible_verified_ids.add(event_id)
+        cached_verified_event_ids = eligible_verified_ids
     gemma_cache_ready = bool(
         gemma_verify
         and cache.get("gemma_verified_model") == gemma_model
