@@ -164,19 +164,21 @@ Static related-generation model policy is deliberately different from the
 interactive `/poisk/` policy:
 
 - primary/audit model is Gemma 4 26B (`models/gemma-4-26b-a4b-it`);
-- there is **no** Flash-Lite/Gemini-Lite fallback for static related generation;
-- provider `5xx/429/timeout` must be handled by repeated Gemma attempts with
-  pauses/backoff (`STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS`,
-  `STATIC_SITE_GEMMA_RELATED_RETRY_BACKOFF_SEC`) because static rebuild speed is
-  less important than preserving the scarce `gemini-3.1-flash-lite` quota for
-  online rescue and other critical flows;
-- strict production/canary builds must publish “similar” cards only when Gemma
-  explicitly accepted the candidate (`llm_semantic_score >= 0.72`); weak
-  0.55–0.71 candidates are adjacent/explore material only;
-- if all Gemma attempts fail for an anchor, the builder records the error. A
-  release/canary gate may either fail the build or publish the anchor without a
-  strict similar block, but it must not silently label raw pgvector order as
-  Gemma-verified related.
+- provider `5xx/429/timeout` and omitted IDs are first handled by the existing
+  targeted Gemma attempts/backoff (`STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS`,
+  `STATIC_SITE_GEMMA_RELATED_RETRY_BACKOFF_SEC`);
+- **only** when a Gemma batch contains some valid verdicts but still has missing
+  IDs after those attempts, the existing shared GoogleAIClient limiter may ask
+  `models/gemini-3.5-flash-lite` **once** about only the missing IDs. A whole
+  failed batch, an explicit Gemma rejection, or an already scored 0.65–0.71
+  candidate does **not** trigger Lite. Gemini 3.1 quota is untouched;
+- the recovered verdict retains `_verified_model` in the existing audit cache
+  and `gemini35_lite_audit` in related-chain reasons; Gemma decisions stay
+  unchanged. A verified related candidate needs an explicit non-reject score
+  `>= 0.72` from the recorded model, never raw vector rank or an averaged score;
+- if neither model returns all requested IDs, the existing partial/unverified
+  result remains; the builder must not claim strict coverage for that pass.
+  Broad second opinions for borderline scores require separate evidence.
 
 #### Gemma static-related verifier contract v4
 
