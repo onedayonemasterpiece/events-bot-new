@@ -5626,8 +5626,10 @@ async def _resume_vk_captcha_outbox(
             )
         )
         jobs = [_normalize_job(job) for job in rows.scalars().all()]
-        jobs.sort(key=lambda job: job.task == JobTask.vk_calendar_comment
-                  and not (job.payload if isinstance(job.payload, dict) else {}).get("relations"))
+        jobs.sort(key=lambda job: (
+            job.task not in (JobTask.vk_calendar_comment, JobTask.vk_sync),
+            job.task == JobTask.vk_calendar_comment
+            and not (job.payload if isinstance(job.payload, dict) else {}).get("relations")))
         for job in jobs:
             payload = job.payload if isinstance(job.payload, dict) else {}
             if job.task == JobTask.vk_calendar_comment and int(payload.get("publish_date") or 0) > now.timestamp():

@@ -1,5 +1,7 @@
 ## 2026-11-17
 
+- CAPTCHA recovery schedules due calendar documents before festival and weekend pages, retaining frozen comments first, new announcements next and the existing spacing.
+
 - Frozen related comments stop automatic retries when live-post identity is ambiguous; the resolver continues to reject an unsafe target. Other retry classes are unchanged.
 
 - CAPTCHA pause preserves future independent VK retry and comment delays. Exhausted jobs retain the shared pause across restart until recovery, then remain terminal without another write attempt.
