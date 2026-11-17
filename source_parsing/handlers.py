@@ -1814,7 +1814,7 @@ async def add_new_event_via_queue(
                 is_free=bool(draft.is_free),
                 pushkin_card=bool(draft.pushkin_card),
                 search_digest=draft.search_digest,
-                raw_excerpt=final_description,
+                raw_excerpt=full_description,
                 vendor_schedule_end_date=(
                     getattr(theatre_event, "vendor_schedule_end_date", None) or None
                 ),
