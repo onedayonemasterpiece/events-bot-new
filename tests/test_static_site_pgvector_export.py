@@ -892,3 +892,91 @@ def test_legacy_verified_packet_repairs_only_missing_verdicts(tmp_path, monkeypa
     assert not any('0' in p for p in json.loads(path.read_text())['gemma_audit_cache'].values())
     assert run(None)['strict_verified_related']
     assert calls == [[3]]
+
+
+def test_lite_recovers_only_missing_id_after_gemma_retries_and_reuses_cache(monkeypatch):
+    exporter = _load_exporter_module()
+    monkeypatch.setenv("GOOGLE_API_KEY4", "test-only")
+    monkeypatch.setenv("STATIC_SITE_GEMMA_RELATED_PASSES", "1")
+    monkeypatch.setenv("STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS", "2")
+    monkeypatch.setenv("STATIC_SITE_GEMMA_RELATED_RETRY_BACKOFF_SEC", "0")
+    calls = []
+
+    def audit(**kwargs):
+        ids = [event["id"] for event in kwargs["candidates"]]
+        calls.append((kwargs["model"], ids))
+        if kwargs["model"] == "models/gemini-3.5-flash-lite":
+            assert ids == [3]
+            return {3: {"llm_semantic_score": .82, "confidence": .9,
+                        "reject": False, "similarity_class": "highly_similar"}}
+        if len(calls) == 1:
+            return {2: {"llm_semantic_score": .75, "confidence": .9,
+                        "reject": False, "similarity_class": "thematically_close"}}
+        raise RuntimeError("Gemma HTTP 503")
+
+    monkeypatch.setattr(exporter, "call_gemma_related_audit", audit)
+    events = [{"id": i, "title": f"Real programme {i}"} for i in range(1, 4)]
+    cache = {}
+
+    def run():
+        chains = {"1": [
+            {"event_id": i, "vector_similarity": .82, "related_score": .82,
+             "slot_type": "adjacent_discovery"} for i in (2, 3)
+        ]}
+        return exporter.maybe_apply_gemma_audit(
+            events, chains, enabled=True, model="models/gemma-4-26b-a4b-it",
+            key_env="GOOGLE_API_KEY4", cache=cache, max_anchors=0, anchor_ids={1})
+
+    result, meta = run()
+    assert calls == [
+        ("models/gemma-4-26b-a4b-it", [2, 3]),
+        ("models/gemma-4-26b-a4b-it", [3]),
+        ("models/gemini-3.5-flash-lite", [3]),
+    ]
+    assert meta["verified_event_ids"] == [1]
+    assert not meta["errors"]
+    assert len([a for a in meta["attempts"] if a["model"].endswith("flash-lite")]) == 1
+    assert [x["event_id"] for x in result["1"] if x["slot_type"] == "pure_related"] == [3, 2]
+    assert "gemini35_lite_audit" in result["1"][0]["reason_codes"]
+    assert "gemma4_26b_audit" in result["1"][1]["reason_codes"]
+    assert any(v.get("_verified_model") == "models/gemini-3.5-flash-lite"
+               for packet in cache["gemma_audit_cache"].values() for v in packet.values())
+    _, warm = run()
+    assert warm["cache_hits"] == 1
+    assert len(calls) == 3
+
+
+def test_lite_never_replaces_scored_low_gemma_or_wholly_failed_pass(monkeypatch):
+    exporter = _load_exporter_module()
+    monkeypatch.setenv("GOOGLE_API_KEY4", "test-only")
+    monkeypatch.setenv("STATIC_SITE_GEMMA_RELATED_PASSES", "1")
+    monkeypatch.setenv("STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS", "1")
+    events = [{"id": 1, "title": "Anchor"}, {"id": 2, "title": "Peer"}]
+    calls = []
+
+    def audit(**kwargs):
+        calls.append(kwargs["model"])
+        assert kwargs["model"] == "models/gemma-4-26b-a4b-it", "no blanket Lite fallback"
+        if len(calls) == 2:
+            raise RuntimeError("Gemma unavailable for whole pass")
+        return {2: {"llm_semantic_score": .70, "confidence": .95,
+                    "reject": False, "similarity_class": "thematically_close"}}
+
+    monkeypatch.setattr(exporter, "call_gemma_related_audit", audit)
+
+    def run():
+        return exporter.maybe_apply_gemma_audit(
+            events, {"1": [{"event_id": 2, "vector_similarity": .9,
+                            "related_score": .9, "slot_type": "adjacent_discovery"}]},
+            enabled=True, model="models/gemma-4-26b-a4b-it",
+            key_env="GOOGLE_API_KEY4", cache={}, max_anchors=0, anchor_ids={1})
+
+    first, meta = run()
+    assert meta["verified_event_ids"] == [1]
+    assert first["1"][0]["llm_semantic_score"] == .7
+    assert first["1"][0]["slot_type"] == "adjacent_discovery"
+    second, failed = run()
+    assert failed["verified_event_ids"] == []
+    assert failed["errors"]
+    assert second["1"][0].get("llm_semantic_score") is None
+    assert calls == ["models/gemma-4-26b-a4b-it"] * 2
