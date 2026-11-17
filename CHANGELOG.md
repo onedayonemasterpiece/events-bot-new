@@ -25,6 +25,7 @@
 
 ### Fixed
 - Related events keep the verified Gemma decisions from partial batches and request the missing candidates before marking an event ready for VK publication.
+- The static related verifier may ask Gemini 3.5 Flash-Lite once for IDs still missing from a partially answered Gemma batch after normal retries; recorded low scores are not reopened, and model provenance stays in the existing cache.
 - Карточка дайджеста сверяет пункты маршрута с анонсом конкретного выезда и показывает сохранённый тематический хук. Удалены подписи, которые выводились по ключевым словам названия или по типу аудитории.
 - Guide import preserves the extractor's negative digest eligibility decision instead of promoting it from filled logistics fields, including offers restricted to an organized group.
 - Redact signed VK upload tickets in existing API error and CAPTCHA logs while preserving upload requests and cached recovery parameters.
