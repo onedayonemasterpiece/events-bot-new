@@ -197,6 +197,10 @@ quality:
   (`STATIC_SITE_GEMMA_RELATED_PASSES`, clamped to `1..3`), so the normal strict
   audit inspects up to `20` pgvector candidates without forcing one large
   fragile JSON response;
+- a strict audit is complete only when parsed verdicts cover every requested
+  candidate ID; an empty/partial response or an unrelated ID does not complete
+  a batch. Full and per-batch caches use the same rule. Completed batches remain
+  reusable while the existing normal path completes missing batches;
 - fact text defaults to `360` chars per event;
 - native structured output schema returns
   `ranked[].event_id`, `ranked[].llm_semantic_score`,
