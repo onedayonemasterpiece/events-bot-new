@@ -6,9 +6,10 @@ import os
 import re
 from datetime import datetime
 from html.parser import HTMLParser
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 import aiohttp
+from yarl import URL
 
 
 class SnapshotUnavailable(RuntimeError):
@@ -42,9 +43,16 @@ class _HTMLContent(HTMLParser):
         if not data:
             return
         if self.link:
-            if urlsplit(self.link).hostname in {"vk.cc", "www.vk.cc"}:
+            parts = urlsplit(self.link)
+            if parts.hostname in {"vk.cc", "www.vk.cc"}:
                 raise SnapshotUnavailable("shortlink_not_original_destination")
-            self.nodes.append({"kind": "link", "label": data, "url": self.link})
+            url = self.link
+            if not url.isascii():
+                # The publication contract expects an RFC 3986 URI. Preserve
+                # existing escapes and delimiters, including signed query values.
+                authority = URL(url).raw_authority
+                url = quote(parts._replace(netloc=authority).geturl(), safe=":/?#[]@!$&'()*+,;=%")
+            self.nodes.append({"kind": "link", "label": data, "url": url})
         else:
             self.nodes.append({"kind": "text", "text": data, "style": self.style})
 

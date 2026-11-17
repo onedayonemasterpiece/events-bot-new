@@ -506,3 +506,28 @@ receipt: reconciled, callback_event_count5, released_resource_count1.
 RECONCILE_030543_USED prevents repeating that incident mitigation. This neither
 pushes a kernel nor resets the queue or edits VK. Future prevention remains a
 normal main release; verify the next ordinary adoption and Event11070 initial.
+
+
+### 17 November: parsed verdict coverage must match requested IDs
+
+Owner-reported posts15017/15012 had empty semantic selections. During the
+investigation, anchor11138 was also marked strict despite only17 of20 requested
+verdicts and an unrelated ID0. This is a separate mechanical defect: the useful
+cross-sport candidate10513 did have a verdict and was excluded by the existing
+score threshold, which this coverage fix does not change.
+
+Full-cache hits, per-pass hits and fresh results counted successful transport
+as a completed audit. Full/scoped build cache shortcuts also trusted stored
+verified metadata. Check requested-ID inclusion in the existing success rules
+and move the existing cached-verified filtering before full-cache readiness.
+Keep valid pair verdicts and completed batches; the normal per-anchor path
+completes missing batches. No policy bump, new queue, retry or catalog-wide gate.
+The existing completion log reports missing candidate count without source text.
+
+Offline regression covers cold, full, pass-only, scoped and completion paths.
+A retained real17/20 fixture reproduces false strict on baseline; the independent
+runner passes32 assertions after the fix. Exporter/scope repository tests pass43
+cases. Local checks do not mean deployed. Semantic calibration and subsequent
+ordinary publication verification remain open. Targeted owner-authorized repairs
+of the two posts were separately completed and visually checked; other old posts
+and comments are not rewritten.

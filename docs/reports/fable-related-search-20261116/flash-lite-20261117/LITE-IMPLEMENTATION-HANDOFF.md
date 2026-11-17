@@ -1,6 +1,6 @@
 # Fable review: выборочное восстановление пропущенных Gemma-оценок через Gemini 3.5 Flash-Lite
 
-**Дата:** 17 ноября 2026. **Исполнитель:** KenigEvents (codex). **Адресат:** Fable под пользователем `devester`, затем (только после вердикта Fable) кодовый агент релиза. **Статус:** отдельный кодовый кандидат, **НЕ production**, без деплоя, изменения векторов, БД, рабочих кэшей и VK. 
+**Дата:** 17 ноября 2026. **Исполнитель:** KenigEvents (codex). **Адресат:** Fable под пользователем `devester`, затем (только после вердикта Fable) кодовый агент релиза. **Статус:** отдельный кодовый кандидат, **НЕ production**, без деплоя, изменения векторов, БД, рабочих кэшей и VK.
 
 **Код:** `chatgpt/related-lite-missing-verdicts-20261117`; предок — точный head [PR #1045](https://github.com/onedayonemasterpiece/events-bot-new/pull/1045) `42f96dd2be2f1a76f2507df64375c74528c4802f`, не `main`. Сравнивать **только с веткой #1045**, иначе тестов и изменённых строк окажется значительно больше. PR #1045 сам по себе ещё не объединён. [Скилл против переусложнения](https://github.com/onedayonemasterpiece/codex-devcoveer-mcp/blob/main/skills/devserver-simplicity/SKILL.md).
 
@@ -91,4 +91,14 @@ git diff 42f96dd2be2f1a76f2507df64375c74528c4802f FETCH_HEAD -- site/scripts/exp
 
 [Исходный опыт, Python-only scripts и сохранённые ответы Gemini 3.5](https://github.com/onedayonemasterpiece/events-bot-new/blob/0ac988ba5de09a12307f45530bd9e34b2cba3d11/docs/reports/fable-related-search-20261116/flash-lite-20261117/FABLE-GEMINI-LITE.md). В этом отчёте все относительные ссылки на JSON и скрипты относятся к этому же закреплённому архиву; новую копию не создавали. Секретов, токенов API и исходных полных приватных конфигураций нет.
 
-**Доставка:** после независимого заключения Fable — только тогда root/кодовый агент принимает изменения, синхронизирует с актуальным `main`, завершает проверки и выпускает с обычной новой публикацией VK и контролем через существующий Crew. Старые VK публикации и рабочие данные не изменялись. 
+**Доставка:** после независимого заключения Fable — только тогда root/кодовый агент принимает изменения, синхронизирует с актуальным `main`, завершает проверки и выпускает с обычной новой публикацией VK и контролем через существующий Crew. Старые VK публикации и рабочие данные не изменялись.
+
+## Root integration after Opus review, 17 November 2026
+
+Integrated with current main da195aa79462fb5504daad1e37e6d1c3f621531c after source PR1045 was deployed. The partial reply test now captures actual model and exact candidate IDs: Lite receives missing IDs in the first build, never an existing low score. Existing main damaged-cache tests also retain their strict coverage assertions and now include the bounded missing-only Lite attempt. The missing-catalog candidate control and incremental scope tests remain.
+
+One outcome log_stage was added at the existing Lite boundary: anchor, pass, model, missing-ID count, status ok/partial/error. No request text, credentials, new state or telemetry subsystem.
+
+Before adjusting obsolete test expectations, the merged candidate produced5 FAIL/44 PASS in10.16s. A distinct control in the existing Lite test fails on the original source with the updated test:1 FAIL in1.95s because the outcome log is absent. The corrected full pair of test files passed49 tests in16.36s. All runs used network-none/tmpfs RunCoveer containers without production DB/env/provider calls. Retained logs are verify-lite1057-integration-20261117/before.log,log-before.log,after.log in the root task artifacts.
+
+This is code-level acceptance only. The eight proposed real Lite quality calls were not run; existing STOP/USED restrictions remain. No broad score calibration or new actual model AFTER is claimed. This PR remains a draft and is not deployed. Preserve the negative controls in REVIEW-3-LITE.md for later authorized quality acceptance. The older reader rollback retains the cached actual model metadata but loses the model-specific reason label in the projected chain.

@@ -5603,6 +5603,10 @@ async def _resume_vk_captcha_outbox(
     resumed = 0
     skipped = 0
     async with db.get_session() as session:
+        await session.execute(update(JobOutbox).where(
+            JobOutbox.task.in_(VK_JOB_TASKS), JobOutbox.status == JobStatus.paused,
+            JobOutbox.last_error == marker, JobOutbox.terminal_reason == "failed",
+        ).values(status=JobStatus.error))
         rows = await session.execute(
             select(JobOutbox).outerjoin(Event, Event.id == JobOutbox.event_id)
             .where(
@@ -5622,6 +5626,10 @@ async def _resume_vk_captcha_outbox(
             )
         )
         jobs = [_normalize_job(job) for job in rows.scalars().all()]
+        jobs.sort(key=lambda job: (
+            job.task not in (JobTask.vk_calendar_comment, JobTask.vk_sync),
+            job.task == JobTask.vk_calendar_comment
+            and not (job.payload if isinstance(job.payload, dict) else {}).get("relations")))
         for job in jobs:
             payload = job.payload if isinstance(job.payload, dict) else {}
             if job.task == JobTask.vk_calendar_comment and int(payload.get("publish_date") or 0) > now.timestamp():
@@ -5765,6 +5773,7 @@ async def vk_captcha_pause_outbox(
             .where(
                 JobOutbox.task.in_(VK_JOB_TASKS),
                 JobOutbox.terminal_reason.is_(None),
+                (JobOutbox.status == JobStatus.running) | (JobOutbox.next_run_at <= now),
                 JobOutbox.status.in_(
                     [JobStatus.pending, JobStatus.error, JobStatus.running]
                 ),
@@ -18598,7 +18607,6 @@ async def add_events_from_text(
                 is_free=event.is_free,
                 pushkin_card=event.pushkin_card,
                 search_digest=event.search_digest,
-                raw_excerpt=event.description,
                 posters=poster_candidates,
                 source_chat_id=source_chat_id,
                 source_message_id=source_message_id,
@@ -19888,6 +19896,7 @@ async def _run_due_jobs_once_locked(
             select(JobOutbox)
             .where(
                 JobOutbox.status.in_([JobStatus.pending, JobStatus.error]),
+                JobOutbox.terminal_reason.is_(None),
                 JobOutbox.next_run_at <= now,
                 JobOutbox.task.in_(known_job_tasks),
             )
@@ -19960,7 +19969,7 @@ async def _run_due_jobs_once_locked(
             }
     fresh_cutoff = now - _tg_event_publish_fresh_queue_horizon()
 
-    media_review_event: dict[int, tuple[str, str, bool]] = {}
+    media_review_event: dict[int, tuple[str, str, str, bool, bool]] = {}
     media_review_ids = sorted(
         {int(j.event_id) for j in jobs if j.task == JobTask.event_media_review and j.event_id is not None}
     )
@@ -19969,14 +19978,17 @@ async def _run_due_jobs_once_locked(
         async with db.get_session() as session:
             event_rows = (
                 await session.execute(
-                    select(Event.id, Event.date, Event.lifecycle_status, Event.silent).where(
+                    select(Event.id, Event.date, Event.time, Event.end_date, Event.end_date_is_inferred, Event.lifecycle_status, Event.silent).where(
                         Event.id.in_(media_review_ids)
                     )
                 )
             ).all()
             media_review_event = {
-                int(event_id): (str(event_date or ""), str(lifecycle or "active"), bool(silent))
-                for event_id, event_date, lifecycle, silent in event_rows
+                int(row.id): (str(row.date or ""),
+                              (_event_vk_publish_end_date(row) or date.min).isoformat(),
+                              str(row.lifecycle_status or "active"), bool(row.silent),
+                              _event_start_has_passed_for_publication(row, now=now))
+                for row in event_rows
             }
             blocked_media_event_ids = {
                 int(event_id)
@@ -19998,6 +20010,9 @@ async def _run_due_jobs_once_locked(
     media_today = now.astimezone(LOCAL_TZ).date().isoformat()
 
     def _job_due_sort_key(j: JobOutbox) -> tuple[int, int, int, int]:
+        if j.task == JobTask.vk_calendar_comment and (j.last_error or "").startswith("captcha_wait:") and not (
+                j.payload if isinstance(j.payload, dict) else {}).get("relations"):
+            return (-1, 0, int(_ensure_utc(j.next_run_at).timestamp()), j.id)
         task_priority = priority.get(j.task, 99)
         related_only = os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only"
         if j.task == JobTask.vk_sync and j.id in initial_vk_jobs and j.last_error != "vk_initial_waiting_related":
@@ -20008,8 +20023,8 @@ async def _run_due_jobs_once_locked(
             return (-2, 2, int(_ensure_utc(j.next_run_at).timestamp()), j.id)
         if j.task == JobTask.event_media_review and j.event_id is not None:
             event_id = int(j.event_id)
-            event_date, lifecycle, silent = media_review_event.get(event_id, ("", "", True))
-            eligible = lifecycle == "active" and not silent and event_date >= media_today
+            event_date, event_end, lifecycle, silent, started = media_review_event.get(event_id, ("", "", "", True, True))
+            eligible = lifecycle == "active" and not silent and event_end >= media_today and not started
             # A VK announcement waiting for media must get the next available
             # semantic-review allowance. Ordinary future reviews follow event
             # date; old events cannot exhaust the daily model budget first.
@@ -20658,6 +20673,10 @@ async def _run_due_jobs_once_locked(
                     retry = not (
                         uncertain_cls is not None and isinstance(exc, uncertain_cls)
                     )
+                    if (obj.task == JobTask.vk_calendar_comment
+                            and isinstance(obj.payload, dict) and obj.payload.get("relations")
+                            and isinstance(exc, RuntimeError) and str(exc) == "vk_live_id_ambiguous"):
+                        retry = False
                     if obj.task == JobTask.static_site_build:
                         static_failure = classify_static_site_failure(exc)
                         retry = static_failure.retryable
@@ -20709,7 +20728,6 @@ async def _run_due_jobs_once_locked(
                     payload["captcha_attempts"] = int(payload.get("captcha_attempts") or 0) + 1
                     obj.payload = payload
                     if payload["captcha_attempts"] >= CAPTCHA_MAX_ATTEMPTS:
-                        status = JobStatus.error
                         obj.terminal_reason = "failed"
                         logging.warning(
                             "VK_CAPTCHA_TERMINAL job_id=%s task=%s event_id=%s captcha_attempts=%s limit=%s",

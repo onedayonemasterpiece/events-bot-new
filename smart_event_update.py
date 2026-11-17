@@ -21386,7 +21386,19 @@ async def _smart_event_update_impl(
         existing_poster_texts = [
             p.ocr_text for p in posters_map.get(existing.id or 0, []) if getattr(p, "ocr_text", None)
         ]
-        blocking_conflicts = [f"{key}: {value}" for key, value in (conflicting or {}).items()]
+        blocking_conflicts = [
+            f"{key}: {value}"
+            for key, value in (conflicting or {}).items()
+            if not (
+                key == "location_name"
+                and _normalize_location_compact(existing.city)
+                and _normalize_location_compact(existing.city) == _normalize_location_compact(candidate.city)
+                and _address_matches(
+                    existing.location_address, candidate.location_address,
+                    city_a=existing.city, city_b=candidate.city,
+                )
+            )
+        ]
         try:
             llm_gate_data = await _llm_merge_identity_gate(
                 candidate,

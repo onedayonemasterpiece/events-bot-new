@@ -247,7 +247,8 @@ async def test_existing_post_does_not_rewrite_or_adopt_hash_for_graph_or_source_
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('source_url', [None, 'https://vk.com/wall-9_12'])
-async def test_captcha_resume_uses_publication_priority_without_shortening_pacing(db, monkeypatch, source_url):
+@pytest.mark.parametrize('calendar_payload', [{}, {'relations': {}}])
+async def test_captcha_resume_uses_publication_priority_without_shortening_pacing(db, monkeypatch, source_url, calendar_payload):
     from models import JobOutbox, JobTask
     from sqlmodel import select
     monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '1')
@@ -256,16 +257,44 @@ async def test_captcha_resume_uses_publication_priority_without_shortening_pacin
     monkeypatch.setattr(main, 'VK_CAPTCHA_RESUME_SPACING_SEC', 30)
     async with db.get_session() as session:
         session.add(JobOutbox(event_id=existing.id, task=JobTask.vk_sync))
-        for task in (JobTask.festival_pages, JobTask.vk_calendar_comment, JobTask.vk_sync):
+        for task in (JobTask.festival_pages, JobTask.vk_sync):
             session.add(JobOutbox(event_id=event.id, task=task))
+        session.add(JobOutbox(event_id=event.id, task=JobTask.vk_calendar_comment, payload=calendar_payload))
+        session.add(JobOutbox(event_id=event.id, task=JobTask.vk_calendar_comment,
+                             payload={"relations": {"related": [{"id": 42}]}}))
         await session.commit()
     await main.vk_captcha_pause_outbox(db, marker='captcha_wait:priority')
-    assert await main._resume_vk_captcha_outbox(db, 'captcha_wait:priority') == 4
+    assert await main._resume_vk_captcha_outbox(db, 'captcha_wait:priority') == 5
     async with db.get_session() as session:
         jobs = (await session.execute(select(JobOutbox).order_by(JobOutbox.next_run_at))).scalars().all()
-    assert [j.task for j in jobs] == [JobTask.vk_calendar_comment, JobTask.vk_sync, JobTask.vk_sync, JobTask.festival_pages]
-    assert [(b.next_run_at - a.next_run_at).total_seconds() for a, b in zip(jobs, jobs[1:])] == [30, 30, 30]
+    assert [j.task for j in jobs] == [JobTask.vk_calendar_comment, JobTask.vk_sync, JobTask.vk_sync,
+                                    JobTask.festival_pages, JobTask.vk_calendar_comment]
+    assert jobs[0].payload["relations"] and not jobs[-1].payload.get("relations")
+    assert [(b.next_run_at - a.next_run_at).total_seconds() for a, b in zip(jobs, jobs[1:])] == [30] * 4
     assert jobs[1].event_id == event.id and jobs[2].event_id == existing.id
+    # A slow preceding handler can make all resumed slots overdue.
+    from datetime import timedelta
+    async with db.get_session() as session:
+        for job in jobs:
+            job.next_run_at -= timedelta(minutes=3)
+            session.add(job)
+        await session.commit()
+    calendar = AsyncMock(return_value=False)
+    sync = AsyncMock(return_value=False)
+    monkeypatch.setitem(main.JOB_HANDLERS, "vk_calendar_comment", calendar)
+    monkeypatch.setitem(main.JOB_HANDLERS, "vk_sync", sync)
+    monkeypatch.setattr(main, "_maybe_auto_recover_vk_captcha_outbox", AsyncMock(return_value=False))
+    await main._run_due_jobs_once(db, None, max_jobs=1)
+    assert calendar.await_args.args[3].get("relations")
+    await main._run_due_jobs_once(db, None, max_jobs=1)
+    assert sync.await_args.args[0] == event.id
+    # A new ordinary calendar keeps its pre-existing foreground priority.
+    async with db.get_session() as session:
+        session.add(JobOutbox(event_id=event.id, task=JobTask.vk_calendar_comment,
+                              payload={"ordinary": True}))
+        await session.commit()
+    await main._run_due_jobs_once(db, None, max_jobs=1)
+    assert calendar.await_args.args[3] == {"ordinary": True}
 
 
 @pytest.mark.asyncio
@@ -423,3 +452,61 @@ async def test_normal_scheduler_does_not_probe_or_requeue_managed_post(db, monke
     await main.schedule_event_update_tasks(db, event)
     probe.assert_not_awaited()
     assert all(call.args[2] != main.JobTask.vk_sync for call in enqueue.await_args_list)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('case', ['frozen', 'document', 'sync', 'missing', 'transport', 'value_error'])
+async def test_frozen_ambiguity_finishes_without_retrying_other_failures(db, monkeypatch, case):
+    from datetime import datetime, timedelta, timezone
+
+    clock = [datetime.now(timezone.utc)]
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock[0].astimezone(tz) if tz else clock[0].replace(tzinfo=None)
+
+    monkeypatch.setattr(main, 'datetime', Clock)
+    monkeypatch.setattr(main, '_vk_captcha_needed', False)
+    event = await save_event(db, vk_source_hash='known', source_vk_post_url='https://vk.com/wall-231920894_10')
+    task = main.JobTask.vk_sync if case == 'sync' else main.JobTask.vk_calendar_comment
+    payload = {} if case == 'document' else {'relations': {'related': [{'id': 9}]}}
+    reason = {'missing': 'vk_relations_post_missing', 'transport': 'offline_transport'}.get(case, 'vk_live_id_ambiguous')
+    exception = ValueError(reason) if case == 'value_error' else RuntimeError(reason)
+    calls, healthy = [], []
+
+    async def failed(event_id, *args):
+        calls.append(event_id)
+        raise exception
+
+    async def succeeded(event_id, *args):
+        healthy.append(event_id)
+        return True
+
+    async def forbidden_api(*args, **kwargs):
+        raise AssertionError('External VK API must not run in this regression')
+
+    monkeypatch.setitem(main.JOB_HANDLERS, task.value, failed)
+    monkeypatch.setitem(main.JOB_HANDLERS, 'telegraph_build', succeeded)
+    monkeypatch.setattr(main, '_vk_api', forbidden_api)
+    async with db.get_session() as session:
+        row = main.JobOutbox(event_id=event.id, task=task, payload=payload, attempts=2,
+                             next_run_at=clock[0] - timedelta(seconds=1))
+        session.add(row)
+        session.add(main.JobOutbox(event_id=event.id, task=main.JobTask.telegraph_build,
+                                   next_run_at=clock[0] - timedelta(seconds=1)))
+        await session.flush()
+        job_id = row.id
+        await session.commit()
+    assert await main._run_due_jobs_once(db, None) == 2
+    async with db.get_session() as session:
+        row = await session.get(main.JobOutbox, job_id)
+        terminal = case == 'frozen'
+        assert row.status == main.JobStatus.error
+        assert row.terminal_reason == ('failed' if terminal else None)
+        assert row.attempts == (2 if terminal else 3)
+        assert row.payload == payload and row.last_error == reason
+        clock[0] = main._ensure_utc(row.next_run_at) + timedelta(seconds=1)
+    assert await main._run_due_jobs_once(db, None) == (0 if terminal else 1)
+    assert len(calls) == (1 if terminal else 2)
+    assert healthy == [event.id] and main._vk_captcha_needed is False

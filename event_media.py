@@ -672,6 +672,7 @@ async def ensure_event_media_reviews(session: Any, event_id: int) -> int:
             .where(
                 EventPoster.event_id == int(event_id),
                 EventPoster.review_status.in_((APPROVED, PENDING_REVIEW)),
+                func.coalesce(EventPoster.review_reason, "") != "cdn_mirror_pending",
             )
             .order_by(EventPoster.display_order.asc(), EventPoster.id.asc())
         )
@@ -1284,6 +1285,9 @@ def _review_prompt(event: Event, left: EventPoster, right: EventPoster, *, ssim:
         "события не конфликтуют: диапазон дат, включающий дату события, общее название и отсутствие частных "
         "деталей не являются противоречием. При визуально подтверждённой связи с этой программой сохраняй "
         "обе картинки как distinct без semantic_conflict. Несовместимая дата или другая программа остаются конфликтом. "
+        "Это исключение только для общей обложки или расписания: афиша другого отдельного события той же "
+        "программы — semantic_conflict=true относительно выбранного event, даже при общем фестивале и месте. "
+        "Если сам event — вся программа, её отдельные события допустимы; иначе сверяй их с event.title и event.date. "
         "Обязательно сверяй даты обеих картинок с event.date: если целевая дата вне указанного диапазона "
         "программы и не совпадает ни с одной карточкой, это semantic_conflict=true, canonical_side=unknown. "
         "Не делай вывод только по hash/SSIM: обязательно сравни визуальную композицию. Верни только JSON по schema.\n"
@@ -2414,6 +2418,7 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
         rows = list((await session.execute(select(EventPoster).where(
             EventPoster.event_id == int(event_id),
             EventPoster.review_status.in_((APPROVED, PENDING_REVIEW)),
+            func.coalesce(EventPoster.review_reason, "") != "cdn_mirror_pending",
         ).order_by(EventPoster.display_order, EventPoster.id).limit(8))).scalars())
         if not any(row.review_status == PENDING_REVIEW for row in rows):
             await session.commit()

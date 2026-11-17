@@ -1072,7 +1072,6 @@ async def _process_vk_item(
             is_free=ev.get("is_free"),
             pushkin_card=ev.get("pushkin_card"),
             search_digest=str(ev.get("search_digest") or "").strip() or None,
-            raw_excerpt=str(ev.get("short_description") or "").strip() or None,
             festival_context="event_with_festival",
             festival_full=decision.festival_full or item.festival_full,
             festival_source=True,

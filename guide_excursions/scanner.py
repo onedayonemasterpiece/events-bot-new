@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import base64
+import io
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from telethon import functions
+from telethon import functions, utils
 
 
 @dataclass(slots=True)
@@ -29,6 +31,7 @@ class GuideScannedSourceMeta:
     source_title: str | None
     about_text: str | None
     about_links: list[str]
+    avatar: dict[str, Any] | None = None
 
 
 def _utc_now() -> datetime:
@@ -130,12 +133,55 @@ def _collapse_group(messages: list[Any], *, username: str, source_title: str | N
     )
 
 
+class _TelegramAvatarBuffer(io.BytesIO):
+    def write(self, chunk):
+        if self.tell() + len(chunk) > 2 * 1024 * 1024:
+            raise ValueError("Telegram source avatar exceeds 2 MiB")
+        return super().write(chunk)
+
+
+async def _telegram_source_avatar(client, entity, previous_avatar):
+    """Read the small profile photo of the exact resolved Telegram peer."""
+    try:
+        peer_id = utils.get_peer_id(entity)
+    except (TypeError, ValueError):
+        return None
+    observed_at = datetime.now(timezone.utc).isoformat()
+    result = {"peer_id": peer_id, "observed_at": observed_at}
+    photo_id = getattr(getattr(entity, "photo", None), "photo_id", None)
+    if not photo_id:
+        return result
+    result["photo_id"] = str(photo_id)
+    if (isinstance(previous_avatar, dict)
+            and str(previous_avatar.get("peer_id")) == str(peer_id)
+            and str(previous_avatar.get("photo_id")) == str(photo_id)):
+        return result
+    try:
+        with _TelegramAvatarBuffer() as target:
+            await client.download_profile_photo(entity, file=target, download_big=False)
+            target.seek(0)
+            from PIL import Image, ImageOps
+            with Image.open(target) as image:
+                if image.width * image.height > 16_000_000:
+                    return result
+                preview = ImageOps.exif_transpose(image)
+                preview.thumbnail((320, 320), Image.Resampling.LANCZOS)
+                with io.BytesIO() as encoded:
+                    preview.convert("RGB").save(encoded, format="JPEG", quality=88)
+                    if encoded.tell() <= 128 * 1024:
+                        result["image_base64"] = base64.b64encode(encoded.getvalue()).decode("ascii")
+    except Exception:
+        return result
+    return result
+
+
 async def scan_source_posts(
     client: Any,
     *,
     username: str,
     limit: int,
     days_back: int,
+    previous_avatar: dict[str, Any] | None = None,
 ) -> tuple[GuideScannedSourceMeta, list[GuideScannedPost]]:
     entity = await client.get_entity(f"https://t.me/{username}" if username.startswith("+") else username)
     source_title = str(getattr(entity, "title", None) or getattr(entity, "first_name", None) or "").strip() or None
@@ -158,6 +204,7 @@ async def scan_source_posts(
                 if raw not in seen:
                     seen.add(raw)
                     about_links.append(raw)
+    avatar = await _telegram_source_avatar(client, entity, previous_avatar)
     messages = await client.get_messages(entity, limit=max(1, int(limit)))
     cutoff = _utc_now() - timedelta(days=max(1, int(days_back)))
 
@@ -193,4 +240,4 @@ async def scan_source_posts(
     if username.startswith("+"):
         for post in out:
             post.source_url = f"https://t.me/c/{entity.id}/{post.message_id}"
-    return GuideScannedSourceMeta(source_title=source_title, about_text=about_text or None, about_links=about_links), out
+    return GuideScannedSourceMeta(source_title=source_title, about_text=about_text or None, about_links=about_links, avatar=avatar), out

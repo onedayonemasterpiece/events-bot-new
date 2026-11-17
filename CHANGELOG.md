@@ -1,3 +1,23 @@
+## 2026-11-17
+
+- Smart Update: retain semantic source updates across venue labels at the same structured address and city; preserve canonical logistics and other identity conflicts.
+
+- VK import: keep missing venues in multi-event carriers separate from the source-wide default; retain the single-event fallback.
+
+- CAPTCHA recovery schedules due calendar documents before festival and weekend pages, retaining frozen comments first, new announcements next and the existing spacing.
+
+- Frozen related comments stop automatic retries when live-post identity is ambiguous; the resolver continues to reject an unsafe target. Other retry classes are unchanged.
+
+- CAPTCHA pause preserves future independent VK retry and comment delays. Exhausted jobs retain the shared pause across restart until recovery, then remain terminal without another write attempt.
+
+- NFC-страницы: `kenigevents.ru/vk/` подписана «Полюбить Калининград Афиша — Самая большая афиша событий региона»; новая `kenigevents.ru/uhty/` по той же схеме открывает сообщество «Ух ты, Калининград!» (дайджесты экскурсий). Workflow выгружает все страницы `site/root-links/*/` и принимает SHA, уже вошедший в main.
+- `kenigevents.ru/vk/` на Android больше не запускает приложение ВК без нажатия: Chrome спрашивал подтверждение и сразу уводил на запасной сайт. Сообщество открывается в приложении кнопкой, как из Telegram/Max.
+- NFC-метка открывает сообщество ВКонтакте через одну страницу `https://kenigevents.ru/vk/`: на Android сразу в приложении ВК (без настроек телефона, без приложения — сайт), на iPhone — по нажатию кнопки. Загружается отдельным workflow только как `vk/index.html`, корень сайта не меняется.
+- Подписи участников и текст дайджеста сверяются с ролями в исходном анонсе. Контакт для записи не получает роль гида. Организатор из общего заголовка программы может появиться у выезда, когда в этом же расписании совпали экскурсия и гид.
+- Мониторинг сохраняет портреты подтверждённых гидов и организаций из Telegram и VK. Карточка дайджеста читает последнюю исправную локальную миниатюру.
+- Мониторинг сопоставляет выезды с архивом и заранее сохраняет подтверждённые описания. Для неполных анонсов он проверяет каталог ТИЦ и собственные каналы организаторов с ограничениями частоты. В выпуск переходят стабильные сведения о маршруте и условия текущего выезда.
+- Лимит хранилища результатов учитывает незавершённые пакеты и проверяется при подтверждении импорта. Новые записи доставки MAX ссылаются на замороженное изображение выпуска.
+
 - Shared source medallions retain original-source identity and use alpha-preserving circular avatars across encoder, Telegram, VK and site data.
 
 ## 2026-11-16
@@ -9,6 +29,18 @@
 - VK source avatars are fetched through the existing reader and reused by tour cards and event source medallions; tour cards use their existing description when space permits. No extra LLM generation step.
 
 ## [Unreleased]
+
+- Проверка галереи не скачивает повторно изображения, для которых зеркалирование в CDN уже завершилось ошибкой; готовые фотографии продолжают обработку.
+
+- Импорт событий не передаёт сгенерированное краткое описание как первичную выдержку для повторного извлечения фактов; сайтовый парсер сохраняет исходное описание.
+
+- После CAPTCHA готовые VK-посты и текстовые рекомендации получают очередь восстановления раньше загрузки календарных файлов; общая пауза и интервалы сохраняются.
+
+- NFC: отдельная ссылка kenigevents.ru/vk.html пытается открыть именно vk.ru/klgdevents в приложении VK, сохраняет веб-fallback и публикуется через изолированный проверяемый single-object релиз.
+
+- Неполный ответ проверки похожих событий больше не считается полной оценкой кандидатов; уже завершённые пакеты сохраняются.
+
+- Карточки похожих событий и других дат с одной или двумя строками занимают меньше места: высота подстраивается под содержимое.
 
 ### Changed
 - Ежедневная задача Events может вызвать автора `gpt-6.1-sol` через приватный сокет на DevCoveer. У рабочего бота и автора отдельные учётные данные.
@@ -26,6 +58,11 @@
 ### Fixed
 - Related events keep the verified Gemma decisions from partial batches and request the missing candidates before marking an event ready for VK publication.
 - The static related verifier may ask Gemini 3.5 Flash-Lite once for IDs still missing from a partially answered Gemma batch after normal retries; recorded low scores are not reopened, and model provenance stays in the existing cache.
+
+
+- VK recommendations no longer refill unused slots with other dates of an already selected canonical programme.
+- Групповое сравнение исходных изображений отличает общую обложку фестиваля от афиши другого входящего в него события.
+- Keep media review for an ongoing exhibition eligible for a waiting initial VK announcement through its canonical end date, including date ranges.
 - Карточка дайджеста сверяет пункты маршрута с анонсом конкретного выезда и показывает сохранённый тематический хук. Удалены подписи, которые выводились по ключевым словам названия или по типу аудитории.
 - Guide import preserves the extractor's negative digest eligibility decision instead of promoting it from filled logistics fields, including offers restricted to an organized group.
 - Redact signed VK upload tickets in existing API error and CAPTCHA logs while preserving upload requests and cached recovery parameters.

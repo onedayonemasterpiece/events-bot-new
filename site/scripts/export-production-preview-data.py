@@ -4664,6 +4664,7 @@ def maybe_apply_gemma_audit(
                             })
                             log_stage(
                                 "gemma_audit_call_complete",
+                                missing_candidate_count=len({event["id"] for event in pass_candidates} - pass_audit.keys()),
                                 anchor_event_id=anchor_int_id,
                                 model=model,
                                 attempt=attempt,
@@ -4744,6 +4745,11 @@ def maybe_apply_gemma_audit(
                                 successful_passes += 1
                                 pass_failures[:] = [failure for failure in pass_failures
                                                     if failure["pass_index"] != pass_index + 1]
+                        log_stage(
+                            "gemma_audit_lite", anchor_event_id=anchor_int_id,
+                            pass_index=pass_index + 1, model=lite_rescue_model,
+                            candidate_count=len(missing), status=meta["attempts"][-1]["status"],
+                        )
                 if not audit:
                     raise RuntimeError(
                         pass_failures[0]["error"] if pass_failures else "Gemma related audit failed"
@@ -4754,7 +4760,7 @@ def maybe_apply_gemma_audit(
                         "error": "partial_gemma_pass_failure",
                         "pass_failures": pass_failures,
                     })
-                if successful_passes == expected_passes:
+                if successful_passes == expected_passes and set(top_ids).issubset(audit):
                     audit_cache[cache_key] = {str(k): v for k, v in audit.items()}
                     meta["verified_event_ids"].append(anchor_int_id)
             except Exception as exc:
