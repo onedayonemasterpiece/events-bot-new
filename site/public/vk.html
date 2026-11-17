@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#141820">
+  <title>Открыть сообщество ВКонтакте</title>
+  <meta name="description" content="Открыть сообщество klgdevents в приложении ВКонтакте или в браузере.">
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: #141820; color: #f4f7fb; }
+    main { width: min(100%, 440px); padding: clamp(24px, 6vw, 40px); border: 1px solid #414c5e; border-radius: 20px; background: #202735; }
+    .brand { display: inline-flex; align-items: center; gap: 12px; font-weight: 700; letter-spacing: .01em; }
+    .mark { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 11px; background: #0077ff; color: white; font-size: 18px; }
+    h1 { font-size: clamp(23px, 6vw, 30px); line-height: 1.2; margin: 24px 0 10px; }
+    p { line-height: 1.55; color: #cbd5e1; margin: 0 0 24px; }
+    a { display: block; padding: 15px; border-radius: 12px; text-align: center; text-decoration: none; font-weight: 650; font-size: 16px; }
+    a:focus-visible { outline: 3px solid #93c5fd; outline-offset: 3px; }
+    .app { background: #0077ff; color: white; margin-bottom: 12px; }
+    .web { border: 1px solid #8291a7; color: #f4f7fb; }
+    .note { font-size: 13px; margin: 18px 0 0; color: #aebcd0; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand"><span class="mark" aria-hidden="true">ВК</span><span>ВКонтакте</span></div>
+    <h1>Открываем сообщество</h1>
+    <p id="message" role="status">Если приложение ВК установлено, попробуем открыть сообщество прямо в нём.</p>
+    <a class="app" id="open-app" href="vk://vk.com/klgdevents">Открыть сообщество в приложении</a>
+    <a class="web" id="open-web" href="https://vk.ru/klgdevents" rel="noreferrer">Открыть сообщество в браузере</a>
+    <p class="note">Если автоматический переход не сработал, нажмите первую кнопку. Обе ссылки ведут на klgdevents, а не на главную страницу ВК.</p>
+    <noscript><p class="note">Автоматический переход требует JavaScript; кнопки работают без него.</p></noscript>
+  </main>
+  <script>
+    (() => {
+      'use strict';
+      const website = 'https://vk.ru/klgdevents';
+      const deeplink = 'vk://vk.com/klgdevents';
+      const androidIntent = 'intent://vk.com/klgdevents#Intent;scheme=vk;package=com.vkontakte.android;S.browser_fallback_url=' + encodeURIComponent(website) + ';end';
+      const ua = navigator.userAgent || '';
+      const android = /Android/i.test(ua);
+      const ios = /iPhone|iPad|iPod/i.test(ua);
+      const appLink = document.getElementById('open-app');
+      appLink.href = android ? androidIntent : deeplink;
+
+      if (!android && !ios) {
+        document.getElementById('message').textContent = 'Откройте сообщество в браузере или используйте установленное приложение ВК.';
+        return;
+      }
+
+      let leftPage = false;
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') leftPage = true;
+      });
+      window.addEventListener('pagehide', () => { leftPage = true; }, { once: true });
+      window.setTimeout(() => {
+        if (!leftPage && document.visibilityState === 'visible') {
+          document.getElementById('message').textContent = 'Не открылось автоматически? Нажмите «Открыть сообщество в приложении». Если ВК не установлен, выберите «Открыть сообщество в браузере».';
+        }
+      }, 2700);
+
+      // Some browsers prohibit automatic app launching from NFC/browser navigation.
+      // The user-initiated button above is the reliable retry path in that case.
+      try { window.location.assign(deeplink); } catch (_) { /* timed web fallback */ }
+    })();
+  </script>
+</body>
+</html>
