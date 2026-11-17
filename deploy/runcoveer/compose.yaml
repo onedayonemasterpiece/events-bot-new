@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:primary-excerpt-20261117
+    image: runcoveer/events:future-retry-20261117
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
