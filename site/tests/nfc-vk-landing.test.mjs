@@ -38,31 +38,34 @@ test('fixed, noindex NFC page always exposes both community destinations', () =>
   assert.doesNotMatch(html, /location\.replace\(['"]https:\/\/vk\.ru\/['"]\)/);
 });
 
-test('Android: app path is preserved in explicit VK Intent; timeout falls back to community web page', () => {
+test('Android: explicit VK Intent preserves community path and browser fallback', () => {
   const r = openOn('Mozilla/5.0 (Linux; Android 15; Pixel) AppleWebKit/537.36 Chrome/127');
   assert.equal(r.links['open-app'].href,
     'intent://vk.com/klgdevents#Intent;scheme=vk;package=com.vkontakte.android;S.browser_fallback_url=https%3A%2F%2Fvk.ru%2Fklgdevents;end');
   assert.deepEqual(r.calls, [['assign', app]]);
   assert.equal(r.timers[0].delay, 2700);
   r.timers[0].handler();
-  assert.deepEqual(r.calls[1], ['replace', target]);
+  assert.match(r.links.message.textContent, /Нажмите/);
+  assert.equal(r.calls.length, 1);
 });
 
-test('iOS: app-scheme navigation with same community path and web fallback', () => {
+test('iOS: app-scheme navigation retains an explicit web fallback button', () => {
   const r = openOn('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)');
   assert.equal(r.links['open-app'].href, app);
   assert.deepEqual(r.calls, [['assign', app]]);
   r.timers[0].handler();
-  assert.deepEqual(r.calls[1], ['replace', target]);
+  assert.match(r.links.message.textContent, /Нажмите/);
+  assert.equal(r.calls.length, 1);
 });
 
-test('successful app switch suppresses fallback, preventing an unrelated browser opening', () => {
+test('successful app switch suppresses retry prompt and browser navigation', () => {
   const r = openOn('Android');
   r.document.visibilityState = 'hidden';
   r.events.visibilitychange();
   r.document.visibilityState = 'visible';
   r.timers[0].handler();
   assert.deepEqual(r.calls, [['assign', app]]);
+  assert.equal(r.links.message.textContent, '');
 });
 
 test('desktop does not attempt to open VK app or start a web redirect timer', () => {
