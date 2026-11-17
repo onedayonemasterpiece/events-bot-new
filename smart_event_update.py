@@ -21391,8 +21391,8 @@ async def _smart_event_update_impl(
             for key, value in (conflicting or {}).items()
             if not (
                 key == "location_name"
-                and _normalize_location(existing.city)
-                and _normalize_location(existing.city) == _normalize_location(candidate.city)
+                and _normalize_location_compact(existing.city)
+                and _normalize_location_compact(existing.city) == _normalize_location_compact(candidate.city)
                 and _address_matches(
                     existing.location_address, candidate.location_address,
                     city_a=existing.city, city_b=candidate.city,
