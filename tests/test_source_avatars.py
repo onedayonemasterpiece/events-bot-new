@@ -313,3 +313,70 @@ def test_same_announced_guide_on_two_departures_keeps_one_writer_identity():
     conflicting = linked.replace('11:00', '10:00').replace('id90171626', 'id999')
     people = avatars.guide_participants(dict(second, linked_posts=[dict(post, text='\n'.join([linked, conflicting, plain]))]), [])
     assert people[0]['owner'] is None
+
+
+@pytest.mark.asyncio
+async def test_first_party_operator_community_works_from_telegram_and_a_third_party_wall(tmp_path, monkeypatch):
+    import aiosqlite
+    import main
+
+    db_path = tmp_path / 'registry.sqlite'
+    db = SimpleNamespace(raw_conn=lambda: aiosqlite.connect(db_path))
+    async with db.raw_conn() as conn:
+        await conn.executescript('''
+            CREATE TABLE guide_profile (id, display_name, marketing_name, profile_kind, source_links_json, facts_rollup_json);
+            CREATE TABLE guide_source (primary_profile_id, title, about_text, platform);
+            INSERT INTO guide_profile VALUES (1, 'Профи-тур', '', 'operator', '[]', '{}');
+            INSERT INTO guide_source VALUES (1, 'Экскурсии от «Профи-тур»', 'Мы ВКонтакте: https://vk.com/profi_tur39', 'telegram');
+            INSERT INTO guide_profile VALUES (2, 'Клуб Прогулок', '', 'project', '["https://vk.com/club_walks"]', '{}');
+        ''')
+    image = tmp_path / 'portrait.webp'
+    Image.new('RGB', (64,64), 'red').save(image)
+    handles = []
+    async def resolve(handle):
+        handles.append(handle)
+        if handle == 'club_walks': return 46, 'Клуб прогулок', handle, 'group'
+        return 12286984, 'ПУТЕШЕСТВИЯ "ПРОФИ-ТУР"', handle, 'group'
+    async def ensure(owner): return image if owner in {-12286984, -46} else None
+    monkeypatch.setattr(main, 'vk_resolve_group', resolve)
+    monkeypatch.setattr(avatars, 'ensure_vk_avatar', ensure)
+    primary = dict(source_platform='telegram', source_title='Экскурсии от «Профи-тур»',
+                   source_about_text='Мы ВКонтакте: https://vk.com/profi_tur39', organizer_names=['Профи-тур'])
+    secondary = dict(source_platform='vk', source_title='Завод OSQ', source_flags_json='{"vk_id":123}',
+                     organizer_names=['Профи-тур', 'Клуб прогулок'], guide_names=['Татьяна'])
+    await avatars.prepare_guide_avatars([primary, secondary, dict(primary)], db)
+    assert set(handles) == {'profi_tur39', 'club_walks'} and len(handles) == 2
+    assert primary['participant_medallions'] == [{'name':'Профи-тур','roles':['Организатор'],'owner':-12286984,'path':str(image)}]
+    assert [p['owner'] for p in secondary['participant_medallions']] == [None,-12286984,-46]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(('about', 'source', 'title', 'kind'), [
+    ('Контакт: https://vk.com/example', 'Экскурсии от «Бюро»', 'Бюро', 'group'),
+    ('Мы ВКонтакте: https://vk.com/example', 'Другой издатель', 'Бюро', 'group'),
+    ('Мы ВКонтакте: https://vk.com/example', 'Бюро', 'Друзья бюро', 'group'),
+    ('Мы ВКонтакте: https://vk.com/example', 'Бюро', 'Бюро', 'user'),
+    ('Мы ВКонтакте: https://vk.com/first и https://vk.com/second', 'Бюро', 'Бюро', 'group'),
+    ('Мы ВКонтакте: https://vk.com/example/posts', 'Бюро', 'Бюро', 'group'),
+])
+async def test_organizer_portrait_needs_an_unambiguous_first_party_group(monkeypatch, about, source, title, kind):
+    import main
+    async def resolve(handle): return 123, title, handle, kind
+    async def no_portrait(owner): pytest.fail(f'Unexpected portrait request for {owner}')
+    monkeypatch.setattr(main, 'vk_resolve_group', resolve)
+    monkeypatch.setattr(avatars, 'ensure_vk_avatar', no_portrait)
+    row = dict(source_platform='telegram', source_title=source, source_about_text=about,
+               organizer_names=['Бюро'], guide_names=['Инга Петрова'])
+    await avatars.prepare_guide_avatars([row])
+    assert [p['owner'] for p in row['participant_medallions']] == [None, None]
+
+
+@pytest.mark.asyncio
+async def test_competing_registered_and_declared_communities_remain_unassigned(monkeypatch):
+    import main
+    async def unexpected(handle): pytest.fail(f'Unexpected VK lookup for {handle}')
+    monkeypatch.setattr(main, 'vk_resolve_group', unexpected)
+    row = dict(source_platform='telegram', source_title='Бюро', source_about_text='Мы ВКонтакте: https://vk.com/second')
+    organizer = {'name':'Бюро', 'roles':['Организатор'], 'owner':None}
+    await avatars._attach_organizer_communities(row, [organizer], {'бюро':{'first'}}, {})
+    assert organizer['owner'] is None

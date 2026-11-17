@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:guide-exclusion-20261116
+    image: runcoveer/events:guide-vk-narrative-20261117
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

@@ -214,17 +214,95 @@ def guide_participants(row: dict[str, Any], profiles: list[dict[str, Any]]) -> l
             result[identity] = {"name": name, "roles": [role], "owner": owner, "path": path}
             if conflicting_tags:
                 result[identity]["conflicting_guide_tags"] = True
+            if len(owners) > 1 and not owner:
+                result[identity]["conflicting_profile_owners"] = True
     return list(result.values())
+
+
+def _organizer_in_title(name: str, title: str) -> bool:
+    """Match the full brand at a title boundary or inside a pair of quotes."""
+    def normalized(value: str) -> str:
+        return " ".join(value.casefold().replace("ё", "е").replace("‑", "-").split())
+
+    brand, title = normalized(name), normalized(title)
+    segments = re.split(r"\s*[|•·]\s*|\s+[–—-]\s+|[,:!]", title)
+    quoted = re.findall(r'[«“"]([^»”"]+)[»”"]', title)
+    return bool(brand and any(brand == part.strip() for part in [*segments, *quoted]))
+
+
+_VK_COMMUNITY_LINK = r"https?://(?:www\.)?vk\.(?:com|ru)/([a-z0-9_][a-z0-9_.]*[a-z0-9_]|[a-z0-9_])/?"
+_ORG_PROFILE_KINDS = {"operator", "organization", "project"}
+
+
+def _declared_vk_community(about: str) -> str | None:
+    # A source's redirect to a venue, a partner, or the booking contact is not its own page.
+    if len(re.findall(r"https?://(?:www\.)?vk\.(?:com|ru)/", about, re.I)) != 1:
+        return None
+    label = r"(?:мы\s+|наш(?:а|е)\s+(?:группа|сообщество)\s+)(?:в\s*)?(?:вконтакте|контакте|вк|vk)"
+    match = re.search(r"\b" + label + r"\s*[:—–-]?\s*" + _VK_COMMUNITY_LINK + r"(?=\s|$)", about, re.I)
+    return match[1].casefold() if match else None
+
+
+def _registered_organizer_groups(profiles, sources) -> dict[str, set[str]]:
+    groups: dict[str, set[str]] = {}
+    for profile in profiles:
+        if profile.get("profile_kind") not in _ORG_PROFILE_KINDS:
+            continue
+        handles = {m[1].casefold() for url in json.loads(profile.get("source_links_json") or "[]")
+                   if (m := re.fullmatch(_VK_COMMUNITY_LINK, url, re.I))}
+        names = _identity_names(profile)
+        for source in sources.get(profile["id"], []):
+            if any(_organizer_in_title(name, source["title"] or "") for name in names):
+                if handle := _declared_vk_community(source["about_text"] or ""):
+                    handles.add(handle)
+        for name in names:
+            groups.setdefault(name, set()).update(handles)
+    return groups
+
+
+async def _attach_organizer_communities(row, participants, registered, community_cache) -> None:
+    for organizer in participants:
+        if organizer["roles"] != ["Организатор"] or organizer.get("conflicting_profile_owners") or organizer["owner"]:
+            continue
+        name = organizer["name"]
+        handles = set(registered.get(" ".join(name.casefold().replace("ё", "е").split()), ()))
+        if row.get("source_platform") == "telegram" and _organizer_in_title(name, row.get("source_title") or ""):
+            if handle := _declared_vk_community(row.get("source_about_text") or ""):
+                handles.add(handle)
+        if len(handles) != 1:
+            continue
+        handle, = handles
+        if handle not in community_cache:
+            try:
+                from main import vk_resolve_group
+                community_cache[handle] = await vk_resolve_group(handle)
+            except Exception as exc:
+                logger.info("source_avatar declared_community_unavailable handle=%s error_type=%s", handle, type(exc).__name__)
+                community_cache[handle] = None
+        if not community_cache[handle]:
+            continue
+        uid, title, _, kind = community_cache[handle]
+        if kind == "group" and uid > 0 and _organizer_in_title(name, title):
+            if path := await ensure_vk_avatar(-uid):
+                organizer.update(owner=-uid, path=str(path))
 
 
 async def prepare_guide_avatars(rows: list[dict[str, Any]], db: Any = None) -> None:
     profiles = []
+    sources: dict[int, list] = {}
     if db is not None:
         async with db.raw_conn() as conn:
             conn.row_factory = aiosqlite.Row
             profiles = [dict(p) for p in await (await conn.execute(
-                "SELECT display_name,marketing_name,profile_kind,source_links_json,facts_rollup_json FROM guide_profile"
+                "SELECT id,display_name,marketing_name,profile_kind,source_links_json,facts_rollup_json FROM guide_profile"
             )).fetchall()]
+            for source in await (await conn.execute(
+                "SELECT primary_profile_id,title,about_text FROM guide_source "
+                "WHERE platform='telegram' AND about_text LIKE '%vk.%'"
+            )).fetchall():
+                sources.setdefault(source["primary_profile_id"], []).append(source)
+    registered = _registered_organizer_groups(profiles, sources)
+    community_cache = {}
     for row in rows:
         participants = guide_participants(row, profiles)
         for person in participants:
@@ -233,6 +311,7 @@ async def prepare_guide_avatars(rows: list[dict[str, Any]], db: Any = None) -> N
         row["participant_medallions"] = participants
         if row.get("source_roles_checked") and not participants:
             continue
+        await _attach_organizer_communities(row, participants, registered, community_cache)
         if row.get("source_platform") != "vk":
             continue
         flags = json.loads(row.get("source_flags_json") or "{}")
@@ -255,7 +334,7 @@ async def prepare_guide_avatars(rows: list[dict[str, Any]], db: Any = None) -> N
             source_participant = None
             resolved = []
             for person in participants:
-                if not person.get("owner") and not person.get("conflicting_guide_tags") and source_names & _identity_names({"display_name": person["name"]}):
+                if not person.get("owner") and not person.get("conflicting_guide_tags") and not person.get("conflicting_profile_owners") and source_names & _identity_names({"display_name": person["name"]}):
                     person.update(owner=owner, path=str(path))
                 if person["owner"] == owner:
                     if source_participant is not None:
