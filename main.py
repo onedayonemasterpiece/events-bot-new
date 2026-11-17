@@ -19960,7 +19960,7 @@ async def _run_due_jobs_once_locked(
             }
     fresh_cutoff = now - _tg_event_publish_fresh_queue_horizon()
 
-    media_review_event: dict[int, tuple[str, str, bool]] = {}
+    media_review_event: dict[int, tuple[str, str, str, bool, bool]] = {}
     media_review_ids = sorted(
         {int(j.event_id) for j in jobs if j.task == JobTask.event_media_review and j.event_id is not None}
     )
@@ -19969,14 +19969,17 @@ async def _run_due_jobs_once_locked(
         async with db.get_session() as session:
             event_rows = (
                 await session.execute(
-                    select(Event.id, Event.date, Event.lifecycle_status, Event.silent).where(
+                    select(Event.id, Event.date, Event.time, Event.end_date, Event.end_date_is_inferred, Event.lifecycle_status, Event.silent).where(
                         Event.id.in_(media_review_ids)
                     )
                 )
             ).all()
             media_review_event = {
-                int(event_id): (str(event_date or ""), str(lifecycle or "active"), bool(silent))
-                for event_id, event_date, lifecycle, silent in event_rows
+                int(row.id): (str(row.date or ""),
+                              (_event_vk_publish_end_date(row) or date.min).isoformat(),
+                              str(row.lifecycle_status or "active"), bool(row.silent),
+                              _event_start_has_passed_for_publication(row, now=now))
+                for row in event_rows
             }
             blocked_media_event_ids = {
                 int(event_id)
@@ -20008,8 +20011,8 @@ async def _run_due_jobs_once_locked(
             return (-2, 2, int(_ensure_utc(j.next_run_at).timestamp()), j.id)
         if j.task == JobTask.event_media_review and j.event_id is not None:
             event_id = int(j.event_id)
-            event_date, lifecycle, silent = media_review_event.get(event_id, ("", "", True))
-            eligible = lifecycle == "active" and not silent and event_date >= media_today
+            event_date, event_end, lifecycle, silent, started = media_review_event.get(event_id, ("", "", "", True, True))
+            eligible = lifecycle == "active" and not silent and event_end >= media_today and not started
             # A VK announcement waiting for media must get the next available
             # semantic-review allowance. Ordinary future reviews follow event
             # date; old events cannot exhaust the daily model budget first.
