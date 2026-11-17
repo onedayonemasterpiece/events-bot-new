@@ -492,3 +492,40 @@ async def test_reassigned_short_handle_cannot_replace_a_registered_owner(tmp_pat
     now[0] += 86401
     assert await avatars._vk_identity('bureau', {}, True) is None
     assert await avatars._vk_identity('bureau', {}, False) is None
+
+
+@pytest.mark.asyncio
+async def test_exact_programme_project_credit_restores_both_cached_portraits_and_writer(tmp_path, monkeypatch):
+    from guide_excursions.visual_digest import _shown_medallions, _vk_narrative_payload
+
+    project = '80 ЛЕТ ЕДИНСТВА'
+    title = 'Время первых: через тернии к звёздам'
+    header = f'Всё это — на экскурсиях проекта [club237389053|{project}] от команды гидов.'
+    slot = f'28.11 (сб) 11:00 — «{title}», гид [id6939421|Варвара Лалэко]'
+    post = dict(url='https://vk.com/wall-211429559_3892', post_date='2026-11-10', text=header + '\n' + slot)
+
+    def row(**changes):
+        return dict(dict(id=749, canonical_title=title, date='2026-11-28', time='11:00',
+                         linked_posts=[post], fact_pack={'organizer_names': []}), **changes)
+
+    monkeypatch.setattr(avatars, 'AVATAR_ROOT', tmp_path)
+    for owner in (6939421, -237389053):
+        Image.new('RGB', (60, 60)).save(tmp_path / f'{owner}.webp')
+    current = row()
+    await avatars.prepare_guide_avatars([current])
+    shown = _shown_medallions(current['participant_medallions'], registered=True)
+    assert [(p['owner'], p['roles']) for p in shown] == [(6939421, ['Гид']), (-237389053, ['Организатор'])]
+    assert current['organizer_names'] == current['fact_pack']['organizer_names'] == [project]
+    payload, _ = _vk_narrative_payload([current])
+    assert payload['excursions'][0]['organizers'] == [project]
+
+    conflict = dict(post, text=post['text'].replace('club237389053', 'club12345'))
+    for other in (row(time='12:00'), row(date='2026-11-29'), row(canonical_title='Другая экскурсия'),
+                  row(linked_posts=[dict(post, text=slot + '\n' + header)]),
+                  row(linked_posts=[dict(post, text='При поддержке [club237389053|Спонсор]\n' + slot)]),
+                  row(linked_posts=[post, conflict]), row(linked_posts=[dict(post, url='https://t.me/repost/123')]),
+                  row(linked_posts=[dict(post, text=post['text'] + '\n' + conflict['text'])])):
+        assert not any('Организатор' in p['roles'] for p in avatars.guide_participants(other, []))
+    conflicting_profile = dict(display_name=project, profile_kind='project',
+                               source_links_json='["https://vk.com/club12345"]')
+    assert not any('Организатор' in p['roles'] for p in avatars.guide_participants(row(), [conflicting_profile]))
