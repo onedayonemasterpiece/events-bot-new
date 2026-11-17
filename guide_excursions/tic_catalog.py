@@ -159,6 +159,8 @@ async def _fetch(session, url):
     async with session.get(url, allow_redirects=False) as response:
         if response.status in (404, 410):
             return None
+        if response.status in (429, 503):
+            response.raise_for_status()
         if response.status != 200:
             raise ValueError(f"HTTP {response.status}")
         allowed = {"text/xml", "application/xml"} if url == SITEMAP else {"text/html"}
@@ -172,36 +174,66 @@ async def _fetch(session, url):
         return data.decode(response.charset or "utf-8")
 
 
-async def refresh_tic_catalog(db, *, fetch=None):
+async def refresh_tic_catalog(db, *, wanted_occurrences=None, fetch=None, now=None):
     """Gather outside SQLite transactions. A failed request cannot erase previous evidence."""
-    now = datetime.now(timezone.utc)
+    now = now or datetime.now(timezone.utc)
     today = now.astimezone(ZoneInfo("Europe/Kaliningrad")).date()
-    async with db.raw_conn() as conn:
-        rows = await conn.execute_fetchall(
-            "SELECT canonical_title, guide_names_json, organizer_names_json, fact_pack_json FROM guide_occurrence "
-            "WHERE date BETWEEN ? AND ? AND digest_eligible = 1 AND COALESCE(status,'') != 'cancelled'",
-            (today.isoformat(), (today + timedelta(days=120)).isoformat()),
-        )
+    if wanted_occurrences is None:
+        async with db.raw_conn() as conn:
+            rows = await conn.execute_fetchall(
+                "SELECT canonical_title, guide_names_json, organizer_names_json, fact_pack_json FROM guide_occurrence "
+                "WHERE date BETWEEN ? AND ? AND digest_eligible = 1 AND COALESCE(status,'') != 'cancelled'",
+                (today.isoformat(), (today + timedelta(days=120)).isoformat()),
+            )
+        wanted_occurrences = [dict(zip(("canonical_title", "guide_names_json", "organizer_names_json", "fact_pack_json"), r))
+                              for r in rows]
     wanted = defaultdict(set)
-    for title, raw_guides, raw_organizers, pack in rows:
-        guides, organizers = _source_roles(dict(guide_names_json=raw_guides, organizer_names_json=raw_organizers,
-                                               fact_pack_json=pack))
-        for key in _route_keys(title, organizers):
-            wanted[key].update(filter(None, map(_person_key, guides)))
+    for occurrence in wanted_occurrences:
+        row = dict(occurrence)
+        guides, organizers = _source_roles(row)
+        people = set(filter(None, map(_person_key, guides)))
+        if people:
+            for key in _route_keys(row["canonical_title"], organizers):
+                wanted[key].update(people)
     stats = {"indexes_read": 0, "listed": 0, "title_candidates": 0, "confirmed": 0, "errors": 0}
     if not wanted:
         return stats
+    # Reserve the entire site before network I/O, including concurrent imports and restarts.
+    async with db.raw_conn() as conn:
+        await conn.execute("CREATE TABLE IF NOT EXISTS guide_web_scan_state (origin TEXT PRIMARY KEY, next_at REAL NOT NULL)")
+        claim = await conn.execute(
+            "INSERT INTO guide_web_scan_state VALUES (?,?) ON CONFLICT(origin) DO UPDATE SET next_at=excluded.next_at "
+            "WHERE guide_web_scan_state.next_at<=?", (ORIGIN, now.timestamp()+86400, now.timestamp()))
+        await conn.commit()
+        if not claim.rowcount:
+            return {**stats, "cooldown": 1}
     cache_rows, withdrawals, listed = [], [], {}
     started = monotonic()
-    slots = asyncio.Semaphore(3)
+    slots = asyncio.Semaphore(1)
+    last_request = 0.0
     timeout = aiohttp.ClientTimeout(total=8)
     async with aiohttp.ClientSession(timeout=timeout, trust_env=True,
             headers={"User-Agent": "EventsBot-ExcursionMonitor/1.0"}) as session:
         async def read(url):
+            nonlocal last_request
+            if stats.get("limited"):
+                return False, None
+            if not fetch and last_request:
+                await asyncio.sleep(max(0.0, 1.0 - (monotonic() - last_request)))
+            last_request = monotonic()
             try:
                 return True, await (fetch(url) if fetch else _fetch(session, url))
             except (aiohttp.ClientError, TimeoutError, ValueError, OSError) as exc:
                 stats["errors"] += 1
+                if isinstance(exc, aiohttp.ClientResponseError) and exc.status in (429, 503):
+                    from .route_readers import _retry_after
+                    wait = _retry_after((exc.headers or {}).get("Retry-After"))
+                    stats["limited"] = 1
+                    async with db.raw_conn() as conn:
+                        await conn.execute("UPDATE guide_web_scan_state SET next_at=max(next_at,?) WHERE origin=?",
+                                           (datetime.now(timezone.utc).timestamp()+wait, ORIGIN))
+                        await conn.commit()
+                    return False, None
                 logger.warning("guide_monitor.tic_request_failed url=%s error=%s", url, exc)
                 return False, None
         indexes = set(INDEXES)
@@ -230,7 +262,7 @@ async def refresh_tic_catalog(db, *, fetch=None):
             elif ok:
                 stats["errors"] += 1
 
-        await asyncio.gather(*(index_cards(url) for url in _rotate_daily(indexes, today)))
+        await asyncio.gather(*(index_cards(url) for url in _rotate_daily(indexes, today)[:4]))
         stats["listed"] = len(listed)
         candidates = [url for url, title in listed.items() if _key(title) in wanted]
         stats["title_candidates"] = len(candidates)
@@ -252,7 +284,7 @@ async def refresh_tic_catalog(db, *, fetch=None):
             else:
                 withdrawals.append((url, now.isoformat()))
 
-        await asyncio.gather(*(read_candidate(url) for url in _rotate_daily(candidates, today)))
+        await asyncio.gather(*(read_candidate(url) for url in _rotate_daily(candidates, today)[:3]))
     async with db.raw_conn() as conn:
         await conn.execute(_TABLE)
         await conn.executemany("DELETE FROM guide_web_route_evidence WHERE url=? AND retrieved_at <= ?", withdrawals)
@@ -292,12 +324,12 @@ async def load_tic_background(conn, records):
     return result
 
 
-async def record_tic_scan(db, details, mode):
+async def record_tic_scan(db, details, mode, *, wanted_occurrences=None):
     if mode != "full":
         return
     try:
         async with asyncio.timeout(70):
-            details["tic_catalog"] = await refresh_tic_catalog(db)
+            details["tic_catalog"] = await refresh_tic_catalog(db, wanted_occurrences=wanted_occurrences)
     except Exception as exc:
         # This auxiliary source must not prevent already imported social posts from being published.
         logger.warning("guide_monitor.tic_scan_failed", exc_info=True)

@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:ongoing-media-20261117
+    image: runcoveer/events:guide-monitoring-assets-20261117
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

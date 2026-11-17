@@ -45,6 +45,15 @@ def acknowledge_import(run_id: str) -> None:
         (kaggle_service.RESULTS_STORE_ROOT / f"guide-excursions-push-{run_id}" / ".delivery_pending").unlink(missing_ok=True)
 
 
+def finish_result_import(run_id: str) -> None:
+    """Called under the shared importer lock after a durable import receipt."""
+    acknowledge_import(run_id)
+    try:
+        kaggle_service._prune_results_store()
+    except OSError:
+        logger.warning("guide_monitor.results_store_prune_failed run_id=%s", run_id, exc_info=True)
+
+
 def _unpack(archive: Path, staging: Path, target: Path, run_id: str) -> tuple[Path, str]:
     with zipfile.ZipFile(archive) as bundle:
         limit = kaggle_service.RESULTS_STORE_MAX_MB * 1024 * 1024
