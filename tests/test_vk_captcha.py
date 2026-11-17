@@ -160,7 +160,7 @@ async def test_handle_vk_captcha_invalid(tmp_path: Path, monkeypatch):
         await session.commit()
     main._vk_captcha_sid = "sid"
     main._vk_captcha_img = "img"
-    main._vk_captcha_needed = True
+    monkeypatch.setattr(main, "_vk_captcha_needed", True)
     main._vk_captcha_method = "wall.post"
     main._vk_captcha_params = {}
     async def fake_superadmin_id(db):
