@@ -24,7 +24,7 @@ _STABLE = re.compile(
     r"расскаж|рассказ|узна|осмотр|покаж|экспонат|экспозиц|сохранил|располож|посвящ|исследу", re.I)
 _TEMPORARY = re.compile(
     r"перенос|перенес|перенёс|отмен|остал[а-яё]* мест|в этот раз|в этот день|впервые|"
-    r"угощ|дегустац|подар[окк]|скидк|сезон|летн(?:ий|яя|ем)|зимн(?:ий|яя|ем)|погод|"
+    r"угощ|дегустац|подар(?:ок|к)|скидк|сеанс|коллективно|в группе|сезон|летн(?:ий|яя|ем)|зимн(?:ий|яя|ем)|погод|"
     r"регистрац|заявк|включен|включён|продаж|трансфер|сбор групп|"
     r"предоплат|организованных групп|только для|мест огранич|\+\s*7|\[id\d+|@\w|#\w", re.I)
 _ONE_OFF = re.compile(r"\b(?:разов(?:ая|ый) (?:прогулка|экскурсия|маршрут)|только один раз|"
@@ -48,18 +48,47 @@ def _roles(row):
     return {_key(name) for name in guides if name}, {_key(name) for name in organizers if name}
 
 
-def _same_route(current, old):
-    if _key(current.get("canonical_title") or current["title_normalized"]) != _key(old.get("canonical_title") or old["title_normalized"]):
+def _person_name(value):
+    # Declared profiles can store "surname first" while the announcement uses "given name first".
+    return " ".join(sorted(_key(value).split()))
+
+
+def _same_route(current, old, source=None):
+    same_source = bool(current.get("primary_source_id")) and current["primary_source_id"] == old.get("primary_source_id")
+    same_template = bool(current.get("template_id")) and current["template_id"] == old.get("template_id")
+    same_title = _key(current.get("canonical_title") or current["title_normalized"]) == _key(
+        old.get("canonical_title") or old["title_normalized"])
+    stored_title = current.get("title_normalized")
+    same_program = bool(stored_title and stored_title == old.get("title_normalized"))
+    if not same_title and not (same_source and same_template and same_program):
         return False
     guides, organizers = _roles(current)
     old_guides, old_organizers = _roles(old)
-    if (guides and old_guides and guides != old_guides) or (organizers and old_organizers and not organizers & old_organizers):
+    guides, old_guides, organizers, old_organizers = [
+        {_person_name(name) for name in values} for values in (guides, old_guides, organizers, old_organizers)]
+    if same_source and source and source.get("source_kind") == "guide_personal":
+        aliases = {_person_name(source.get(field)) for field in ("profile_name", "marketing_name", "title")}
+        aliases.discard("")
+        # Only names of this registered personal profile are equivalent. Two guest guides remain distinct.
+        def canonical(values):
+            return (values - aliases) | ({"@profile"} if values & aliases else set())
+        guides, old_guides, organizers, old_organizers = map(canonical, (guides, old_guides, organizers, old_organizers))
+        # A personal channel can credit its brand or one of the same named leaders
+        # as organiser. Require a common verified programme, identical guide roster,
+        # and the registered brand on one side of this substitution.
+        if same_template and same_program and guides and guides == old_guides:
+            def brand_and_leader(left, right):
+                return left == {"@profile"} and len(right) == 1 and right <= guides
+            if brand_and_leader(organizers, old_organizers) or brand_and_leader(old_organizers, organizers):
+                organizers = old_organizers = {"@profile"}
+    if guides and old_guides and guides != old_guides:
+        return False
+    if organizers and old_organizers and not organizers & old_organizers:
         return False
     shared_guides = guides & old_guides
     if any(2 <= len(name.split()) <= 5 for name in shared_guides - organizers - old_organizers):
         return True
-    return (bool(current.get("primary_source_id")) and current["primary_source_id"] == old.get("primary_source_id")
-            and bool(organizers & old_organizers or shared_guides))
+    return same_source and bool(organizers & old_organizers or shared_guides)
 
 
 def _focus(post, title, *, linked):
@@ -80,6 +109,16 @@ def _focus(post, title, *, linked):
     hits = [b for b in blocks if f" {title_key} " in f" {_key(b)} "]
     if len(hits) != 1:
         return ""
+    # An author's timetable can give the formal title below an introductory paragraph
+    # that explicitly names the same walk with a different preposition. Keep only that
+    # original paragraph, only for an already linked outing with a unique named block.
+    opening = re.split(r"\n\s*\n", text, maxsplit=1)[0]
+    opening_sentence = re.split(r"(?<=[.!?])\s+", opening, maxsplit=1)[0]
+    distinctive = [w for w in title_key.split() if len(w) >= 5 or re.fullmatch(r"[xiv]{2,}", w)]
+    if linked and len(distinctive) >= 3 and re.search(r"экскурси|прогулк|маршрут|путешеств", opening_sentence, re.I):
+        pattern = r"\b" + r"\b(?:\s+\w+){0,2}\s+".join(map(re.escape, distinctive)) + r"\b"
+        if re.search(pattern, _key(opening_sentence)) and _sufficient(_stable_excerpt(opening, title)):
+            return opening
     block = hits[0]
     # The parser preserves preambles in some schedules. A title mentioned only in a
     # timetable line does not own another introduction, or the rest of a list of titles.
@@ -101,7 +140,8 @@ def _stable_excerpt(block, title):
     selected = []
     for fragment in re.split(r"(?<=[.!?])\s+|\n+", block):
         sentence = fragment.strip(" \t•—–")
-        if not (8 <= len(sentence) <= 450) or _LOGISTICS.search(sentence) or _TEMPORARY.search(sentence):
+        if (not 8 <= len(sentence) <= 450 or not re.search(r"[.!?…][»”\"']?$", sentence)
+                or _LOGISTICS.search(sentence) or _TEMPORARY.search(sentence)):
             continue
         if not _STABLE.search(sentence) or not set(_key(sentence).split()) - set(title_words):
             continue
@@ -169,7 +209,7 @@ async def load_materialized_history(conn, records, linked):
     return stored
 
 
-async def load_route_history(conn, records, linked):
+async def load_route_history(conn, records, linked, sources=None):
     """Derive recurrence from distinct dated outings; carry only literal stable source excerpts."""
     rows = {int(r["id"]): dict(r) for r in records}
     if not rows:
@@ -190,7 +230,8 @@ async def load_route_history(conn, records, linked):
         old = dict(source)
         row = rows[old["wanted"]]
         info = histories[old["wanted"]]
-        if info["ambiguous_title"] or info["kind"] == "one_off" or old.get("status") in {"cancelled", "rescheduled"} or not _same_route(row, old):
+        if info["ambiguous_title"] or info["kind"] == "one_off" or old.get("status") in {"cancelled", "rescheduled"} or not _same_route(
+                row, old, (sources or {}).get(row.get("primary_source_id"))):
             continue
         title = row.get("canonical_title") or row["title_normalized"]
         post = dict(text=old["source_text"], post_kind=old["post_kind"], post_date=old["post_date"])
@@ -357,6 +398,11 @@ async def refresh_route_history(db, *, search=None, now=None, external=True):
             ORDER BY o.date,o.id""", (today.isoformat(), (today + timedelta(days=45)).isoformat()))]
         await conn.execute(_TABLE)
         await conn.execute(_MATERIAL)
+        # Only the per-outing projection expires. Its source announcements and indexed
+        # dated outings remain available for subsequent seasons and annual programmes.
+        await conn.execute("""DELETE FROM guide_route_material AS m WHERE NOT EXISTS
+            (SELECT 1 FROM guide_occurrence o WHERE o.id=m.occurrence_id AND o.date>=?)""",
+            ((today - timedelta(days=120)).isoformat(),))
         await conn.execute("""DELETE FROM guide_route_lookup WHERE lookup_key LIKE 'route:%' AND
              ((evidence_json='{}' AND next_at<=?) OR
               (evidence_json!='{}' AND unixepoch(json_extract(evidence_json,'$.retrieved_at'))+?<=?))""",
@@ -371,11 +417,11 @@ async def refresh_route_history(db, *, search=None, now=None, external=True):
         linked = defaultdict(list)
         for post in joined:
             linked[post["occurrence_id"]].append(dict(post))
-        histories = await load_route_history(conn, records, linked)
-        websites = await load_tic_background(conn, records)
         sources = {s["id"]: dict(s) for s in await conn.execute_fetchall("""
             SELECT s.*,p.display_name AS profile_name,p.marketing_name FROM guide_source s
             LEFT JOIN guide_profile p ON p.id=s.primary_profile_id WHERE s.enabled=1""")}
+        histories = await load_route_history(conn, records, linked, sources)
+        websites = await load_tic_background(conn, records)
         for row in records:
             row["route_history"] = histories[row["id"]]
         cached = await load_cached_background(conn, records, fresh_only=True, now=now)
