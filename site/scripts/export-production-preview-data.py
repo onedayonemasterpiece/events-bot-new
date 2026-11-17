@@ -55,7 +55,7 @@ SPARSE_RELATED_RETRIEVAL_METHOD = "local_tfidf_sparse_v1"
 PGVECTOR_RELATED_ALGORITHM = "event_pgvector_related_chain_v2_two_doc"
 PGVECTOR_RELATED_SCHEMA_VERSION = "event_pgvector_related_chain_v2"
 PGVECTOR_RELATED_RETRIEVAL_METHOD = "supabase_pgvector_hnsw_cosine_v1"
-PGVECTOR_RELATED_CACHE_SCHEMA_VERSION = "event_pgvector_related_chain_v2_cache_20261114_content_vector_only"
+PGVECTOR_RELATED_CACHE_SCHEMA_VERSION = "event_pgvector_related_chain_v3_cache_equal_content_facts"
 RELATED_CACHE_SCHEMA_VERSION = "event_sparse_related_chain_v1_cache_20260628b"
 BGE_RELATED_ALGORITHM = "event_bge_m3_related_chain_v1"
 BGE_RELATED_SCHEMA_VERSION = "event_bge_m3_related_chain_v1"
@@ -2726,6 +2726,7 @@ def build_event(
         "image_object_position": primary_asset.get("recommended_object_position") if primary_asset else None,
         "safe_crop": bool(primary_asset and primary_asset.get("safe_crop")),
         "summary": summary,
+        "canonical_search_digest": None if occurrence_conflict else row_get(row, "search_digest"),
         "meta_description": summary,
         "description_html": markdownish_to_html(description) or f"<p>{html.escape(summary or title)}</p>",
         "topics": topics,
@@ -3445,12 +3446,13 @@ def event_embedding_document(event: dict[str, Any]) -> str:
     return clean_text(" ".join(part for part in parts if part))
 
 
-def event_fingerprint(event: dict[str, Any]) -> str:
+def event_fingerprint(event: dict[str, Any], programme: Iterable[int] = ()) -> str:
     payload = {
         "title": event.get("title"),
         "event_type": event.get("event_type"),
         "topics": event.get("topics") or [],
         "summary": event.get("summary"),
+        "canonical_search_digest": event.get("canonical_search_digest"),
         "description_html": event.get("description_html"),
         "city": event.get("city"),
         "venue_name": event.get("venue_name"),
@@ -3462,6 +3464,11 @@ def event_fingerprint(event: dict[str, Any]) -> str:
         "age_restriction_status": event.get("age_restriction_status"),
         "age_recommendation": event.get("age_recommendation"),
     }
+    if event.get("other_date_ids") or programme:
+        peers = set(programme).union(int(peer) for peer in event.get("other_date_ids") or [])
+        peers.discard(int(event["id"]))
+        if peers:
+            payload["other_date_ids"] = sorted(peers)
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
@@ -3497,8 +3504,11 @@ def sparse_cosine(left: dict[str, float], right: dict[str, float]) -> float:
     return float(sum(value * right.get(token, 0.0) for token, value in left.items()))
 
 
-def eligible_related_pair(left: dict[str, Any], right: dict[str, Any]) -> bool:
-    if int(left["id"]) == int(right["id"]):
+def eligible_related_pair(left: dict[str, Any], right: dict[str, Any], programmes: dict[int, int] | None = None) -> bool:
+    left_id, right_id = int(left["id"]), int(right["id"])
+    if left_id == right_id:
+        return False
+    if programmes and programmes.get(left_id, left_id) == programmes.get(right_id, right_id):
         return False
     if int(right["id"]) in [int(item) for item in left.get("other_date_ids", [])]:
         return False
@@ -3596,6 +3606,7 @@ def apply_pgvector_graph_reciprocity(
     events: list[dict[str, Any]],
     chains: dict[str, list[dict[str, Any]]],
     *,
+    programmes: dict[int, int] | None = None,
     high_confidence_threshold: float = 0.88,
 ) -> dict[str, Any]:
     """Repair only high-signal graph asymmetry without creating an echo chamber."""
@@ -3631,7 +3642,7 @@ def apply_pgvector_graph_reciprocity(
             for right_id in candidates:
                 left = by_id[left_id]
                 right = by_id[right_id]
-                if not eligible_related_pair(left, right):
+                if not eligible_related_pair(left, right, programmes):
                     continue
                 source = forward_item(right_id, left_id) or forward_item(left_id, right_id) or {
                     "related_score": 0.0,
@@ -3657,7 +3668,7 @@ def apply_pgvector_graph_reciprocity(
             right_id = int(item.get("event_id") or 0)
             if right_id not in by_id or float(item.get("vector_similarity") or 0) < high_confidence_threshold:
                 continue
-            if not eligible_related_pair(by_id[right_id], by_id[left_id]):
+            if not eligible_related_pair(by_id[right_id], by_id[left_id], programmes):
                 continue
             before = forward_item(right_id, left_id)
             _insert_forced_related(
@@ -3686,7 +3697,7 @@ def apply_pgvector_graph_reciprocity(
         if not outgoing:
             continue
         neighbor_id = int(outgoing["event_id"])
-        if not eligible_related_pair(by_id[neighbor_id], by_id[event_id]):
+        if not eligible_related_pair(by_id[neighbor_id], by_id[event_id], programmes):
             continue
         before = forward_item(neighbor_id, event_id)
         _insert_forced_related(
@@ -3703,7 +3714,7 @@ def apply_pgvector_graph_reciprocity(
         if len(ids) != 2:
             continue
         left_id, right_id = ids
-        if not eligible_related_pair(by_id[left_id], by_id[right_id]) or not eligible_related_pair(by_id[right_id], by_id[left_id]):
+        if not eligible_related_pair(by_id[left_id], by_id[right_id], programmes) or not eligible_related_pair(by_id[right_id], by_id[left_id], programmes):
             continue
         if not forward_item(left_id, right_id) or not forward_item(right_id, left_id):
             exact_missing.append(sorted([left_id, right_id]))
@@ -3948,6 +3959,14 @@ def personalization_supabase_request(
         raise RuntimeError(f"Supabase RPC {function_name} failed HTTP {exc.code}: {detail}") from exc
 
 
+def related_programme_members(events: list[dict[str, Any]]) -> dict[int, list[int]]:
+    from scripts.sync_event_search_vectors_to_supabase import build_occurrence_projections
+
+    return {event_id: projection["occurrence_member_ids"]
+            for event_id, projection in build_occurrence_projections(events).items()
+            if len(projection["occurrence_member_ids"]) > 1}
+
+
 def build_pgvector_related_chain(
     events: list[dict[str, Any]],
     *,
@@ -3960,11 +3979,28 @@ def build_pgvector_related_chain(
     retrieval_receipt_out: dict[str, Any] | None = None,
     response_max_bytes: int = DEFAULT_RELATED_RESPONSE_MAX_BYTES,
     total_response_max_bytes: int | None = None,
+    programme_members: dict[int, list[int]] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     by_id = {int(event["id"]): event for event in events}
     if len(by_id) != len(events):
         raise RuntimeError("pgvector related build requires unique anchor event ids")
-    allowed_ids = set(by_id)
+    if programme_members is None:
+        programme_members = related_programme_members(events)
+    programmes = {event_id: members[0] for event_id, members in programme_members.items()}
+
+    def programmes_first(chain):
+        seen = set()
+        first, repeats = [], []
+        for item in chain:
+            peer = item["event_id"]
+            programme = programmes.get(peer, peer)
+            if programme in seen:
+                repeats.append(item)
+            else:
+                first.append(item)
+                seen.add(programme)
+        return first + repeats
+
     chains: dict[str, list[dict[str, Any]]] = {}
     retrieval_metrics: dict[str, Any] = {
         "schema_version": "static_related_retrieval_receipt_v1",
@@ -4001,18 +4037,13 @@ def build_pgvector_related_chain(
             expected_row_fields=COMPACT_RELATED_FIELDS,
         ) or []
         scored: list[dict[str, Any]] = []
-        excluded_ids = {event_id, *[int(item) for item in event.get("other_date_ids") or []]}
         for row in rows:
             try:
                 candidate_id = int(row.get("event_id"))
             except Exception:
                 continue
             candidate = by_id.get(candidate_id)
-            if not candidate or candidate_id not in allowed_ids or candidate_id in excluded_ids:
-                continue
-            if int(event_id) in [int(item) for item in candidate.get("other_date_ids") or []]:
-                continue
-            if not eligible_related_pair(event, candidate):
+            if not candidate or not eligible_related_pair(event, candidate, programmes):
                 continue
             vector_similarity = max(0.0, min(1.0, float(row.get("vector_similarity") or 0)))
             slot_type = "pure_related" if vector_similarity >= 0.80 else "adjacent_discovery"
@@ -4034,8 +4065,13 @@ def build_pgvector_related_chain(
                 "display_eligible": True,
             })
         scored.sort(key=lambda item: (-float(item["related_score"]), -float(item.get("vector_similarity") or 0), int(item["event_id"])))
-        chains[str(event_id)] = scored[:40]
-    graph_meta = apply_pgvector_graph_reciprocity(events, chains)
+        chains[str(event_id)] = programmes_first(scored)[:40]
+    graph_meta = apply_pgvector_graph_reciprocity(events, chains, programmes=programmes)
+    # Graph repair can insert/re-sort edges. Keep its membership and its topology.
+    chains = {anchor: programmes_first(chain) for anchor, chain in chains.items()
+              if anchor_ids is None or int(anchor) in anchor_ids}
+    if anchor_ids is not None:
+        graph_meta["policy"] = "scoped_pgvector_candidates"
     if graph_meta_out is not None:
         graph_meta_out.clear()
         graph_meta_out.update(graph_meta)
@@ -4327,11 +4363,19 @@ async def call_gemma_related_audit_async(
         raise RuntimeError("Gemma related audit returned empty text after thought filtering")
     parsed = parse_gemma_json_object(str(text).strip())
     out: dict[int, dict[str, Any]] = {}
+    requested_ids = {candidate["id"] for candidate in candidates}
+    seen_ids = set()
     for item in parsed.get("ranked") or []:
         try:
             event_id = int(item.get("event_id"))
         except Exception:
             continue
+        if event_id not in requested_ids:
+            continue
+        if event_id in seen_ids:
+            out.pop(event_id, None)
+            continue
+        seen_ids.add(event_id)
         out[event_id] = item
     return out
 
@@ -4471,6 +4515,10 @@ def gemma_related_audit_cache_key(*, model, policy_signature, anchor_id, fingerp
     }, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
 
+def gemma_audit_complete(verdicts: Any, candidate_ids: Iterable[int]) -> bool:
+    return isinstance(verdicts, dict) and set(verdicts) == {str(cid) for cid in candidate_ids}
+
+
 def maybe_apply_gemma_audit(
     events: list[dict[str, Any]],
     chains: dict[str, list[dict[str, Any]]],
@@ -4482,6 +4530,7 @@ def maybe_apply_gemma_audit(
     max_anchors: int,
     changed_event_ids: set[int] | None = None,
     anchor_ids: set[int] | None = None,
+    fingerprints: dict[str, str] | None = None,
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
     changed_event_ids = set(changed_event_ids or set())
     meta = {
@@ -4532,7 +4581,8 @@ def maybe_apply_gemma_audit(
         return chains, meta
     by_id = {int(event["id"]): event for event in events}
     audit_cache = cache.setdefault("gemma_audit_cache", {})
-    fingerprints = {str(event["id"]): event_fingerprint(event) for event in events}
+    if fingerprints is None:
+        fingerprints = {str(event["id"]): event_fingerprint(event) for event in events}
     candidate_limit = int(meta["retry_policy"]["candidate_limit"])
     pass_count = int(meta["retry_policy"].get("pass_count") or 1)
     total_candidate_limit = candidate_limit * pass_count
@@ -4566,7 +4616,7 @@ def maybe_apply_gemma_audit(
             fingerprints=fingerprints, candidate_ids=top_ids,
         )
         cached = audit_cache.get(cache_key)
-        if cached:
+        if gemma_audit_complete(cached, top_ids):
             meta["cache_hits"] += 1
             audit = {int(k): v for k, v in cached.items()}
             meta["verified_event_ids"].append(anchor_int_id)
@@ -4590,11 +4640,16 @@ def maybe_apply_gemma_audit(
                     pass_candidates = candidate_events[pass_index * candidate_limit : (pass_index + 1) * candidate_limit]
                     if not pass_candidates:
                         continue
+                    pass_ids = {event["id"] for event in pass_candidates}
                     pass_key = gemma_related_audit_cache_key(
                         model=model, policy_signature=policy_signature, anchor_id=anchor_id,
-                        fingerprints=fingerprints, candidate_ids=[event["id"] for event in pass_candidates])
-                    if pass_key in audit_cache:
-                        audit.update({int(k): v for k, v in audit_cache[pass_key].items()})
+                        fingerprints=fingerprints, candidate_ids=pass_ids)
+                    saved_pass = audit_cache.get(pass_key) or {}
+                    pass_audit = {cid: saved_pass[str(cid)] for cid in pass_ids if str(cid) in saved_pass}
+                    audit.update(pass_audit)
+                    if pass_audit.keys() == pass_ids:
+                        if len(saved_pass) != len(pass_audit):
+                            audit_cache[pass_key] = {str(cid): verdict for cid, verdict in pass_audit.items()}
                         successful_passes += 1
                         log_stage("gemma_audit_pass_cache_hit", anchor_event_id=anchor_int_id, pass_index=pass_index + 1)
                         continue
@@ -4602,10 +4657,11 @@ def maybe_apply_gemma_audit(
                     for attempt in range(1, max_attempts + 1):
                         started = time.monotonic()
                         try:
+                            missing = [event for event in pass_candidates if event["id"] not in pass_audit]
                             log_stage(
                                 "gemma_audit_call",
                                 anchor_event_id=anchor_int_id,
-                                candidate_count=len(pass_candidates),
+                                candidate_count=len(missing),
                                 candidate_limit=candidate_limit,
                                 total_candidate_limit=total_candidate_limit,
                                 pass_index=pass_index + 1,
@@ -4615,19 +4671,22 @@ def maybe_apply_gemma_audit(
                                 attempt=attempt,
                                 max_attempts=max_attempts,
                             )
-                            pass_audit = call_gemma_related_audit(
+                            response = call_gemma_related_audit(
                                 model=model,
                                 key_env=key_env,
                                 anchor=anchor,
-                                candidates=pass_candidates,
+                                candidates=missing,
                                 timeout_seconds=int(meta["retry_policy"]["timeout_seconds"]),
                                 candidate_limit=candidate_limit,
                             )
                             elapsed_ms = int((time.monotonic() - started) * 1000)
+                            meta["provider_calls"] += 1
+                            pass_audit.update({e["id"]: response[e["id"]] for e in missing if e["id"] in response})
                             audit.update(pass_audit)
                             audit_cache[pass_key] = {str(k): v for k, v in pass_audit.items()}
+                            if pass_audit.keys() != pass_ids:
+                                raise ValueError(f"Missing Gemma verdicts: {sorted(pass_ids - pass_audit.keys())}")
                             successful_passes += 1
-                            meta["provider_calls"] += 1
                             meta["attempts"].append({
                                 "anchor_event_id": anchor_int_id,
                                 "attempt": attempt,
@@ -4636,7 +4695,7 @@ def maybe_apply_gemma_audit(
                                 "model": model,
                                 "status": "ok",
                                 "elapsed_ms": elapsed_ms,
-                                "candidate_count": len(pass_candidates),
+                                "candidate_count": len(missing),
                                 "candidate_limit": candidate_limit,
                                 "total_candidate_limit": total_candidate_limit,
                             })
@@ -4883,7 +4942,9 @@ def build_related(
         embedding_doc_version = "event_embedding_doc_v1"
     related_corpus_revision = str(related_corpus_revision or "").strip()
     generated_at = datetime.now(timezone.utc).isoformat()
-    fingerprints = {str(event["id"]): event_fingerprint(event) for event in events}
+    programme_members = related_programme_members(events) if related_mode == "pgvector" else {}
+    fingerprints = {str(event["id"]): event_fingerprint(event, programme_members.get(int(event["id"]), ()))
+                    for event in events}
     event_ids = [int(event["id"]) for event in events]
     cache = load_related_cache(cache_path) or {}
     graph_meta: dict[str, Any] = {
@@ -4924,7 +4985,6 @@ def build_related(
     )
     cache_valid = (
         cache_compatible
-        and (related_mode != "pgvector" or cache.get("related_corpus_revision") == related_corpus_revision)
         and (
             related_mode != "bge"
             or cache.get("shared_bge_artifact_sha256")
@@ -4942,6 +5002,24 @@ def build_related(
         for value in (cache.get("gemma_verified_event_ids") or [])
         if str(value).isdigit()
     }
+    cached_raw_chains = cache.get("raw_chains") if isinstance(cache.get("raw_chains"), dict) else None
+    incomplete_verified_ids: set[int] = set()
+    if gemma_verify or related_mode == "pgvector":
+        # Older builders marked a whole packet verified even when the model skipped IDs.
+        audit_cache = cache.get("gemma_audit_cache") or {}
+        eligible_verified_ids = set()
+        for event_id in cached_verified_event_ids:
+            chain = (cached_raw_chains or {}).get(str(event_id))
+            if chain is None:
+                continue
+            top_ids = [int(item["event_id"]) for item in chain[:candidate_limit * pass_count]]
+            full_key = gemma_related_audit_cache_key(
+                model=gemma_model, policy_signature=gemma_policy_signature,
+                anchor_id=event_id, fingerprints=fingerprints, candidate_ids=top_ids)
+            if not top_ids or gemma_audit_complete(audit_cache.get(full_key), top_ids):
+                eligible_verified_ids.add(event_id)
+        incomplete_verified_ids = cached_verified_event_ids - eligible_verified_ids
+        cached_verified_event_ids = eligible_verified_ids
     gemma_cache_ready = bool(
         gemma_verify
         and cache.get("gemma_verified_model") == gemma_model
@@ -4961,43 +5039,51 @@ def build_related(
         algorithm=algorithm,
     )
     raw_chains_for_cache: dict[str, list[dict[str, Any]]] | None = None
-    cached_raw_chains = cache.get("raw_chains") if isinstance(cache.get("raw_chains"), dict) else None
     unfinished_anchor_ids: set[int] = set()
-    if anchor_ids is not None and related_mode == "pgvector":
+    if related_mode == "pgvector":
+        graph_meta = {"policy": "scoped_pgvector_candidates"}
+        if cache_valid:
+            graph_meta.update(copy.deepcopy(cache.get("graph_reciprocity") or {}))
         if not cache_compatible:
-            cached_verified_event_ids = set()
+            cached_verified_event_ids.clear()
+            # A different embedding recipe needs a fresh ranked shortlist.
             cached_raw_chains = None
-        cached_verified_event_ids = {
-            event_id for event_id in cached_verified_event_ids
-            if str(event_id) in (cached_raw_chains or {}) and (
-                not cached_raw_chains[str(event_id)] or gemma_related_audit_cache_key(
-                    model=gemma_model, policy_signature=gemma_policy_signature,
-                    anchor_id=event_id, fingerprints=fingerprints,
-                    candidate_ids=[int(item["event_id"]) for item in cached_raw_chains[str(event_id)][:candidate_limit * pass_count]],
-                ) in (cache.get("gemma_audit_cache") or {})
-            )
-        }
         # First publications need their own anchors, not a cold audit of every
         # old page. Keep the complete catalog available to retrieval/verifier.
-        targets = set(anchor_ids) | (changed_event_ids if previous_fingerprints else set())
+        if anchor_ids is not None:
+            targets = set(anchor_ids)
+        elif not previous_fingerprints or not cache_compatible:
+            targets = set(current_id_set)
+        else:
+            targets = set(incomplete_verified_ids) if gemma_verify else set()
+        if cache_compatible and previous_fingerprints:
+            targets.update(changed_event_ids)
         targets.difference_update(cached_verified_event_ids - changed_event_ids)
+        changed_current_ids = changed_event_ids & current_id_set
+        targets.update(
+            int(anchor) for anchor, chain in (cached_raw_chains or {}).items()
+            if int(anchor) not in cached_verified_event_ids
+            and any(int(item["event_id"]) in changed_current_ids for item in chain)
+        )
         targets.intersection_update(current_id_set)
         chains = copy.deepcopy(cache.get("chains") or {}) if cache_compatible else {}
         raw_chains_for_cache = copy.deepcopy(cached_raw_chains or chains)
         fresh = build_pgvector_related_chain(
-            events, current_date=current_date, anchor_ids=targets,
+            events, current_date=current_date,
+            anchor_ids=None if anchor_ids is None and targets == current_id_set else targets,
             embedding_model=embedding_model,
             embedding_doc_kind=embedding_doc_version,
             graph_meta_out=graph_meta, retrieval_receipt_out=retrieval_receipt,
             response_max_bytes=related_response_max_bytes,
             total_response_max_bytes=related_total_response_max_bytes,
+            programme_members=programme_members,
         ) if targets else {}
         fresh = {key: chain for key, chain in fresh.items() if int(key) in targets}
         raw_chains_for_cache.update(copy.deepcopy(fresh))
         fresh, gemma_meta = maybe_apply_gemma_audit(
             events, fresh, enabled=gemma_verify, model=gemma_model,
             key_env=gemma_key_env, cache=cache, max_anchors=gemma_max_anchors,
-            changed_event_ids=targets, anchor_ids=targets,
+            changed_event_ids=targets, anchor_ids=targets, fingerprints=fingerprints,
         )
         chains.update(fresh)
         gemma_meta["verified_event_ids"] = sorted(
@@ -5007,7 +5093,13 @@ def build_related(
         if gemma_verify:
             gemma_meta["status"] = "ok" if current_id_set.issubset(set(gemma_meta["verified_event_ids"])) and not gemma_meta["errors"] else ("partial" if gemma_meta["verified_event_ids"] else "failed")
         unfinished_anchor_ids = targets - set(gemma_meta["verified_event_ids"]) if gemma_verify else set()
-        cache_state = "incremental"
+        unfinished_anchor_ids.update(
+            int(item["event_id"]) for anchor in list(unfinished_anchor_ids)
+            for item in (cached_raw_chains or {}).get(str(anchor), [])
+            if int(item["event_id"]) in changed_current_ids
+        )
+        retrieval_receipt["source"] = "compact_rpc" if targets else "cache"
+        cache_state = "incremental" if targets else "hit"
     elif cache_valid and (not gemma_verify or gemma_cache_ready):
         chains = cache["chains"]
         raw_chains_for_cache = copy.deepcopy(cached_raw_chains or chains)
@@ -5043,25 +5135,12 @@ def build_related(
             key_env=gemma_key_env,
             cache=cache,
             max_anchors=gemma_max_anchors,
-            changed_event_ids=set(),
+            changed_event_ids=set(), fingerprints=fingerprints,
         )
     else:
         salt = hashlib.sha1(json.dumps({"ids": event_ids, "fp": fingerprints}, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:12]
         log_stage(f"{related_mode}_rebuild_start", event_count=len(events), cache_salt=salt, changed_event_count=len(changed_event_ids), embedding_model=embedding_model)
-        if related_mode == "pgvector":
-            graph_meta = {}
-            chains = build_pgvector_related_chain(
-                events,
-                current_date=current_date,
-                embedding_model=embedding_model,
-                embedding_doc_kind=os.getenv("STATIC_SITE_PGVECTOR_RELATED_DOC_KIND", "related_v1") or "related_v1",
-                graph_meta_out=graph_meta,
-                retrieval_receipt_out=retrieval_receipt,
-                response_max_bytes=related_response_max_bytes,
-                total_response_max_bytes=related_total_response_max_bytes,
-            )
-            retrieval_receipt["source"] = "compact_rpc"
-        elif related_mode == "bge":
+        if related_mode == "bge":
             if not shared_bge_artifact:
                 raise RuntimeError("BGE related mode requires the shared in-memory vector artifact")
             graph_meta = {
@@ -5091,7 +5170,7 @@ def build_related(
             key_env=gemma_key_env,
             cache=cache,
             max_anchors=gemma_max_anchors,
-            changed_event_ids=changed_event_ids,
+            changed_event_ids=changed_event_ids, fingerprints=fingerprints,
         )
     log_stage("gemma_audit_complete", **gemma_meta)
     raw_chains_for_cache = raw_chains_for_cache or copy.deepcopy(chains)
@@ -6892,7 +6971,8 @@ def main() -> int:
             else None
         ),
     )
-    if args.catalog_mode == "full" and args.related_mode == "pgvector" and args.related_anchor_ids is None:
+    if (args.catalog_mode == "full" and args.related_mode == "pgvector" and args.related_anchor_ids is None
+            and (related_payload.get("graph_reciprocity") or {}).get("policy") != "scoped_pgvector_candidates"):
         validate_pgvector_graph_release(related_payload.get("graph_reciprocity") or {})
     (out_dir / "preview-related.json").write_text(json.dumps(related_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Exported {len(events)} events to {out_dir}")

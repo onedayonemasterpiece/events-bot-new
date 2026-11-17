@@ -1,0 +1,23 @@
+{
+  "job": "job_beb889aa77abed89112d2722",
+  "status": "succeeded",
+  "exit_code": 0,
+  "observed": [
+    "candidate 0b7d71e8eefadf420e25366ffd5f365b5962dad5b63161dc3d4c806d94096825 68564",
+    "prepare 0 {\"events\": 2, \"new_facts_inputs\": 0, \"related_corpus_revision\": \"a16e0e57c74cea04698b9c7fa6409050a1dcdb34809f65ffe335561741c3cd17\"}",
+    " ",
+    "prepare 1 {\"events\": 2, \"new_facts_inputs\": 1, \"related_corpus_revision\": \"3a615ad5290ce47e74585d3a85d4eaa8947be53adcaaf042d329249366b2dc9c\"}",
+    " Re-run with --complete-missing for the measured number of provider inputs",
+    "prepare 0 {\"events\": 2, \"new_facts_inputs\": 0, \"related_corpus_revision\": \"a16e0e57c74cea04698b9c7fa6409050a1dcdb34809f65ffe335561741c3cd17\"}",
+    " ",
+    "Prepared with archived U in a complete two-row fixture; changed canonical alone reports missing U; rerun is byte-identical.",
+    "expected refusal: psql:/tmp/apply.sql:37: ERROR:  Stale or incomplete catalog, document, source vector or stage",
+    "expected refusal: psql:/tmp/apply.sql:37: ERROR:  Stale or incomplete catalog, document, source vector or stage",
+    "expected refusal: psql:/tmp/apply.sql:37: ERROR:  Stale or incomplete catalog, document, source vector or stage",
+    "expected refusal: psql:/tmp/rollback.sql:27: ERROR:  Live state advanced, or this release was already reverted. Rebuild from current inputs.",
+    "expected refusal: psql:/tmp/rollback.sql:27: ERROR:  Live state advanced, or this release was already reverted. Rebuild from current inputs.",
+    "{\"engine\": \"PostgreSQL 17.10 (Debian 17.10-1.pgdg12+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit|0.8.2\", \"cases\": [\"export-v2\", \"missing membership\", \"changed input\", \"apply all\", \"duplicate apply\", \"rollback refuses changed row\", \"exact rollback incl search metadata and timestamp\", \"duplicate rollback\"], \"source_data\": \"fully synthetic; two vectors of dimension 768; no mounts or network\"}"
+  ],
+  "engine": "PostgreSQL 17.10 + pgvector 0.8.2",
+  "notes": "Isolated test on archived U for two real event texts and synthetic old vectors. No production database or API was used."
+}

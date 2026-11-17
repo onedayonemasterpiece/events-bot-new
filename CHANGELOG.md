@@ -24,6 +24,8 @@
 - Guide visual VK digest (owner request 2026-11-16): the post text was a numbered list `title — link`; it is now a connected first-person editorial story written by one LLM request per edition, with exact titles in caps, dates, price, booking contact, brand line and hashtags added from stored rows. The compact list remains the text when the writer is unavailable or its answer is rejected. Personal guide mentions `[id…|name]` exist behind `GUIDE_VISUAL_DIGEST_VK_MENTIONS` (default off, sandbox testing only).
 
 ### Fixed
+- Event-to-event Gemini retrieval now combines the existing description embedding with accepted event facts in the same related vector and selects independent programmes before repeated dates. The incremental writer accounts for both embedding calls and checks the active index version.
+- Related events keep the verified Gemma decisions from partial batches and request the missing candidates before marking an event ready for VK publication.
 - Карточка дайджеста сверяет пункты маршрута с анонсом конкретного выезда и показывает сохранённый тематический хук. Удалены подписи, которые выводились по ключевым словам названия или по типу аудитории.
 - Guide import preserves the extractor's negative digest eligibility decision instead of promoting it from filled logistics fields, including offers restricted to an organized group.
 - Redact signed VK upload tickets in existing API error and CAPTCHA logs while preserving upload requests and cached recovery parameters.

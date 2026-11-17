@@ -433,6 +433,6 @@ anchor не добавляется. `strict_verified` означает заве�
 
 ### Сохранение частично выполненного semantic audit
 
-Успешные batches сохраняются в существующем `gemma_audit_cache` с обычным ключом модели, policy и fingerprints anchor/candidates. Следующий штатный цикл повторяет только отсутствующие batches. Полный ключ anchor и `strict_verified` появляются после всех batches; частичный успех не выдаётся за полную проверку. Pruning сохраняет только ключи текущих полных выборок и batches, без второго кеша или новой очереди.
+Сборщик сохраняет решения Gemma по запрошенным кандидатам в существующем `gemma_audit_cache`. При частичном ответе штатное продолжение запрашивает только пропущенные ID. Отметка `strict_verified` требует однозначного ответа по каждому кандидату. Тёплая сборка сверяет с этим же списком прежние записи кэша.
 
 Source-avatar medallions retain original source identity rather than the publisher wall identity. Their existing source_owner metadata reaches VK rendering; older string asset paths remain supported. The shared avatar encoder and TG/VK renderers use the same circular, alpha-preserving transform; curated medallion geometry is preserved.

@@ -1,0 +1,2 @@
+\set ON_ERROR_STOP on
+\copy (SELECT d.event_id, d.related_text_hash, d.text_hash, e.embedding::text FROM public.event_search_documents d JOIN public.event_embeddings e USING(event_id) WHERE e.embedding_doc_kind='related_v1' AND e.embedding_model='gemini-embedding-2' AND e.embedding_dim=768 AND e.text_hash=d.related_text_hash AND d.related_doc_version='event-related-doc-v2-content-only' AND e.metadata->>'doc_version'=d.related_doc_version ORDER BY d.event_id) TO 'live-v2.csv' WITH (FORMAT csv)

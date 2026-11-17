@@ -1,0 +1,1267 @@
+{
+  "as_of": "2026-11-17",
+  "scope": "Shadow evidence. Frozen index and programme selection from the Nov 16 690-row archive, deployed exporter and actual local public event fields on Nov 17. The live VK card was not edited.",
+  "method": {
+    "snapshot_sha256": "08ff42cf350f158a05705598bd1a5f23065cc05ba4b43120236c67dce5502d74",
+    "frozen_collector_git": "0808b35b9737e0fca2b9e1220488f6a5078b5086",
+    "frozen_vector_chain_job": "job_085b3673dbc2cef2e9f084c4",
+    "candidate_retrieval": "L2-normalized sum of archived production and facts vectors, frozen 690-row eligibility and programme collector. Current live graph is a separate baseline; it does not use the candidate index.",
+    "verdict_tuple": [
+      "score",
+      "reject",
+      "confidence",
+      "similarity_class"
+    ],
+    "key": "The legacy cache key sorts candidate ID-to-fingerprint pairs, hiding order. This replay compares exact ordered prompt SHA-256s before applying scores.",
+    "reconstruction": "The deployed build_related function receives frozen candidate IDs and vector scores and saved model replies in memory; vk_event_relations.presentation reads production SQLite mode=ro and retained real VK replies. No model, VK publication, cache or index writes in the replay.",
+    "vk_public_api_reads": "On Nov 17, one read-only wall.getById for the two eligible URLs without retained visibility evidence; all other public checks reuse Nov 16 receipts.",
+    "verifier_replay": "Replayed maybe_apply_gemma_audit, gemma_related_audit_cache_key, gemma_audit_complete from PR #1045 at 42f96dd2be2f1a76f2507df64375c74528c4802f (exporter Git blob f43b76e7bd76938011faf8dd8fa7d4b65c330051) inside the read-only deployed application process. Public rendering and candidate-score replay use the deployed functions. The provider is replaced by byte-matched captured responses for this replay."
+  },
+  "old_control": {
+    "url": "https://github.com/onedayonemasterpiece/events-bot-new/blob/a52e4fbcc3a7ca9c11e185d0957a2894da3f99f5/docs/reports/fable-related-search-20261116/execution-evidence.json",
+    "study": "frozen 2026-11-16; same cohort does not imply identical prompt bytes on 2026-11-17",
+    "one": {
+      "gemma": [
+        {
+          "variant": "equal_mix",
+          "pass": 1,
+          "n": 10,
+          "sha": "e91e8d244945e91d450e9557937a79b61c1ff32eec560763cd39fec382384988"
+        },
+        {
+          "variant": "equal_mix",
+          "pass": 2,
+          "n": 10,
+          "sha": "81c3c10a26871e5851d56133c7245faeeb8aa1f7bf0b57322965a6a1a154aab7"
+        },
+        {
+          "variant": "v2",
+          "pass": 1,
+          "n": 10,
+          "sha": "0c5e136237f80bcb898a927d1cc220ed9a422f0c299a9067d7418832ba125c6e"
+        },
+        {
+          "variant": "v2",
+          "pass": 2,
+          "n": 9,
+          "sha": "aae136704da674a0c80022f7930bdc1363be970d020838033608186f90784593"
+        }
+      ],
+      "post": [
+        {
+          "variant": "11068_v2",
+          "order": [
+            10800,
+            10860
+          ],
+          "public_shadow": [
+            10800,
+            10860
+          ],
+          "dates": []
+        },
+        {
+          "variant": "11010_equal_mix",
+          "order": [
+            10938,
+            10939,
+            10976,
+            10940,
+            10960
+          ],
+          "public_shadow": [
+            10938,
+            10940,
+            10960,
+            10939,
+            10976
+          ],
+          "dates": []
+        },
+        {
+          "variant": "11068_equal_mix",
+          "order": [
+            10860,
+            10443,
+            10416,
+            11055,
+            10798
+          ],
+          "public_shadow": [
+            10860,
+            10443,
+            10416,
+            11055,
+            10798
+          ],
+          "dates": []
+        }
+      ]
+    },
+    "ghost": [
+      {
+        "variant": "10580_v2",
+        "order": [
+          10915
+        ],
+        "public_shadow": [
+          10915
+        ],
+        "dates": []
+      }
+    ],
+    "weakness": "The archived audit stored parsed scores, without the raw emitted ID list. Historical completeness means all requested unique keys were present in the parsed response."
+  },
+  "current_prompt_projection": {
+    "utc": "2026-11-17T08:10:20.489310+00:00",
+    "catalog": 728,
+    "date_for_projection": "2026-11-17",
+    "rows": [
+      {
+        "a": 11068,
+        "pass": 1,
+        "sha256": "e209cc6abd49d8e4ae7a11c1ff635b1d8f783a6779e274f89634572799bfe378",
+        "missing": []
+      },
+      {
+        "a": 11068,
+        "pass": 2,
+        "sha256": "369df5aad218923ab6a5b01bb1a55bf40f939dac46c655a26a100c55c73960a1",
+        "missing": []
+      },
+      {
+        "a": 11010,
+        "pass": 1,
+        "sha256": "6db9b25dee7c91aa2bbf0f8a4a05aa057fcd6efde191428b51a4bae7761e46d0",
+        "missing": []
+      },
+      {
+        "a": 11010,
+        "pass": 2,
+        "sha256": "e45a8a3c040bbbb2eecff61b2add074689d0da839639df216b4f6d0070da5764",
+        "missing": []
+      },
+      {
+        "a": 10580,
+        "pass": 1,
+        "sha256": "5ef92e36a3dfa1aa287e126f246867adb1962c1c8c6b077dc10734d4f2972aee",
+        "missing": []
+      },
+      {
+        "a": 10580,
+        "pass": 2,
+        "sha256": "527f65afc35524e8607dba5aa0441a228212a30ecff1daf646c2096825cebc64",
+        "missing": []
+      }
+    ]
+  },
+  "warm_cache_probe": {
+    "read_utc": "2026-11-17T08:03:09.182882+00:00",
+    "graph_generated": "2026-11-17T07:49:57.009013+00:00",
+    "cached_audits": 186,
+    "live_graph": {
+      "10580": {
+        "live_related": [
+          10915,
+          10508,
+          10607
+        ],
+        "strict_verified": false,
+        "raw_ids": [
+          10915,
+          10508,
+          10607,
+          10578,
+          11002,
+          10606,
+          10507,
+          10598,
+          10916,
+          10720,
+          10998,
+          10716,
+          10671,
+          10717,
+          10635,
+          10398,
+          10505,
+          10610,
+          9506,
+          9558
+        ]
+      },
+      "11010": {
+        "live_related": [
+          10496
+        ],
+        "strict_verified": false,
+        "raw_ids": [
+          10640,
+          10939,
+          10976,
+          9708,
+          10940,
+          10938,
+          9821,
+          9852,
+          10599,
+          9509,
+          9107,
+          10496,
+          10489,
+          10486,
+          7578,
+          10487,
+          10639,
+          9948,
+          10299,
+          10300
+        ]
+      },
+      "11068": {
+        "live_related": [
+          10800
+        ],
+        "strict_verified": false,
+        "raw_ids": [
+          10756,
+          10607,
+          9819,
+          9105,
+          9821,
+          10689,
+          9509,
+          10508,
+          10757,
+          10915,
+          10716,
+          10721,
+          10800,
+          9794,
+          10882,
+          9507,
+          10916,
+          10642,
+          9331,
+          9335
+        ]
+      }
+    },
+    "checked_new_packets": [
+      {
+        "anchor": 11068,
+        "full_set_cache_hit": false,
+        "batches": [
+          {
+            "sha256": "e209cc6abd49d8e4ae7a11c1ff635b1d8f783a6779e274f89634572799bfe378",
+            "cache_hit": false
+          },
+          {
+            "sha256": "369df5aad218923ab6a5b01bb1a55bf40f939dac46c655a26a100c55c73960a1",
+            "cache_hit": false
+          }
+        ]
+      },
+      {
+        "anchor": 11010,
+        "full_set_cache_hit": false,
+        "batches": [
+          {
+            "sha256": "6db9b25dee7c91aa2bbf0f8a4a05aa057fcd6efde191428b51a4bae7761e46d0",
+            "cache_hit": false
+          },
+          {
+            "sha256": "e45a8a3c040bbbb2eecff61b2add074689d0da839639df216b4f6d0070da5764",
+            "cache_hit": false
+          }
+        ]
+      },
+      {
+        "anchor": 10580,
+        "full_set_cache_hit": false,
+        "batches": [
+          {
+            "sha256": "5ef92e36a3dfa1aa287e126f246867adb1962c1c8c6b077dc10734d4f2972aee",
+            "cache_hit": false
+          },
+          {
+            "sha256": "527f65afc35524e8607dba5aa0441a228212a30ecff1daf646c2096825cebc64",
+            "cache_hit": false
+          }
+        ]
+      }
+    ]
+  },
+  "public_receipts": [
+    {
+      "utc": "2026-11-16T16:06:42.464924+00:00",
+      "ids": [
+        10938,
+        10939,
+        10940,
+        10960,
+        10976
+      ],
+      "source": "execution-evidence.json / vk_projection",
+      "receipt": "op_762301cb067e5609017c5fc5"
+    },
+    {
+      "utc": "2026-11-16T16:12:43.610455+00:00",
+      "ids": [
+        10915
+      ],
+      "source": "execution-evidence.json / holdout_10580.vk_projection",
+      "receipt": "job_d2895d9d50b8c4728e9d70bf"
+    },
+    {
+      "utc": "2026-11-17T08:21:15.437092+00:00",
+      "public": {
+        "https://vk.com/wall-231920894_13778": true,
+        "https://vk.com/wall-231920894_14739": true
+      },
+      "returned_count": 2,
+      "requested": 2,
+      "receipt": "job_28f175796030b85bcf4dc90d"
+    }
+  ],
+  "frozen_top20": {
+    "10580": [
+      [
+        10915,
+        0.8533
+      ],
+      [
+        10598,
+        0.8002
+      ],
+      [
+        10607,
+        0.7996
+      ],
+      [
+        10578,
+        0.7915
+      ],
+      [
+        10606,
+        0.7866
+      ],
+      [
+        11002,
+        0.7845
+      ],
+      [
+        10507,
+        0.7821
+      ],
+      [
+        10998,
+        0.7717
+      ],
+      [
+        10720,
+        0.7705
+      ],
+      [
+        10441,
+        0.7698
+      ],
+      [
+        10716,
+        0.7666
+      ],
+      [
+        9558,
+        0.7664
+      ],
+      [
+        10916,
+        0.766
+      ],
+      [
+        10883,
+        0.7655
+      ],
+      [
+        10416,
+        0.764
+      ],
+      [
+        10443,
+        0.7639
+      ],
+      [
+        10635,
+        0.7628
+      ],
+      [
+        10717,
+        0.7609
+      ],
+      [
+        10510,
+        0.7599
+      ],
+      [
+        10671,
+        0.7597
+      ]
+    ],
+    "11010": [
+      [
+        10939,
+        0.8184
+      ],
+      [
+        10938,
+        0.818
+      ],
+      [
+        10976,
+        0.8121
+      ],
+      [
+        10940,
+        0.8084
+      ],
+      [
+        10960,
+        0.8018
+      ],
+      [
+        10496,
+        0.7983
+      ],
+      [
+        11083,
+        0.7962
+      ],
+      [
+        9804,
+        0.7811
+      ],
+      [
+        9708,
+        0.781
+      ],
+      [
+        9107,
+        0.7689
+      ],
+      [
+        7578,
+        0.7587
+      ],
+      [
+        10484,
+        0.7582
+      ],
+      [
+        9120,
+        0.7575
+      ],
+      [
+        9069,
+        0.7548
+      ],
+      [
+        9950,
+        0.7542
+      ],
+      [
+        10350,
+        0.7541
+      ],
+      [
+        7360,
+        0.7504
+      ],
+      [
+        10778,
+        0.7501
+      ],
+      [
+        10639,
+        0.7477
+      ],
+      [
+        10544,
+        0.746
+      ]
+    ]
+  },
+  "remaining_packets": {
+    "study": "these second tens complete the reader control; they are outside the repeat study",
+    "job": "job_aaaa271fc06131c5f45cc37c",
+    "provider_sends": 2
+  },
+  "standup_missing_followup": {
+    "fable17": "error",
+    "utc": "2026-11-17T08:24:54.418458+00:00",
+    "anchor": 11010,
+    "label": "M",
+    "packet_sha256": "805dcc4cf12ec4d7b51cde99ad8486ab5f6c6171a5118c681bb2f04590111376",
+    "sends": 1,
+    "error_type": "ProviderError",
+    "status_code": 503,
+    "blocked_reason": "",
+    "retry_after_ms": 0,
+    "job": "job_5859776eaf508a2dc19eb545",
+    "interpretation": "The single ambiguous candidate was submitted alone, matching #1045 retry behaviour. Its sole actual provider send failed with HTTP 503. No verdict exists for that request."
+  },
+  "reader": {
+    "utc": "2026-11-17T08:26:49.865090+00:00",
+    "versions": {
+      "exporter": "c034067a2a56f3c0c17937b0a5c58f1b5582ce2671ed43bbb2b1b398f40ccb8c",
+      "presentation": "a3543eacbbe1b0ac789f2364aa695eebaafe2ca47d67b0b3e4dc77f92390e3b4"
+    },
+    "matched_packet_sha_and_verdicts": [
+      [
+        "10580",
+        "5ef92e36a3dfa1aa287e126f246867adb1962c1c8c6b077dc10734d4f2972aee",
+        10
+      ],
+      [
+        "10580",
+        "527f65afc35524e8607dba5aa0441a228212a30ecff1daf646c2096825cebc64",
+        10
+      ],
+      [
+        "11010",
+        "6db9b25dee7c91aa2bbf0f8a4a05aa057fcd6efde191428b51a4bae7761e46d0",
+        9
+      ],
+      [
+        "11010",
+        "805dcc4cf12ec4d7b51cde99ad8486ab5f6c6171a5118c681bb2f04590111376",
+        0
+      ],
+      [
+        "11010",
+        "e45a8a3c040bbbb2eecff61b2add074689d0da839639df216b4f6d0070da5764",
+        10
+      ]
+    ],
+    "result": {
+      "10580": {
+        "strict": true,
+        "pure": [
+          10915,
+          10607,
+          10635
+        ],
+        "reader_input": {
+          "anchor_url": "https://vk.com/wall-231920894_13678",
+          "has_photo": true,
+          "linked": [],
+          "candidates": [
+            {
+              "id": 10607,
+              "url": "https://vk.com/wall-231920894_13778",
+              "links": [],
+              "eligible": true,
+              "public": true,
+              "visibility_observed_at": "2026-11-17T08:21:15.437092+00:00"
+            },
+            {
+              "id": 10635,
+              "url": "https://vk.com/wall-231920894_14739",
+              "links": [],
+              "eligible": true,
+              "public": true,
+              "visibility_observed_at": "2026-11-17T08:21:15.437092+00:00"
+            },
+            {
+              "id": 10915,
+              "url": "https://vk.com/wall-231920894_13692",
+              "links": [
+                10508
+              ],
+              "eligible": true,
+              "public": true,
+              "visibility_observed_at": "2026-11-16T16:12:43.610455+00:00"
+            }
+          ]
+        },
+        "archived_vk_rows": [
+          {
+            "id": 10915,
+            "url": "https://vk.com/wall-231920894_13692",
+            "title": "🎬 Кинопоказ «Фильм, фильм, фильм»",
+            "date": "21.11",
+            "time": "20:00"
+          },
+          {
+            "id": 10607,
+            "url": "https://vk.com/wall-231920894_13778",
+            "title": "🎬 Кинопоказ «Боже! Чувствую приближение Твоё!»",
+            "date": "22.11",
+            "time": "15:00"
+          },
+          {
+            "id": 10635,
+            "url": "https://vk.com/wall-231920894_14739",
+            "title": "Арт-выходные. Художник в объективе",
+            "date": "20.11",
+            "time": "17:30"
+          }
+        ],
+        "all_unknown_visible_rows": [
+          {
+            "id": 10915,
+            "url": "https://vk.com/wall-231920894_13692",
+            "title": "🎬 Кинопоказ «Фильм, фильм, фильм»",
+            "date": "21.11",
+            "time": "20:00"
+          },
+          {
+            "id": 10607,
+            "url": "https://vk.com/wall-231920894_13778",
+            "title": "🎬 Кинопоказ «Боже! Чувствую приближение Твоё!»",
+            "date": "22.11",
+            "time": "15:00"
+          },
+          {
+            "id": 10635,
+            "url": "https://vk.com/wall-231920894_14739",
+            "title": "Арт-выходные. Художник в объективе",
+            "date": "20.11",
+            "time": "17:30"
+          }
+        ],
+        "visibility_unknown": [],
+        "dates": [],
+        "unambiguous_verdicts": 20,
+        "strict_e2e": true
+      },
+      "11010": {
+        "strict": false,
+        "pure": [
+          9950,
+          10938
+        ],
+        "reader_input": {
+          "anchor_url": "https://vk.com/wall-231920894_14778",
+          "has_photo": true,
+          "linked": [
+            11009
+          ],
+          "candidates": [
+            {
+              "id": 9950,
+              "url": "",
+              "links": [],
+              "eligible": true,
+              "public": null
+            },
+            {
+              "id": 10938,
+              "url": "https://vk.com/wall-231920894_14807",
+              "links": [
+                7061,
+                7315,
+                8405,
+                8191,
+                8793,
+                9220,
+                9351,
+                9608,
+                9653,
+                10152,
+                10181
+              ],
+              "eligible": true,
+              "public": true,
+              "visibility_observed_at": "2026-11-16T16:06:42.464924+00:00"
+            },
+            {
+              "id": 11009,
+              "url": "https://vk.com/wall-231920894_14689",
+              "links": [
+                11010
+              ],
+              "eligible": false,
+              "public": null
+            }
+          ]
+        },
+        "archived_vk_rows": [
+          {
+            "id": 10938,
+            "url": "https://vk.com/wall-231920894_14807",
+            "title": "Стендап: Сборный стендап-концерт",
+            "date": "20.11",
+            "time": "19:00"
+          }
+        ],
+        "all_unknown_visible_rows": [
+          {
+            "id": 10938,
+            "url": "https://vk.com/wall-231920894_14807",
+            "title": "Стендап: Сборный стендап-концерт",
+            "date": "20.11",
+            "time": "19:00"
+          }
+        ],
+        "visibility_unknown": [],
+        "dates": [],
+        "unambiguous_verdicts": 19,
+        "strict_e2e": false
+      }
+    },
+    "job": "job_c5b28bd414e60d107f83fce3"
+  },
+  "packets": {
+    "10580": [
+      {
+        "ids": [
+          10915,
+          10598,
+          10607,
+          10578,
+          10606,
+          11002,
+          10507,
+          10998,
+          10720,
+          10441
+        ],
+        "sha256": "5ef92e36a3dfa1aa287e126f246867adb1962c1c8c6b077dc10734d4f2972aee",
+        "judged": {
+          "10441": [
+            0.58,
+            false,
+            0.8,
+            "weak_or_adjacent_related"
+          ],
+          "10507": [
+            0.5,
+            true,
+            0.9,
+            "different_topic"
+          ],
+          "10578": [
+            0.65,
+            false,
+            0.85,
+            "thematically_close"
+          ],
+          "10598": [
+            0.5,
+            true,
+            0.9,
+            "different_topic"
+          ],
+          "10606": [
+            0.7,
+            false,
+            0.9,
+            "thematically_close"
+          ],
+          "10607": [
+            0.75,
+            false,
+            0.9,
+            "thematically_close"
+          ],
+          "10720": [
+            0.45,
+            true,
+            0.95,
+            "different_topic"
+          ],
+          "10915": [
+            0.85,
+            false,
+            0.95,
+            "highly_similar"
+          ],
+          "10998": [
+            0.6,
+            false,
+            0.85,
+            "weak_or_adjacent_related"
+          ],
+          "11002": [
+            0.5,
+            true,
+            0.9,
+            "different_topic"
+          ]
+        },
+        "receipt": "2026-11-17T08:13:30.810717+00:00",
+        "label": "A3",
+        "unusable_duplicate": [],
+        "missing": [],
+        "unexpected": []
+      },
+      {
+        "ids": [
+          10716,
+          9558,
+          10916,
+          10883,
+          10416,
+          10443,
+          10635,
+          10717,
+          10510,
+          10671
+        ],
+        "sha256": "527f65afc35524e8607dba5aa0441a228212a30ecff1daf646c2096825cebc64",
+        "judged": {
+          "9558": [
+            0.3,
+            true,
+            0.9,
+            "different_topic"
+          ],
+          "10416": [
+            0.4,
+            true,
+            0.9,
+            "different_topic"
+          ],
+          "10443": [
+            0.4,
+            true,
+            0.9,
+            "different_topic"
+          ],
+          "10510": [
+            0.65,
+            false,
+            0.9,
+            "thematically_close"
+          ],
+          "10635": [
+            0.75,
+            false,
+            0.9,
+            "thematically_close"
+          ],
+          "10671": [
+            0.25,
+            true,
+            0.9,
+            "different_topic"
+          ],
+          "10716": [
+            0.45,
+            true,
+            0.9,
+            "different_topic"
+          ],
+          "10717": [
+            0.35,
+            true,
+            0.9,
+            "different_topic"
+          ],
+          "10883": [
+            0.5,
+            true,
+            0.8,
+            "weak_or_adjacent_related"
+          ],
+          "10916": [
+            0.6,
+            false,
+            0.9,
+            "thematically_close"
+          ]
+        },
+        "receipt": "2026-11-17T08:15:32.819687+00:00",
+        "label": "F",
+        "unusable_duplicate": [],
+        "missing": [],
+        "unexpected": [
+          "0"
+        ]
+      }
+    ],
+    "11010": [
+      {
+        "ids": [
+          10939,
+          10938,
+          10976,
+          10940,
+          10960,
+          10496,
+          11083,
+          9804,
+          9708,
+          9107
+        ],
+        "sha256": "6db9b25dee7c91aa2bbf0f8a4a05aa057fcd6efde191428b51a4bae7761e46d0",
+        "judged": {
+          "9107": [
+            0.45,
+            true,
+            0.9,
+            "different_topic"
+          ],
+          "9708": [
+            0.45,
+            true,
+            0.9,
+            "different_topic"
+          ],
+          "9804": [
+            0.5,
+            true,
+            0.9,
+            "different_topic"
+          ],
+          "10496": [
+            0.6,
+            false,
+            0.9,
+            "thematically_close"
+          ],
+          "10938": [
+            0.75,
+            false,
+            0.9,
+            "thematically_close"
+          ],
+          "10940": [
+            0.7,
+            false,
+            0.95,
+            "thematically_close"
+          ],
+          "10960": [
+            0.65,
+            false,
+            0.95,
+            "thematically_close"
+          ],
+          "10976": [
+            0.7,
+            false,
+            0.95,
+            "thematically_close"
+          ],
+          "11083": [
+            0.58,
+            false,
+            0.85,
+            "weak_or_adjacent_related"
+          ]
+        },
+        "receipt": "2026-11-17T08:07:53.133380+00:00",
+        "label": "A1",
+        "unusable_duplicate": [
+          "10939"
+        ],
+        "missing": [],
+        "unexpected": []
+      },
+      {
+        "ids": [
+          7578,
+          10484,
+          9120,
+          9069,
+          9950,
+          10350,
+          7360,
+          10778,
+          10639,
+          10544
+        ],
+        "sha256": "e45a8a3c040bbbb2eecff61b2add074689d0da839639df216b4f6d0070da5764",
+        "judged": {
+          "7360": [
+            0.68,
+            false,
+            0.8,
+            "thematically_close"
+          ],
+          "7578": [
+            0.7,
+            false,
+            0.85,
+            "thematically_close"
+          ],
+          "9069": [
+            0.52,
+            true,
+            0.85,
+            "different_topic"
+          ],
+          "9120": [
+            0.4,
+            true,
+            0.9,
+            "different_topic"
+          ],
+          "9950": [
+            0.78,
+            false,
+            0.9,
+            "thematically_close"
+          ],
+          "10350": [
+            0.45,
+            true,
+            0.9,
+            "different_topic"
+          ],
+          "10484": [
+            0.58,
+            false,
+            0.8,
+            "weak_or_adjacent_related"
+          ],
+          "10544": [
+            0.2,
+            true,
+            0.95,
+            "different_topic"
+          ],
+          "10639": [
+            0.3,
+            true,
+            0.95,
+            "different_topic"
+          ],
+          "10778": [
+            0.65,
+            false,
+            0.9,
+            "thematically_close"
+          ]
+        },
+        "receipt": "2026-11-17T08:15:42.586978+00:00",
+        "label": "F",
+        "unusable_duplicate": [],
+        "missing": [],
+        "unexpected": []
+      }
+    ]
+  },
+  "packet2_public_inputs": [
+    {
+      "anchor": 11010,
+      "sha256": "e45a8a3c040bbbb2eecff61b2add074689d0da839639df216b4f6d0070da5764",
+      "public_fields_prompt": "Ты строгий verifier похожих событий для статической афиши Калининграда.\nНе добавляй event_id, которых нет в candidates. Верни только JSON по схеме.\nЗадача: оценить, насколько каждый candidate тематически близок к anchor, и отсортировать ranked от наиболее похожего к менее похожему.\nОценка: 0.90+ почти тот же интерес; 0.72+ можно показывать в блоке «Похожие»; 0.55-0.71 слабая/смежная рекомендация; <0.55 reject=true.\nОцени только самостоятельные программы. Если anchor и candidate описывают ту же конкретную программу, включая общий анонс программы и её отдельный сеанс, ставь reject=true: это не самостоятельное похожее событие. Общий анонс фестиваля или турнира может содержать разные программы: учитывай факты выбранного события, а не всего расписания.\nЕсли программа другая и тематически не близка, даже качественная, ставь reject=true.\nsimilarity_class выбери строго из: identical_or_near_identical, highly_similar, thematically_close, weak_or_adjacent_related, different_topic.\nconfidence: 0..1, насколько достаточно фактов и насколько ты уверен в оценке; снижай при скудном описании или спорной похожести.\nНе объясняй решение, не возвращай лишние поля.\n\n<anchor>\n<event id=\"11010\">\n<title>Стендап: «Проверка материала опытных комиков»</title>\n<type>концерт</type>\n<summary>Зрители смогут первыми услышать новые шутки, которые позже войдут в большие концерты опытных комиков.</summary>\n<description>Зрители первыми услышат шутки, которые в будущем войдут в большие концерты опытных комиков.</description>\n<venue>Стендап клуб Локация</venue>\n<city>Калининград</city>\n<date>2026-11-21</date>\n</event>\n</anchor>\n\n<candidates>\n<candidate id=\"7578\">\n<title>Спектакль «Ищу мужа»</title>\n<type>спектакль</type>\n<summary>Комедийный спектакль Ищу мужа с участием профессиональных театральных актёров представляет собой легкую и забавную постановку.</summary>\n<description>Комедийный спектакль «Ищу мужа» с участием профессиональных театральных актёров.</description>\n<venue>Янтарь холл</venue>\n<city>Светлогорск</city>\n<date>2027-02-13</date>\n</candidate>\n<candidate id=\"10484\">\n<title>Занятие курса сценической импровизации</title>\n<type>мастер-класс</type>\n<summary>Пробный мастер-класс по сценической импровизации с Дмитрием Сущенко посвящен разыгрыванию сюжетов без заранее написанного сценария.</summary>\n<description>Пробное занятие в кружке сценической импровизации с Дмитрием Сущенко. Участники будут разыгрывать сюжеты без сценария, следуя правилам «Всегда говори да» и «Ошибок нет». Это возможность примерить новые роли, эмоционально разгрузиться и побороть страх самопредъявления.</description>\n<venue>Винный факультет</venue>\n<city>Калининград</city>\n<date>2026-11-26</date>\n</candidate>\n<candidate id=\"9120\">\n<title>Спектакль «Соня, уйди!»</title>\n<type>спектакль</type>\n<summary>Драматический спектакль исследует сложные личные переживания и драматическую судьбу своей главной героини.</summary>\n<description>🎭 Драматический спектакль «Соня, уйди!» исследует личные переживания и судьбу главной героини. Продолжительность: 1 час 40 минут. Цена: от 500 ₽.</description>\n<venue>Калининградский театр эстрады (Дом искусств)</venue>\n<city>Калининград</city>\n<date>2026-11-27</date>\n</candidate>\n<candidate id=\"9069\">\n<title>Моноспектакль «Развейся»</title>\n<type>спектакль</type>\n<summary>Моноспектакль Ольги Савельевой предлагает зрителям искренние жизненные истории для поиска ответов на важные личные вопросы.</summary>\n<description>Моноспектакль Ольги Савельевой «Развейся» состоит из историй из жизни автора. Эти сюжеты служат подсказками для поиска ответов на личные вопросы зрителей.</description>\n<venue>Дом офицеров Балтийского флота</venue>\n<city>Калининград</city>\n<date>2027-01-22</date>\n</candidate>\n<candidate id=\"9950\">\n<title>С. Дроботенко «Новый Год По-Русски»</title>\n<type>концерт</type>\n<summary>Юмористический концерт Сергея Дроботенко с новой праздничной программой в Калининградском театре эстрады.</summary>\n<description>Название: С. Дроботенко \"Новый Год По-Русски\" Дата: 2027-01-08 Время: 19:00 Площадка: Калининградский театр эстрады (Дом искусств), Ленинский проспект 155, Калининград Адрес: Ленинский проспект 155, Калининград Возраст: 12+ Статус билетов: доступны Цена: от 1200 RUB Ссылка: https://domiskusstv.edinoepole.ru/widget/events/1047/event_seats Описание: Большой за</description>\n<venue>Калининградский театр эстрады (Дом искусств)</venue>\n<city>Калининград</city>\n<date>2027-01-08</date>\n</candidate>\n<candidate id=\"10350\">\n<title>Спектакль «Старший сын»</title>\n<type>спектакль</type>\n<summary>Спектакль представляет собой нежную притчу о человеческих ценностях, искренней любви и важности взаимного прощения.</summary>\n<description>Это нежная притча о человеческих ценностях, любви и прощении. 🎭 Визуальный ряд постановки запечатлел фотограф Геннадий Филиппович.</description>\n<venue>Драматический театр</venue>\n<city>Калининград</city>\n<date>2026-11-19</date>\n</candidate>\n<candidate id=\"7360\">\n<title>БеспринцЫпный Новый год в Калининграде</title>\n<type>спектакль</type>\n<summary>Александр Цыпкин и популярные российские артисты представят лучшие и новые рассказы в театральном спектакле.</summary>\n<description>БеспринцЫпный Новый год в Калининграде 🎭 В Калининградском драматическом театре состоится специальная праздничная программа «БеспринцЫпный Новый год в Калининграде». Это событие станет финальным аккордом литературно-театрального сезона. Проект «БеспринцЫпные чтения» объединит на основной сцене театра популярных российских артистов. В мероприятии примут участ</description>\n<venue>Драматический театр</venue>\n<city>Калининград</city>\n<date>2026-12-03</date>\n</candidate>\n<candidate id=\"10778\">\n<title>Спектакль «Пижама на шестерых»</title>\n<type>спектакль</type>\n<summary>Комедия положений о неожиданных встречах и комических недоразумениях, возникающих в попытке скрыть тайное свидание.</summary>\n<description>Фотограф: Геннадий Филиппов.</description>\n<venue>Драматический театр</venue>\n<city>Калининград</city>\n<date>2027-01-05</date>\n</candidate>\n<candidate id=\"10639\">\n<title>Новогодняя сказка для малышей</title>\n<type>спектакль</type>\n<summary>Событие представляет собой новогоднюю сказку для малышей 🎄.</summary>\n<description>Событие представляет собой новогоднюю сказку для малышей 🎄. Это спектакль.</description>\n<venue>НЕКРАСОВО</venue>\n<city>Калининград</city>\n<date>2026-12-20</date>\n</candidate>\n<candidate id=\"10544\">\n<title>Project X Party</title>\n<type>концерт</type>\n<summary>Концерт с танцевальной программой и выступлениями диджеев KALEE и SECRET с браслетами для новых знакомств.</summary>\n<description>Project X Party — вечеринка с танцевальной програм мой и участием диджеев 🎧. За музыку отвечают DJ KALEE и DJ SECRET. Для гостей предусмотрены браслеты для знакомств. Цена: от 249 ₽.</description>\n<venue>Бастион Прегель</venue>\n<city>Калининград</city>\n<date>2026-11-28</date>\n</candidate>\n</candidates>"
+    },
+    {
+      "anchor": 10580,
+      "sha256": "527f65afc35524e8607dba5aa0441a228212a30ecff1daf646c2096825cebc64",
+      "public_fields_prompt": "Ты строгий verifier похожих событий для статической афиши Калининграда.\nНе добавляй event_id, которых нет в candidates. Верни только JSON по схеме.\nЗадача: оценить, насколько каждый candidate тематически близок к anchor, и отсортировать ranked от наиболее похожего к менее похожему.\nОценка: 0.90+ почти тот же интерес; 0.72+ можно показывать в блоке «Похожие»; 0.55-0.71 слабая/смежная рекомендация; <0.55 reject=true.\nОцени только самостоятельные программы. Если anchor и candidate описывают ту же конкретную программу, включая общий анонс программы и её отдельный сеанс, ставь reject=true: это не самостоятельное похожее событие. Общий анонс фестиваля или турнира может содержать разные программы: учитывай факты выбранного события, а не всего расписания.\nЕсли программа другая и тематически не близка, даже качественная, ставь reject=true.\nsimilarity_class выбери строго из: identical_or_near_identical, highly_similar, thematically_close, weak_or_adjacent_related, different_topic.\nconfidence: 0..1, насколько достаточно фактов и насколько ты уверен в оценке; снижай при скудном описании или спорной похожести.\nНе объясняй решение, не возвращай лишние поля.\n\n<anchor>\n<event id=\"10580\">\n<title>Кинопоказ «Кентервильское приведение»</title>\n<type>кинопоказ</type>\n<summary>Зрители увидят классический советский анимационный фильм по мотивам знаменитой новеллы Оскара Уайльда.</summary>\n<description>Кинопоказ советского мультфильма «Кентервильское приведение» (1970) Сюжет мультфильма основан на новелле Оскара Уайльда. Мероприятие проходит в рамках фестиваля «Искусство в объективе», а партнёром выступает культурно-просветительский проект Doctrina et Nobiles (г. Санкт-Петербург). 🎬 О фестивале и партнёрах Фестиваль «Искусство в объективе» включает встречи</description>\n<venue>Филиал Третьяковской галереи</venue>\n<city>Калининград</city>\n<date>2026-11-22</date>\n</event>\n</anchor>\n\n<candidates>\n<candidate id=\"10716\">\n<title>Служебный роман</title>\n<type>кинопоказ</type>\n<summary>Кинопоказ фильма «Служебный роман» в клубе «Красивое кино» с лекцией от Лилии Новицкой.</summary>\n<description>Кинопоказ мелодрамы и комедии «Служебный роман» 1977 года. После просмотра состоится лекция, которую проведет Лилия Новицкая, ведущая киноклуба «Красивое кино» и профессиональная преподавательница. В рамках встречи запланировано обсуждение визуального стиля, нарядов героев и интерьеров фильма.</description>\n<venue>Дом китобоя</venue>\n<city>Калининград</city>\n<date>2026-11-28</date>\n</candidate>\n<candidate id=\"9558\">\n<title>Спектакль «Легенда о Красавице и Чудовище»</title>\n<type>спектакль</type>\n<summary>Юные зрители смогут насладиться увлекательным театральным представлением по мотивам знаменитой сказки о Красавице и Чудовище.</summary>\n<description>Спектакль для детей по мотивам известной сказки о Красавице и Чудовище.</description>\n<venue>Калининградский театр эстрады (Дом искусств)</venue>\n<city>Калининград</city>\n<date>2027-01-06</date>\n</candidate>\n<candidate id=\"10916\">\n<title>Мастер-класс «Предметная фотосъемка»</title>\n<type>мастер-класс</type>\n<summary>Мастер-класс по основам предметной фотографии проходит в рамках фестиваля «Искусство в объективе».</summary>\n<description>Мастер-класс по основам предметной фотографии проходит в рамках фестиваля «Искусство в объективе». Партнером мероприятия выступает культурно-просветительский проект Doctrina et Nobiles из Санкт-Петербурга. Для участия в занятии необходима собственная фотоаппаратура.</description>\n<venue>Филиал Третьяковской галереи</venue>\n<city>Калининград</city>\n<date>2026-11-21</date>\n</candidate>\n<candidate id=\"10883\">\n<title>Жизнь Пи</title>\n<type>кинопоказ</type>\n<summary>Кинопоказ приключенческой драмы «Жизнь Пи», получившей четыре премии «Оскар» за выдающиеся достижения в кинематографе.</summary>\n<description>22 ноября 2026 | 19:00 Жизнь Пи 2012 (США, Тайвань, Великобритания, Канада, Индия, Франция) Фэнтези, драма, приключения - 127 мин Индийский юноша оказался посреди океана в шлюпке с тигром. Живописная экранизация, четыре премии «Оскар» Это история сына владельца одного индийского зоопарка, мальчика по имени Пи. Он познаёт мир, учится отстаивать свои принципы,</description>\n<venue>Заря</venue>\n<city>Калининград</city>\n<date>2026-11-22</date>\n</candidate>\n<candidate id=\"10416\">\n<title>Кинопоказ «Гарри Поттер и Философский камень»</title>\n<type>кинопоказ</type>\n<summary>Показ культового фильма о Гарри Поттере в сопровождении живой музыки симфонического оркестра.</summary>\n<description>Кинопоказ пройдёт в сопровождении симфонического оркестра под управлением дирижёра Анастасии Моисеевой. В составе оркестра 28 профессиональных инструментов и оркестрантов, которые исполнят 58 музыкальных композиций 🎻. Длительность показа составляет 3 часа. Площадка проведения — Театр эстрады Янтарь-Холл. Цена: от 1500 ₽ 🎬.</description>\n<venue>Янтарь холл</venue>\n<city>Светлогорск</city>\n<date>2027-02-14</date>\n</candidate>\n<candidate id=\"10443\">\n<title>Кинопоказ «Гарри Поттер и Тайная комната»</title>\n<type>кинопоказ</type>\n<summary>Показ фильма о Гарри Поттере в сопровождении живой музыки в исполнении симфонического оркестра.</summary>\n<description>Показ фильма «Гарри Поттер и Тайная комната» в сопровождении симфонического оркестра Показ фильма «Гарри Поттер и Тайная комната» в сопровождении симфонического оркестра состоится на площадке Театр эстрады Янтарь-Холл. Мероприятие подарит зрителям незабываемые впечатления от встречи с любимым сюжетом. Музыкальное сопровождение Музыкальное сопровождение испол</description>\n<venue>Янтарь холл</venue>\n<city>Светлогорск</city>\n<date>2027-02-14</date>\n</candidate>\n<candidate id=\"10635\">\n<title>Арт-выходные. Художник в объективе</title>\n<type>лекция</type>\n<summary>Сотрудник Третьяковской галереи проведет познавательную лекцию о взаимосвязи изобразительного искусства с фотографией и кинематографом.</summary>\n<description>Б.В. Игнатович. А.М. Герасимов в мастерской на фоне картин «Портрет четырех старейших художников» и «Деревенская баня». 1944. ГТГ. Лекция «Арт-выходные. Художник в объективе» пройдет в рамках фестиваля «Искусство в объективе», о фотографии и кинематографе. О лекторе Лектор — Никита Ерофеев, старший научный сотрудник музея научно-справочного отдела фотокинома</description>\n<venue>Филиал Третьяковской галереи</venue>\n<city>Калининград</city>\n<date>2026-11-20</date>\n</candidate>\n<candidate id=\"10717\">\n<title>Ограбление по-бразильски</title>\n<type>кинопоказ</type>\n<summary>Кинопоказ комедийной драмы о реальном ограблении банка в Бразилии в рамках фестиваля бразильского кино.</summary>\n<description>Сюжет фильма «Ограбление по-бразильски» основан на реальной истории ограбления банка в Бразилии в 1980-х годах. Фильм «Ограбление по-бразильски» является частью программы 17-го фестиваля бразильского кино. Жанры фильма — драма и комедия. 🎬 О фестивале Фестиваль бразильского кино проводится в России с 2008 года. Программа фестиваля включает комедии, драмы, по</description>\n<venue>Заря</venue>\n<city>Калининград</city>\n<date>2026-11-26</date>\n</candidate>\n<candidate id=\"10510\">\n<title>Мастер-класс «АРТ-ВЫХОДНЫЕ. ОТ ДВИЖЕНИЯ – К РИСУНКУ»</title>\n<type>мастер-класс</type>\n<summary>Педагог-хореограф Елена Дементьева проведет мастер-класс по созданию рисунков на основе движений современного танца.</summary>\n<description>Название: АРТ-ВЫХОДНЫЕ. ОТ ДВИЖЕНИЯ – К РИСУНКУ (16+) Дата: 2026-11-21 Время: 12:00 Площадка: Филиал Третьяковской галереи (Атриум) Статус билетов: доступны Цена: от 350 RUB Ссылка: https://kaliningrad.tretyakovgallery.ru/tickets/#buy/event/52606/2026-11-21/12:00:00 Описание: Мероприятие пройдет в рамках фестиваля «Искусство в объективе», посвящённого фотогр</description>\n<venue>Филиал Третьяковской галереи</venue>\n<city>Калининград</city>\n<date>2026-11-21</date>\n</candidate>\n<candidate id=\"10671\">\n<title>Спектакль «Бременские музыканты»</title>\n<type>кинопоказ</type>\n<summary>Кинопоказ сценической версии спектакля по мотивам советского мультфильма с живой музыкой, вокалом и танцами.</summary>\n<description>Сценическая версия спектакля адаптирует материал советского мультфильма 70-х годов. В постановке задействованы живая музыка, вокал, танцы и трюки 🎭. Музыкальное оформление В спектакле звучит музыка Геннадия Гладкова и стихи Юрия Энтина. Композиции представлены в современных аранжировках. Персонажи и эффекты В сюжете задействованы: - Трубадур - Принцесса - Ст</description>\n<venue>Музыкальный театр</venue>\n<city>Калининград</city>\n<date>2027-01-05</date>\n</candidate>\n</candidates>"
+    }
+  ],
+  "packet2_provider_responses": [
+    {
+      "fable17": "reply",
+      "utc": "2026-11-17T08:15:32.819687+00:00",
+      "anchor": 10580,
+      "label": "F",
+      "ids": [
+        10716,
+        9558,
+        10916,
+        10883,
+        10416,
+        10443,
+        10635,
+        10717,
+        10510,
+        10671
+      ],
+      "packet_sha256": "527f65afc35524e8607dba5aa0441a228212a30ecff1daf646c2096825cebc64",
+      "sends": 1,
+      "scores": {
+        "0": {
+          "llm_semantic_score": 0.4,
+          "reject": true,
+          "confidence": 0.9,
+          "similarity_class": "different_topic"
+        },
+        "9558": {
+          "llm_semantic_score": 0.3,
+          "reject": true,
+          "confidence": 0.9,
+          "similarity_class": "different_topic"
+        },
+        "10416": {
+          "llm_semantic_score": 0.4,
+          "reject": true,
+          "confidence": 0.9,
+          "similarity_class": "different_topic"
+        },
+        "10443": {
+          "llm_semantic_score": 0.4,
+          "reject": true,
+          "confidence": 0.9,
+          "similarity_class": "different_topic"
+        },
+        "10510": {
+          "llm_semantic_score": 0.65,
+          "reject": false,
+          "confidence": 0.9,
+          "similarity_class": "thematically_close"
+        },
+        "10635": {
+          "llm_semantic_score": 0.75,
+          "reject": false,
+          "confidence": 0.9,
+          "similarity_class": "thematically_close"
+        },
+        "10671": {
+          "llm_semantic_score": 0.25,
+          "reject": true,
+          "confidence": 0.9,
+          "similarity_class": "different_topic"
+        },
+        "10716": {
+          "llm_semantic_score": 0.45,
+          "reject": true,
+          "confidence": 0.9,
+          "similarity_class": "different_topic"
+        },
+        "10717": {
+          "llm_semantic_score": 0.35,
+          "reject": true,
+          "confidence": 0.9,
+          "similarity_class": "different_topic"
+        },
+        "10883": {
+          "llm_semantic_score": 0.5,
+          "reject": true,
+          "confidence": 0.8,
+          "similarity_class": "weak_or_adjacent_related"
+        },
+        "10916": {
+          "llm_semantic_score": 0.6,
+          "reject": false,
+          "confidence": 0.9,
+          "similarity_class": "thematically_close"
+        }
+      },
+      "duplicate": [],
+      "unexpected": [
+        "0"
+      ],
+      "missing": [],
+      "reply_sha256": "eae8557ae39429438f6a19619f4dd7eaa435c15eb00f7da590db104160773c5a",
+      "emitted_ids": [
+        10635,
+        10510,
+        10916,
+        10883,
+        10716,
+        10416,
+        0,
+        10443,
+        10717,
+        9558,
+        10671
+      ],
+      "config_sha256": "92b2cbc10ff46efbcc902de664e0a75e99e90f4ca4145a9ec6712d27648f4ac1"
+    },
+    {
+      "fable17": "reply",
+      "utc": "2026-11-17T08:15:42.586978+00:00",
+      "anchor": 11010,
+      "label": "F",
+      "ids": [
+        7578,
+        10484,
+        9120,
+        9069,
+        9950,
+        10350,
+        7360,
+        10778,
+        10639,
+        10544
+      ],
+      "packet_sha256": "e45a8a3c040bbbb2eecff61b2add074689d0da839639df216b4f6d0070da5764",
+      "sends": 1,
+      "scores": {
+        "7360": {
+          "llm_semantic_score": 0.68,
+          "reject": false,
+          "confidence": 0.8,
+          "similarity_class": "thematically_close"
+        },
+        "7578": {
+          "llm_semantic_score": 0.7,
+          "reject": false,
+          "confidence": 0.85,
+          "similarity_class": "thematically_close"
+        },
+        "9069": {
+          "llm_semantic_score": 0.52,
+          "reject": true,
+          "confidence": 0.85,
+          "similarity_class": "different_topic"
+        },
+        "9120": {
+          "llm_semantic_score": 0.4,
+          "reject": true,
+          "confidence": 0.9,
+          "similarity_class": "different_topic"
+        },
+        "9950": {
+          "llm_semantic_score": 0.78,
+          "reject": false,
+          "confidence": 0.9,
+          "similarity_class": "thematically_close"
+        },
+        "10350": {
+          "llm_semantic_score": 0.45,
+          "reject": true,
+          "confidence": 0.9,
+          "similarity_class": "different_topic"
+        },
+        "10484": {
+          "llm_semantic_score": 0.58,
+          "reject": false,
+          "confidence": 0.8,
+          "similarity_class": "weak_or_adjacent_related"
+        },
+        "10544": {
+          "llm_semantic_score": 0.2,
+          "reject": true,
+          "confidence": 0.95,
+          "similarity_class": "different_topic"
+        },
+        "10639": {
+          "llm_semantic_score": 0.3,
+          "reject": true,
+          "confidence": 0.95,
+          "similarity_class": "different_topic"
+        },
+        "10778": {
+          "llm_semantic_score": 0.65,
+          "reject": false,
+          "confidence": 0.9,
+          "similarity_class": "thematically_close"
+        }
+      },
+      "duplicate": [],
+      "unexpected": [],
+      "missing": [],
+      "reply_sha256": "70ace2c4b2b9f071aab269e42e8421cd6a3d6837da7c0048226ca750f3f9eb1b",
+      "emitted_ids": [
+        9950,
+        7578,
+        7360,
+        10778,
+        10484,
+        9069,
+        10350,
+        9120,
+        10639,
+        10544
+      ],
+      "config_sha256": "92b2cbc10ff46efbcc902de664e0a75e99e90f4ca4145a9ec6712d27648f4ac1"
+    }
+  ]
+}

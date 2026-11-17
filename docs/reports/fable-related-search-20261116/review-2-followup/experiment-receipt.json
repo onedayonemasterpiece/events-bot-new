@@ -1,0 +1,216 @@
+{
+  "window_utc": [
+    "2026-11-17T08:06:35.768953+00:00",
+    "2026-11-17T08:26:17.899866+00:00"
+  ],
+  "model": "models/gemma-4-26b-a4b-it",
+  "policy_sha1": "bfc70cddbe4803d472676dbe7614985fac665fee",
+  "temperature": 0.1,
+  "model_config_sha256": "92b2cbc10ff46efbcc902de664e0a75e99e90f4ca4145a9ec6712d27648f4ac1",
+  "initial_job": "job_3d49dcb68251e506ce56ea3f",
+  "recovery_jobs": [
+    "job_963cbf79d74ea3c17dc5b9a4",
+    "job_ac125844bcbf9ab3f15d30f2"
+  ],
+  "initial": {
+    "sends": 12,
+    "replies": 6,
+    "pairs_by_A_response_count": {
+      "0": 2,
+      "1": 10,
+      "2": 18,
+      "3": 0
+    },
+    "judged_unambiguous": 56,
+    "judged_unique_native": 60,
+    "missing": 0,
+    "unexpected": 0,
+    "duplicate": 4,
+    "pre_send_blocks": 0,
+    "counts": {
+      "A_score_changed": [
+        0,
+        18
+      ],
+      "B_score_changed": [
+        4,
+        8
+      ],
+      "B_reject_changed": [
+        3,
+        8
+      ],
+      "raw_A_flip": [
+        0,
+        18
+      ],
+      "raw_B_vs_A1_flip": [
+        0,
+        0
+      ],
+      "raw_B_vs_first_available_A_flip": [
+        0,
+        8
+      ],
+      "raw_B_vs_A_majority_flip": [
+        0,
+        0
+      ],
+      "raw_B_unseen_on_A": [
+        0,
+        0
+      ],
+      "raw_A_flip_all_three": [
+        0,
+        0
+      ],
+      "eligible_A_flip": [
+        0,
+        18
+      ],
+      "eligible_B_vs_A1_flip": [
+        0,
+        0
+      ],
+      "eligible_B_vs_first_available_A_flip": [
+        0,
+        8
+      ],
+      "eligible_B_vs_A_majority_flip": [
+        0,
+        0
+      ],
+      "eligible_B_unseen_on_A": [
+        0,
+        0
+      ],
+      "eligible_A_flip_all_three": [
+        0,
+        0
+      ]
+    },
+    "http_503": 6,
+    "sent_without_response": 0
+  },
+  "recovery_only": {
+    "sends": 6,
+    "replies": 1,
+    "http_503": 4,
+    "sent_without_response": 1,
+    "scored_anchor": 10580,
+    "scored_label": "A1"
+  },
+  "all": {
+    "sends": 18,
+    "replies": 7,
+    "pairs_by_A_response_count": {
+      "0": 2,
+      "1": 0,
+      "2": 28,
+      "3": 0
+    },
+    "judged_unambiguous": 66,
+    "judged_unique_native": 70,
+    "missing": 0,
+    "unexpected": 0,
+    "duplicate": 4,
+    "pre_send_blocks": 0,
+    "counts": {
+      "A_score_changed": [
+        0,
+        28
+      ],
+      "B_score_changed": [
+        4,
+        8
+      ],
+      "B_reject_changed": [
+        3,
+        8
+      ],
+      "raw_A_flip": [
+        0,
+        28
+      ],
+      "raw_B_vs_A1_flip": [
+        0,
+        8
+      ],
+      "raw_B_vs_first_available_A_flip": [
+        0,
+        8
+      ],
+      "raw_B_vs_A_majority_flip": [
+        0,
+        8
+      ],
+      "raw_B_unseen_on_A": [
+        0,
+        8
+      ],
+      "raw_A_flip_all_three": [
+        0,
+        0
+      ],
+      "eligible_A_flip": [
+        0,
+        28
+      ],
+      "eligible_B_vs_A1_flip": [
+        0,
+        8
+      ],
+      "eligible_B_vs_first_available_A_flip": [
+        0,
+        8
+      ],
+      "eligible_B_vs_A_majority_flip": [
+        0,
+        8
+      ],
+      "eligible_B_unseen_on_A": [
+        0,
+        8
+      ],
+      "eligible_A_flip_all_three": [
+        0,
+        0
+      ]
+    },
+    "http_503": 10,
+    "sent_without_response": 1
+  },
+  "per_anchor": [
+    {
+      "anchor": 11068,
+      "strict_pairs_repeated_A": 9,
+      "shared_pairs_with_B_and_A": 0
+    },
+    {
+      "anchor": 11010,
+      "strict_pairs_repeated_A": 9,
+      "shared_pairs_with_B_and_A": 0
+    },
+    {
+      "anchor": 10580,
+      "strict_pairs_repeated_A": 10,
+      "shared_pairs_with_B_and_A": 8
+    }
+  ],
+  "required_context_comparisons_still_missing": [
+    {
+      "slot": 4,
+      "anchor": 11068,
+      "label": "B"
+    },
+    {
+      "slot": 8,
+      "anchor": 11010,
+      "label": "B"
+    }
+  ],
+  "counts_format": "[number meeting condition, number with adequate observations]; [0,0] is unmeasured. Duplicate IDs excluded under PR 1045. Scores are verifier-level; final VK rows also depend on the consumer.",
+  "packet_bytes_archive_sha256": "05a2f6ae037ac685a3edbccdb2c25ba01ac85e4887cda334ed27d5b6c3dcbaab",
+  "first_journal_sha256": "042b1ae183fc0703183f7f21f41b22a89a3404c9a28a0dd50ee1f2bf92485a61",
+  "combined_journal_sha256": "9495bc079c8cbf98d03072c5ac3970c01c7ad9276317d9c6b28113b9e4f357d8"
+}

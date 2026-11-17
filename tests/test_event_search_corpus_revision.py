@@ -6,6 +6,8 @@ import re
 import sys
 from pathlib import Path
 
+import pytest
+
 from scripts import sync_event_search_vectors_to_supabase as sync
 
 
@@ -330,7 +332,8 @@ def test_authoritative_main_report_publishes_terminal_zero_gap_coverage(
 
     def existing(_event_ids, *, doc_kind, **_kwargs):
         hash_key = "text_hash" if doc_kind == "search_v3" else "related_text_hash"
-        return {doc.event_id: doc.document[hash_key] for doc in projected}
+        current = sync.build_search_doc(event, site_origin="", base_path="", ics_base_url="")
+        return {current.event_id: current.document[hash_key]}
 
     def inventory():
         documents = [
@@ -451,3 +454,86 @@ def test_related_embedding_ignores_generated_facets_and_place() -> None:
     assert "Краеведение" not in before.related_embedding_input
     assert "Янтарный" not in before.related_embedding_input
     assert before.search_embedding_input != after.search_embedding_input
+
+
+def test_related_mix_uses_exact_inputs_and_both_hashes():
+    event = _event(1, title="Две крепости")
+    event.update(summary="Кинопоказ.", description_html="<p>Студии New Line и Wingnut.</p>",
+                 canonical_search_digest="Жанр фэнтези.")
+    options = dict(site_origin="", base_path="", ics_base_url="")
+    before = sync.build_search_doc(event, **options)
+    assert before.related_embedding_input == "related-event: title: Две крепости | text: Кинопоказ.\nСтудии New Line и Wingnut."
+    assert before.related_facts_input == "Две крепости\nКинопоказ.\nЖанр фэнтези."
+    alias = sync.build_search_doc(dict(event, canonical_search_digest="Кинопоказ."), **options)
+    assert alias.related_facts_input == "Две крепости\nКинопоказ."
+    old_content = sync.build_search_doc(dict(event, description_html="Другое описание."), **options)
+    assert len({doc.document["related_text_hash"] for doc in (before, alias, old_content)}) == 3
+    assert before.document["text_hash"] == alias.document["text_hash"]
+    assert sync.equal_mix([4., 0.], [0., 2.], dim=2) == pytest.approx([2**-0.5] * 2)
+    with pytest.raises(ValueError):
+        sync.equal_mix([1., 0.], [-1., 0.], dim=2)
+
+
+def test_related_mix_sync_skips_unchanged_and_reserves_two_calls(tmp_path, monkeypatch):
+    fixture = tmp_path / "events.json"
+    fixture.write_text(json.dumps({"events": [_event(1), _event(2)]}))
+    report = tmp_path / "report.json"
+    stored = {}
+    calls = []
+    monkeypatch.setattr(sync, "upsert_documents", len)
+    monkeypatch.setattr(sync, "build_embedding_client", lambda **kw: object())
+    monkeypatch.setattr(sync, "fetch_existing_embeddings", lambda *args, **kw: {
+        i: row["text_hash"] for i, row in stored.items()
+    })
+
+    def embed(text, **kw):
+        calls.append(text)
+        return [1., 0.] if text.startswith("related-event:") else [0., 2.]
+
+    def upsert(rows):
+        stored.update({r["event_id"]: r for r in rows})
+        return len(rows)
+
+    monkeypatch.setattr(sync, "gemini_embed", embed)
+    monkeypatch.setattr(sync, "upsert_embeddings", upsert)
+    def run(cap):
+        monkeypatch.setattr(sys, "argv", [
+            "sync", "--apply", "--require-complete", "--document-kinds", "related_v1",
+            "--preview-events-json", str(fixture), "--report-json", str(report),
+            "--embedding-dim", "2", "--max-provider-calls", str(cap),
+        ])
+        return sync.main(), json.loads(report.read_text())
+    for cap, exit_code, sends, missing in [(1, 2, 0, 2), (3, 2, 2, 1), (2, 0, 2, 0), (0, 0, 0, 0)]:
+        rc, info = run(cap)
+        assert (rc, info["provider_calls"], info["not_embedded_due_call_cap"]) == (exit_code, sends, missing)
+    assert len(calls) == 4
+    assert all(row["embedding"] == pytest.approx([2**-0.5] * 2) for row in stored.values())
+
+
+def test_incremental_sync_rejects_mixed_index_before_writing(tmp_path, monkeypatch):
+    fixture = tmp_path / "events.json"
+    fixture.write_text(json.dumps({"events": [_event(777)]}))
+    def supabase(method, path, **kwargs):
+        assert method == "GET"
+        assert "embedding_doc_kind=eq.related_v1" in path
+        assert "event_id=in." not in path  # Also catch an old row outside a canary.
+        assert "metadata->>doc_version.is.null" in path
+        assert sync.RELATED_DOC_VERSION in path
+        return [{"event_id": 123}]
+    monkeypatch.setattr(sync, "supabase_request", supabase)
+    monkeypatch.setattr(sys, "argv", ["sync", "--apply", "--document-kinds", "related_v1",
+                                      "--preview-events-json", str(fixture)])
+    with pytest.raises(RuntimeError, match="different document version"):
+        sync.main()
+
+
+def test_only_budget_deferred_related_hash_survives_cleanup():
+    docs = [_doc(i, search_hash="s", related_hash="fresh") for i in (1, 2, 3)]
+    old = dict(text_hash="stale", embedding_doc_kind="related_v1", embedding_model="m", embedding_dim=2,
+               metadata={"doc_version": "event-related-doc-v1"})
+    rows = [dict(old, event_id=1), dict(old, event_id=2), dict(old, event_id=3, metadata={})]
+    removed = sync.noncanonical_embedding_rows(
+        docs, rows, document_kinds=["related_v1"], embedding_model="m", embedding_dim=2,
+        deferred_related_ids={1, 3},
+    )
+    assert [r["event_id"] for r in removed] == [2, 3]

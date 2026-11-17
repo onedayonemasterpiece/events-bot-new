@@ -315,13 +315,12 @@ def test_zero_call_verification_scans_all_matching_embeddings(monkeypatch, tmp_p
         encoding="utf-8",
     )
     report_path = tmp_path / "report.json"
-    expected_hashes: dict[int, str] = {}
-
-    def remember_documents(docs):
-        expected_hashes.update({doc.event_id: doc.document["text_hash"] for doc in docs})
-        return len(docs)
-
-    monkeypatch.setattr(sync, "upsert_documents", remember_documents)
+    docs = [
+        sync.build_search_doc(event, site_origin="", base_path="", ics_base_url="")
+        for event in json.loads(fixture.read_text())["events"]
+    ]
+    expected_hashes = {doc.event_id: doc.document["text_hash"] for doc in docs}
+    monkeypatch.setattr(sync, "upsert_documents", len)
     monkeypatch.setattr(sync, "fetch_existing_embeddings", lambda *args, **kwargs: dict(expected_hashes))
     monkeypatch.setattr(
         sys,

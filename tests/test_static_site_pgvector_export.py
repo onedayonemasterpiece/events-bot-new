@@ -171,7 +171,7 @@ def test_pgvector_graph_reciprocity_restores_only_strong_reverse_edges() -> None
     assert weak_reverse is None or weak_reverse["slot_type"] == "adjacent_discovery"
 
 
-def test_pgvector_cache_is_invalidated_by_related_corpus_revision() -> None:
+def test_pgvector_revision_only_change_does_not_rebuild_unchanged_anchors() -> None:
     exporter = _load_exporter_module()
     events = [
         _related_event(1, "Первое", day=1),
@@ -222,11 +222,11 @@ def test_pgvector_cache_is_invalidated_by_related_corpus_revision() -> None:
             related_corpus_revision="b" * 64,
         )
 
-    assert first["cache"]["state"] == "miss_rebuilt"
+    assert first["cache"]["state"] == "incremental"
     assert second["cache"]["state"] == "hit"
-    assert third["cache"]["state"] == "miss_rebuilt"
+    assert third["cache"]["state"] == "hit"
     assert third["related_corpus_revision"] == "b" * 64
-    assert calls == ["gemini-embedding-2", "gemini-embedding-2"]
+    assert calls == ["gemini-embedding-2"]
 
 
 def test_pgvector_release_gate_rejects_dark_or_underfilled_graph() -> None:
@@ -450,6 +450,87 @@ def test_pgvector_cache_hit_makes_zero_related_rpc_calls_and_records_receipt(mon
     assert second["retrieval_receipt"]["source"] == "cache"
 
 
+def test_scoped_pgvector_ranks_programmes_before_repeated_dates(monkeypatch):
+    exporter = _load_exporter_module()
+    events = [_related_event(i, f"Programme {i}", day=1) for i in range(1, 58)]
+    for event in events:
+        if 2 <= event["id"] <= 42:
+            # Reciprocal links may form a chain, not a clique.
+            event["other_date_ids"] = [i for i in (event["id"] - 1, event["id"] + 1) if 2 <= i <= 42]
+    events[42]["other_date_ids"] = [2]  # One-way, so 43 is independent.
+    matches = list(range(2, 58))
+    calls = []
+
+    def rpc(_name, payload, **_kwargs):
+        calls.append(payload["p_anchor_event_id"])
+        return [{"event_id": i, "vector_similarity": 1 - i / 100} for i in matches]
+
+    monkeypatch.setattr(exporter, "personalization_supabase_request", rpc)
+    graph = exporter.build_pgvector_related_chain(events, current_date="2026-07-20", anchor_ids={1})
+    assert calls == [1]
+    selected = [row["event_id"] for row in graph["1"]]
+    assert selected == [2, *range(43, 58), *range(3, 27)]
+    assert graph["1"][1]["vector_similarity"] == .57
+    assert set(graph) == {"1"}
+
+
+@pytest.mark.parametrize("old_schema", [
+    "event_pgvector_related_chain_v2_cache_20261114_content_vector_only",
+    "event_pgvector_related_chain_v2_cache_20261116_programme_order",
+])
+def test_old_vector_space_retrieves_again_before_certifying_anchors(tmp_path, monkeypatch, old_schema):
+    exporter = _load_exporter_module()
+    events = [_related_event(i, f"Programme {i}", day=i) for i in range(1, 7)]
+    events[1]["other_date_ids"], events[2]["other_date_ids"] = [3], [2]
+    replies, audits = [], []
+    chosen = 2
+
+    def rpc(_name, payload, **_kwargs):
+        anchor = payload["p_anchor_event_id"]
+        replies.append(anchor)
+        if anchor == 1:
+            return [{"event_id": chosen, "vector_similarity": .97}]
+        return [{"event_id": i, "vector_similarity": .91 - i / 100}
+                for i in range(1, 7) if i != anchor]
+
+    def audit(**kwargs):
+        audits.append(kwargs["anchor"]["id"])
+        return {e["id"]: {"llm_semantic_score": .9, "confidence": .9, "reject": False}
+                for e in kwargs["candidates"]}
+
+    monkeypatch.setattr(exporter, "personalization_supabase_request", rpc)
+    monkeypatch.setattr(exporter, "call_gemma_related_audit", audit)
+    monkeypatch.setenv("GOOGLE_API_KEY4", "test-only")
+    cache_path = tmp_path / "cache.json"
+
+    def run(anchors):
+        return exporter.build_related(events, current_date="2026-07-20", related_mode="pgvector",
+                                      cache_path=cache_path, gemma_verify=True, anchor_ids=anchors)
+
+    initial_peers = run({1, 6})["related"]["1"]["pure_related"]
+    assert 2 in initial_peers and 4 not in initial_peers
+    chosen = 4
+    legacy = json.loads(cache_path.read_text())
+    legacy["schema_version"] = old_schema
+    legacy["event_fingerprints"] = {str(e["id"]): exporter.event_fingerprint({**e, "other_date_ids": []}) for e in events}
+    cache_path.write_text(json.dumps(legacy))
+    replies.clear()
+    scoped = run({1})
+    assert replies == [1]
+    assert scoped["related"]["1"]["strict_verified"]
+    assert scoped["related"]["1"]["pure_related"] == [4]
+    assert not scoped["related"]["6"]["strict_verified"]
+    assert not scoped["related"]["6"]["pure_related"]
+    run({1})
+    assert replies == [1]
+    run({6})
+    assert replies == [1, 6]
+    full = run(None)
+    assert replies == [1, 6]
+    assert full["related"]["1"]["strict_verified"]
+    assert full["related"]["6"]["strict_verified"]
+
+
 def test_pgvector_rejects_duplicate_anchor_fetch_before_rpc(monkeypatch) -> None:
     exporter = _load_exporter_module()
     calls = 0
@@ -614,7 +695,7 @@ def test_related_audit_retry_respects_shared_minute_bucket(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_related_audit_inherits_operator_normal_pool(monkeypatch) -> None:
+async def test_related_audit_inherits_operator_normal_pool_and_keeps_unambiguous_requested_ids(monkeypatch) -> None:
     import google_ai.client
     exporter = _load_exporter_module()
     monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
@@ -624,13 +705,16 @@ async def test_related_audit_inherits_operator_normal_pool(monkeypatch) -> None:
         def __init__(self, **kwargs):
             captured.update(kwargs)
         async def generate_content_async(self, **kwargs):
-            return json.dumps({'ranked': [{'event_id': 2, 'llm_semantic_score': .8,
-                   'similarity_class': 'highly_similar', 'confidence': .9, 'reject': False}]}), None
+            return json.dumps({'ranked': [{'event_id': i, 'llm_semantic_score': .8,
+                   'similarity_class': 'highly_similar', 'confidence': .9, 'reject': False}
+                    for i in (2, 0, 3, 3, 1, 3)]}), None
     monkeypatch.setattr(google_ai.client, 'GoogleAIClient', Client)
     monkeypatch.setattr(exporter, 'supabase_limiter_client', object)
     result = await exporter.call_gemma_related_audit_async(
         model='models/gemma-4-26b-a4b-it', key_env='GOOGLE_API_KEY4',
-        anchor={'id': 1, 'title': 'Standup'}, candidates=[{'id': 2, 'title': 'Comedy'}])
+        anchor={'id': 1, 'title': 'Standup'},
+        candidates=[{'id': 2, 'title': 'Comedy'}, {'id': 3, 'title': 'Matinee'}])
+    assert set(result) == {2}
     assert captured['reserve_key_envs'] == 'GOOGLE_API_KEY,GOOGLE_API_KEY4'
     assert result[2]['llm_semantic_score'] == .8
 
@@ -785,7 +869,7 @@ def test_shrinking_catalog_persists_bounded_audit_progress(tmp_path, monkeypatch
     for expected_ready in (1, 2, 3, 3):
         result = exporter.build_related(events, current_date='2026-11-15',
             related_mode='pgvector', cache_path=cache_path, gemma_verify=True,
-            gemma_max_anchors=1)
+            gemma_max_anchors=1, anchor_ids={1, 2, 3})
         assert result['cache']['written']
         assert len(result['gemma_verification']['verified_event_ids']) == expected_ready
         current_keys = set(json.loads(cache_path.read_text())['gemma_audit_cache'])
@@ -793,15 +877,15 @@ def test_shrinking_catalog_persists_bounded_audit_progress(tmp_path, monkeypatch
         retained_keys = current_keys
     assert calls == [3, 2, 1]
     assert result['strict_verified_related']
-    assert result['gemma_verification']['cache_hits'] == 3
+    assert result['gemma_verification']['provider_calls'] == 0
     saved = json.loads(cache_path.read_text())
     assert saved['event_ids'] == [1, 2, 3]
     assert 'previous-verdict' not in saved['gemma_audit_cache']
     assert len(saved['gemma_audit_cache']) == 3
 
 
-@pytest.mark.parametrize('empty_first_batch', [False, True])
-def test_partial_related_batches_survive_save_and_resume(tmp_path, monkeypatch, empty_first_batch):
+@pytest.mark.parametrize('first_reply', ['complete', 'partial', 'empty'])
+def test_partial_related_batches_survive_save_and_resume(tmp_path, monkeypatch, first_reply):
     exporter = _load_exporter_module()
     monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
     monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '2')
@@ -818,12 +902,10 @@ def test_partial_related_batches_survive_save_and_resume(tmp_path, monkeypatch, 
         calls.append(ids)
         if cycle == 1 and ids[0] == 8:
             raise RuntimeError('provider minute bucket exhausted')
-        if cycle == 2 and ids[0] == 2:
-            pytest.fail('completed batch was repeated after saving the cache')
-        if empty_first_batch and ids[0] == 2:
-            return {}
-        return {ids[0]: {'llm_semantic_score': .8, 'confidence': .9,
-                        'reject': False, 'similarity_class': 'highly_similar'}}
+        if cycle == 1 and ids[0] == 2 and first_reply != 'complete':
+            ids = [] if first_reply == 'empty' else [2, 3, 0]
+        return {i: {'llm_semantic_score': .8, 'confidence': .9,
+                    'reject': False, 'similarity_class': 'highly_similar'} for i in ids}
     monkeypatch.setattr(exporter, 'build_pgvector_related_chain', retrieve)
     monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
     path = tmp_path / 'cache.json'
@@ -836,10 +918,205 @@ def test_partial_related_batches_survive_save_and_resume(tmp_path, monkeypatch, 
     cycle = 2
     second = run()
     assert second['related']['1']['strict_verified']
-    assert calls == [list(range(2, 8)), list(range(8, 14)), list(range(8, 14))]
+    initial = [list(range(2, 8)), list(range(8, 14))]
+    resumed = {'empty': [list(range(2, 8))], 'partial': [list(range(4, 8))], 'complete': []}
+    assert calls == initial + resumed[first_reply] + [list(range(8, 14))]
+    assert 0 not in second['related']['1']['pure_related']
+    before_edit = len(calls)
     cycle = 3
     events[1]['title'] = 'Changed source programme'
     third = run()
     assert third['related']['1']['strict_verified']
     assert calls[-1] == list(range(2, 8))
-    assert len(calls) == 4, 'changed peer invalidates its batch, while the other stays reusable'
+    assert len(calls) == before_edit + 1, 'a changed peer invalidates only its batch'
+
+
+@pytest.mark.parametrize('scoped', [True, False])
+def test_legacy_verified_packet_repairs_only_missing_verdicts(tmp_path, monkeypatch, scoped):
+    exporter = _load_exporter_module()
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '2')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT', '6')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS', '1')
+    ids = list(range(2, 14))
+    events = [{'id': i, 'title': f'Event {i}', 'date': '2026-12-01'} for i in [1, *ids]]
+    def retrieve(*args, **kwargs):
+        return {str(e['id']): ([{'event_id': i, 'vector_similarity': .8, 'related_score': .8}
+                                 for i in ids] if e['id'] == 1 else []) for e in events}
+    calls = []
+    def audit(**kwargs):
+        requested = [e['id'] for e in kwargs['candidates']]
+        calls.append(requested)
+        return {i: {'llm_semantic_score': .8, 'confidence': .9, 'reject': False,
+                    'similarity_class': 'highly_similar'} for i in requested}
+    monkeypatch.setattr(exporter, 'build_pgvector_related_chain', retrieve)
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+    path = tmp_path / 'cache.json'
+    def run(anchors):
+        return exporter.build_related(events, current_date='2026-11-16', related_mode='pgvector',
+            cache_path=path, gemma_verify=True, anchor_ids=anchors)
+    assert run(None)['strict_verified_related']
+    cache = json.loads(path.read_text())
+    for packet in cache['gemma_audit_cache'].values():
+        if '3' in packet:
+            packet['0'] = packet.pop('3')
+    path.write_text(json.dumps(cache))
+    calls.clear()
+    if scoped:
+        untargeted = run({12})
+        assert not untargeted['related']['1']['strict_verified']
+        assert untargeted['related']['12']['strict_verified']
+        assert not calls
+    repaired = run({1} if scoped else None)
+    assert repaired['strict_verified_related']
+    assert calls == [[3]]
+    assert not any('0' in p for p in json.loads(path.read_text())['gemma_audit_cache'].values())
+    assert run(None)['strict_verified_related']
+    assert calls == [[3]]
+
+
+@pytest.mark.parametrize("change_programme, cap, failure", [
+    (False, 0, False), (False, 1, False), (True, 0, False), (True, 1, False), (True, 1, True)])
+def test_warm_pgvector_targets_keep_partial_cache_and_rebuild_dependents(tmp_path, monkeypatch, change_programme, cap, failure):
+    exporter = _load_exporter_module()
+    events = [_related_event(i, f"Programme {i}", day=i) for i in range(1, 7)]
+    rows = {1: [2, 3, 4], 2: [1], 3: [1], 4: [2, 3, 1], 5: [6], 6: [5]}
+    fetched, audited, failures = [], [], set()
+
+    def rpc(_name, payload, **_kwargs):
+        anchor = payload["p_anchor_event_id"]
+        fetched.append(anchor)
+        return [{"event_id": peer, "vector_similarity": .85 - rank / 100}
+                for rank, peer in enumerate(rows[anchor])]
+
+    def audit(**kwargs):
+        audited.append(kwargs["anchor"]["id"])
+        if kwargs["anchor"]["id"] in failures:
+            raise RuntimeError("offline provider failure")
+        return {e["id"]: {"llm_semantic_score": .9, "confidence": .9, "reject": False}
+                for e in kwargs["candidates"]}
+
+    monkeypatch.setattr(exporter, "personalization_supabase_request", rpc)
+    monkeypatch.setattr(exporter, "call_gemma_related_audit", audit)
+    monkeypatch.setenv("GOOGLE_API_KEY4", "test-only")
+    monkeypatch.setenv("STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS", "1")
+    monkeypatch.setenv("STATIC_SITE_GEMMA_RELATED_RETRY_BACKOFF_SEC", "0")
+    cache_path = tmp_path / "cache.json"
+
+    def run(anchors, limit=0):
+        return exporter.build_related(events, current_date="2026-07-20", related_mode="pgvector",
+                                      cache_path=cache_path, gemma_verify=True, anchor_ids=anchors, gemma_max_anchors=limit)
+
+    initial = run(None if change_programme else {1})
+    before = json.loads(cache_path.read_text())
+    assert initial["related"]["1"]["strict_verified"]
+    fetched.clear()
+    audited.clear()
+    if change_programme:
+        events[1]["other_date_ids"], events[2]["other_date_ids"] = [3], [2]
+        failures.update({2} if failure else ())
+        result = run({6}, cap)
+        for _ in range(4):
+            result = run(None, cap)
+        assert 1 in fetched, "unrequested dependent must be rebuilt after candidate programme changes"
+        assert 1 in audited
+        assert set(fetched) == {1, 2, 3, 4}
+        assert result["related"]["1"]["strict_verified"]
+        assert result["related"]["4"]["strict_verified"]
+        assert 4 in audited
+        completed_calls = len(fetched), len(audited)
+        run(None, cap)
+        if failure:
+            assert not result["related"]["2"]["strict_verified"]
+            assert audited[completed_calls[1]:] == [2]
+            assert fetched[completed_calls[0]:] == [2]
+        else:
+            assert (len(fetched), len(audited)) == completed_calls
+        after = json.loads(cache_path.read_text())
+        assert [item["event_id"] for item in after["raw_chains"]["1"]] == [2, 4, 3]
+        assert after["chains"]["5"] == before["chains"]["5"]
+        assert 5 not in audited and 6 not in audited
+    else:
+        assert set(before["gemma_verified_event_ids"]) == {1}, "seed must be genuinely partial"
+        result = run(None)
+        assert fetched == [], "unchanged warm full export must not fetch an old unverified tail"
+        assert audited == []
+        assert result["related"]["1"]["strict_verified"]
+        if cap == 0:
+            incompatible = json.loads(cache_path.read_text())
+            incompatible["schema_version"] = "unknown-cache-contract"
+            cache_path.write_text(json.dumps(incompatible))
+            rebuilt = run(None)
+            assert set(fetched) == set(range(1, 7)), "incompatible full cache must bootstrap instead of erasing output"
+            assert all(rebuilt["related"][str(i)]["strict_verified"] for i in range(1, 7))
+
+
+def test_full_cli_reuses_incremental_graph_without_validating_partial_metrics(tmp_path, monkeypatch):
+    import sqlite3
+    import sys
+    from types import SimpleNamespace
+
+    exporter = _load_exporter_module()
+    events = [_related_event(i, f"Distinct programme {i}", day=i) for i in range(1, 7)]
+    db = tmp_path / "catalog.sqlite"
+    sqlite3.connect(db).close()
+    cache = tmp_path / "related-cache.json"
+    fetched, validated = [], []
+    empty_rpc = False
+
+    def rpc(_name, payload, **_kwargs):
+        anchor = payload["p_anchor_event_id"]
+        fetched.append(anchor)
+        return [] if empty_rpc else [{"event_id": event["id"], "vector_similarity": .85}
+                                     for event in events if event["id"] != anchor]
+
+    validator = exporter.validate_pgvector_graph_release
+    def validate(meta):
+        validated.append(dict(meta))
+        validator(meta)
+
+    monkeypatch.setattr(exporter, "personalization_supabase_request", rpc)
+    monkeypatch.setattr(exporter, "validate_pgvector_graph_release", validate)
+    monkeypatch.setattr(exporter, "fetch_rows", lambda *a, **k: events)
+    monkeypatch.setattr(exporter, "fetch_recent_event_detail_archive_rows", lambda *a, **k: [])
+    monkeypatch.setattr(exporter, "build_event", lambda _con, row, *a, **k: dict(row))
+    monkeypatch.setattr(exporter, "build_catalog_ledger", lambda *a, **k: {})
+    monkeypatch.setattr(exporter, "collect_source_records", lambda *a, **k: [])
+    for name in ("event_participants_for_events", "event_video_assets_for_events",
+                 "build_interest_clubs_projection", "build_interest_clubs_projection_v2",
+                 "build_festival_timeline_projection"):
+        monkeypatch.setattr(exporter, name, lambda *a, **k: {})
+    monkeypatch.setitem(sys.modules, "static_collection_export", SimpleNamespace(
+        stable_hash=lambda *a: "offline", build_registry_projection=lambda *a, **k: ({}, [])))
+    monkeypatch.setitem(sys.modules, "static_place_org_registry", SimpleNamespace(
+        load_registry=lambda: {}, registry_hash=lambda *a: "offline"))
+    monkeypatch.delenv("STATIC_SITE_SYNC_PGVECTOR_VECTORS", raising=False)
+    monkeypatch.delenv("STATIC_SITE_COLLECTION_SEMANTIC_COMPUTE", raising=False)
+    monkeypatch.setattr(sys, "argv", ["exporter", "--db", str(db), "--output-dir", str(tmp_path / "output"),
+        "--catalog-mode", "full", "--current-date", "2026-07-20", "--related-mode", "pgvector",
+        "--related-cache", str(cache), "--related-corpus-revision", "c" * 64,
+        "--repo-sha", "a" * 40, "--run-id", "offline", "--build-id", "offline",
+        "--snapshot-id", "offline", "--snapshot-sha256", "b" * 64])
+    assert exporter.main() == 0
+    assert len(fetched) == 6 and len(validated) == 1
+    fetched.clear()
+    events.append(_related_event(7, "New independent programme", day=7))
+    assert exporter.main() == 0
+    assert fetched == [7], "warm full export must fetch only the new anchor"
+    assert len(validated) == 1, "partial metrics must not be interpreted as a full graph"
+    fetched.clear()
+    assert exporter.main() == 0
+    assert fetched == [] and len(validated) == 1, "empty scope is not a measured full graph"
+    cache.unlink()
+    empty_rpc = True
+    with pytest.raises(RuntimeError, match="graph release gate failed"):
+        exporter.main()
+    assert len(validated) == 2, "a genuinely cold full graph must retain its release validation"
+    with pytest.raises(RuntimeError, match="graph release gate failed"):
+        exporter.main()
+    assert len(validated) == 3, "cached failed full graph must not become unmeasured scoped success"
+    fetched.clear()
+    sys.argv[sys.argv.index("--related-corpus-revision") + 1] = "d" * 64
+    with pytest.raises(RuntimeError, match="graph release gate failed"):
+        exporter.main()
+    assert fetched == [] and len(validated) == 4, "revision-only change must not hide a cached bad full graph"
