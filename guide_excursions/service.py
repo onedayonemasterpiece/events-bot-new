@@ -3560,8 +3560,8 @@ async def run_guide_import_from_results(
         )
         accepted = await cur.fetchone()
     if accepted:
-        from .result_delivery import acknowledge_import
-        acknowledge_import(run_id)
+        from .result_delivery import finish_result_import
+        await asyncio.to_thread(finish_result_import, run_id)
         details = _safe_json_object(accepted["details_json"])
         await reconcile_kaggle_run_terminal_from_host(
             db, run_id=f"guide_monitor:{run_id}", message="Guide import already accepted",
@@ -3641,8 +3641,8 @@ async def run_guide_import_from_results(
     await finish_ops_run(db, run_id=ops_run_id, status=status, metrics=metrics, details=run_details)
 
     if import_completed:
-        from .result_delivery import acknowledge_import
-        acknowledge_import(run_id)
+        from .result_delivery import finish_result_import
+        await asyncio.to_thread(finish_result_import, run_id)
 
     if send_progress and bot and chat_id:
         await bot.send_message(
@@ -3921,8 +3921,8 @@ async def run_guide_monitor(
     await finish_ops_run(db, run_id=ops_run_id, status=status, metrics=metrics, details=run_details)
 
     if import_completed:
-        from .result_delivery import acknowledge_import
-        acknowledge_import(run_id)
+        from .result_delivery import finish_result_import
+        await asyncio.to_thread(finish_result_import, run_id)
     if recovery_kernel_ref and import_completed and not auto_publish_after_import:
         try:
             await clear_guide_monitor_recovery_job(recovery_kernel_ref)

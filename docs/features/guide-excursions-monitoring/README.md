@@ -67,6 +67,8 @@ Guide-track LLM использует общий `GoogleAIClient` с настро
 - `title_normalized` в extraction prompt считается stable route identity core: без имён гидов, source labels, дат, времени, маркетинговых суффиксов и availability-слов, чтобы один source post не создавал дубли одной и той же экскурсии под разными идентичностями.
 - regression evidence для guide digest completeness должен включать не только run-level `Новых выходов`, а occurrence-level проверку: какие raw outputs были digest-ready, какие были исключены как sold-out/no-date/non-target/duplicate, и какие still-future missed cards были компенсирующе опубликованы.
 
+На сервере импортёр проверяет кэш `guide_monitoring_results` после сохранения результата Kaggle и после подтверждённого импорта. В пределах `GUIDE_MONITORING_RESULTS_STORE_MAX_MB` и `GUIDE_MONITORING_RESULTS_STORE_MAX_RUNS` учитывается размер и число всех пакетов, в том числе полученных через callback. Пакет с `.delivery_pending` сохраняется до подтверждения импорта. Когда защищённые пакеты занимают весь бюджет, уборка может освободить только ранее подтверждённые пакеты.
+
 ## Retention persistent guide media
 
 `GUIDE_MEDIA_STORE_ROOT` находится на том же ограниченном volume, что и core SQLite, поэтому каждый server import выполняет bounded retention **до** materialization и ещё раз после commit. Ошибка retention не теряет уже скачанный Kaggle result (import остаётся fail-open), но попадает в runtime log `guide_media_retention ...` и в `import_summary.media_retention`.
