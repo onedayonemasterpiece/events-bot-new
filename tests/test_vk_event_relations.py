@@ -162,7 +162,7 @@ async def test_shared_graph_keeps_original_gallery_and_semantic_only(tmp_path, m
         assert data['related'][0]['description'] == 'Готовое описание ежедневного анонса'
         cards = await relations.cards(data, 8)
         assert len(cards) == 2
-        assert Image.open(BytesIO(cards[1])).size == (1080, 1350)
+        assert Image.open(BytesIO(cards[1])).size == (1080, 640)
         async def photo(group, url, *args, **kwargs):
             return url
         async def card(group, payload, *args, **kwargs):
@@ -241,7 +241,8 @@ async def test_comment_is_created_once_never_edited_and_defers_postponed(tmp_pat
         await db.close()
 
 
-def test_related_card_has_no_missing_emoji_glyph_or_title_medallion_overlap(monkeypatch):
+@pytest.mark.parametrize('row_count,canvas_height', [(1, 640), (2, 878), (5, 1350)])
+def test_related_card_has_no_missing_emoji_glyph_or_title_medallion_overlap(monkeypatch, row_count, canvas_height):
     from PIL import ImageDraw
     seen = []
     original = ImageDraw.ImageDraw.text
@@ -250,8 +251,10 @@ def test_related_card_has_no_missing_emoji_glyph_or_title_medallion_overlap(monk
         return original(self, xy, text, *args, **kwargs)
     monkeypatch.setattr(ImageDraw.ImageDraw, 'text', record)
     body = relations.render_card([{'date': '20.11', 'date_iso': '2026-11-20', 'time': '19:00', 'title': '🎭 ' + 'Длинное название концерта ' * 12,
-        'event_type': 'кинопоказ', 'place': 'Кафедральный собор', 'medallions': ['site/public/assets/organizers/kant-island.png'], 'is_free': True}])
-    assert Image.open(BytesIO(body)).size == (1080, 1350)
+        'event_type': 'кинопоказ', 'place': 'Кафедральный собор', 'medallions': ['site/public/assets/organizers/kant-island.png'], 'is_free': True}] * row_count)
+    assert Image.open(BytesIO(body)).size == (1080, canvas_height)
+    footer = [(xy, text) for xy, text, _ in seen if text == 'Ссылки на события — в комментарии ↓']
+    assert footer == [((58, canvas_height - 60), 'Ссылки на события — в комментарии ↓')]
     assert all('🎭' not in text for _, text, _ in seen)
     assert any('Кинопоказ' in text for _, text, _ in seen)
     assert any(text == 'НОЯБРЯ' for _, text, _ in seen)
