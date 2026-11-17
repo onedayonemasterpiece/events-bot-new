@@ -1,0 +1,339 @@
+{
+  "issue_id": 349,
+  "code": "d415d422eef818ac8fcdd480657cd72d61db1060",
+  "source": "render-original-guide-previews-20261116.py with the retained four rows, extracted role answers and portraits",
+  "palette": "sea-glass-mango",
+  "issue_palettes": {
+    "348": "clay-mint-graphite",
+    "349": "sea-glass-mango",
+    "350": "butter-cobalt"
+  },
+  "visible_lines": [
+    {
+      "id": 745,
+      "byline": "Ольга Рубцова, 80 ЛЕТ ЕДИНСТВА",
+      "place": "Калининград",
+      "focus": "",
+      "description": "С музыкой, играми и квестами",
+      "modes": [],
+      "seats": ""
+    },
+    {
+      "id": 746,
+      "byline": "Ноза Усманова, 80 ЛЕТ ЕДИНСТВА",
+      "place": "Калининград",
+      "focus": "",
+      "description": "По местам, куда обычно не водят туристов",
+      "modes": [],
+      "seats": ""
+    },
+    {
+      "id": 747,
+      "byline": "Ольга Рубцова, 80 ЛЕТ ЕДИНСТВА",
+      "place": "Калининград",
+      "focus": "",
+      "description": "С историями людей и темой природы",
+      "modes": [],
+      "seats": ""
+    },
+    {
+      "id": 763,
+      "byline": "Мария Морозова",
+      "place": "Осетровая ферма",
+      "focus": "",
+      "description": "С дегустацией эксклюзивных закусок",
+      "modes": [],
+      "seats": ""
+    }
+  ],
+  "avatar_calls_name_left_top_size": [
+    [
+      "Ольга Рубцова",
+      708,
+      362,
+      140
+    ],
+    [
+      "80 ЛЕТ ЕДИНСТВА",
+      820,
+      362,
+      140
+    ],
+    [
+      "Ноза Усманова",
+      708,
+      608,
+      140
+    ],
+    [
+      "80 ЛЕТ ЕДИНСТВА",
+      820,
+      608,
+      140
+    ],
+    [
+      "Ольга Рубцова",
+      708,
+      854,
+      140
+    ],
+    [
+      "80 ЛЕТ ЕДИНСТВА",
+      820,
+      854,
+      140
+    ],
+    [
+      "Мария Морозова",
+      820,
+      1100,
+      140
+    ]
+  ],
+  "rows": [
+    {
+      "id": 745,
+      "canonical_title": "Зелёные истории",
+      "date": "2026-11-17",
+      "time": "14:00",
+      "city": "Калининград",
+      "source_title": "80 ЛЕТ ЕДИНСТВА",
+      "guide_names": [
+        "Ольга Рубцова"
+      ],
+      "organizer_names": [
+        "Ольга Рубцова"
+      ],
+      "meeting_point": null,
+      "digest_blurb": "Приглашаем на экскурсию «Зелёные истории» 17 ноября в 14:00. Гид — Ольга Рубцова.",
+      "summary_one_liner": "Прогулка «Зелёные истории» с гидом Ольгой Рубцовой",
+      "audience_fit": [],
+      "duration_text": null,
+      "guide_profile_marketing_name": "80 лет единства",
+      "source_username": "kld80",
+      "seats_text": null,
+      "fact_pack": {
+        "guide_names": [
+          "Ольга Рубцова"
+        ],
+        "organizer_names": [
+          "80 ЛЕТ ЕДИНСТВА"
+        ],
+        "city": "Калининград",
+        "meeting_point": null,
+        "route_summary": null,
+        "main_hook": "экскурсия проекта 80 ЛЕТ ЕДИНСТВА с музыкой, играми и квестами",
+        "main_hook_evidence": [
+          "Зелёные истории",
+          "экскурсиях проекта 80 ЛЕТ ЕДИНСТВА",
+          "С музыкой, играми, квестами"
+        ],
+        "group_format": null,
+        "seats_text": null
+      },
+      "participant_medallions": [
+        {
+          "name": "Ольга Рубцова",
+          "roles": [
+            "Гид"
+          ],
+          "owner": 41501067,
+          "path": "portraits/41501067.jpg"
+        },
+        {
+          "name": "80 ЛЕТ ЕДИНСТВА",
+          "roles": [
+            "Организатор"
+          ],
+          "owner": -237389053,
+          "path": "portraits/-237389053.webp"
+        }
+      ]
+    },
+    {
+      "id": 746,
+      "canonical_title": "Рассвет над Балтикой",
+      "date": "2026-11-20",
+      "time": "14:00",
+      "city": "Калининград",
+      "source_title": "80 ЛЕТ ЕДИНСТВА",
+      "guide_names": [
+        "Ноза Усманова"
+      ],
+      "organizer_names": [
+        "Ольга Рубцова"
+      ],
+      "meeting_point": null,
+      "digest_blurb": "20 ноября в 14:00 состоится экскурсия «Рассвет над Балтикой». Гид: Ноза Усманова.",
+      "summary_one_liner": "Экскурсия «Рассвет над Балтикой» с гидом Нозой Усмановой",
+      "audience_fit": [],
+      "duration_text": null,
+      "guide_profile_marketing_name": "80 лет единства",
+      "source_username": "kld80",
+      "seats_text": null,
+      "fact_pack": {
+        "guide_names": [
+          "Ноза Усманова"
+        ],
+        "organizer_names": [
+          "80 ЛЕТ ЕДИНСТВА"
+        ],
+        "city": "Калининград",
+        "meeting_point": null,
+        "route_summary": null,
+        "main_hook": "экскурсия Рассвет над Балтикой по местам, куда обычно не водят туристов",
+        "main_hook_evidence": [
+          "Рассвет над Балтикой",
+          "места, куда обычно не водят туристов",
+          "экскурсиях проекта 80 ЛЕТ ЕДИНСТВА"
+        ],
+        "group_format": null,
+        "seats_text": null
+      },
+      "participant_medallions": [
+        {
+          "name": "Ноза Усманова",
+          "roles": [
+            "Гид"
+          ],
+          "owner": 408521495,
+          "path": "portraits/408521495.jpg"
+        },
+        {
+          "name": "80 ЛЕТ ЕДИНСТВА",
+          "roles": [
+            "Организатор"
+          ],
+          "owner": -237389053,
+          "path": "portraits/-237389053.webp"
+        }
+      ]
+    },
+    {
+      "id": 747,
+      "canonical_title": "Зелёные истории",
+      "date": "2026-11-21",
+      "time": "11:00",
+      "city": "Калининград",
+      "source_title": "80 ЛЕТ ЕДИНСТВА",
+      "guide_names": [
+        "Ольга Рубцова"
+      ],
+      "organizer_names": [
+        "Калининград с Варей"
+      ],
+      "route_summary": "Зелёные истории",
+      "meeting_point": null,
+      "digest_blurb": "Приглашаем на прогулку «Зелёные истории» 21 ноября в 11:00. Гид — Ольга Рубцова.",
+      "summary_one_liner": "Экскурсия «Зелёные истории» с гидом Ольгой Рубцовой.",
+      "audience_fit": [
+        "family-friendly"
+      ],
+      "duration_text": null,
+      "group_format": "small group",
+      "guide_profile_marketing_name": "80 лет единства",
+      "source_username": "kld80",
+      "seats_text": null,
+      "fact_pack": {
+        "guide_names": [
+          "Ольга Рубцова"
+        ],
+        "organizer_names": [
+          "80 ЛЕТ ЕДИНСТВА"
+        ],
+        "city": "Калининград",
+        "meeting_point": null,
+        "route_summary": "Зелёные истории",
+        "main_hook": "экскурсия Зелёные истории с историями людей и темой природы",
+        "main_hook_evidence": [
+          "Зелёные истории",
+          "пять тем: военная память, созидание, культура, архитектура и природа",
+          "историями людей"
+        ],
+        "group_format": "small group",
+        "seats_text": null
+      },
+      "participant_medallions": [
+        {
+          "name": "Ольга Рубцова",
+          "roles": [
+            "Гид"
+          ],
+          "owner": 41501067,
+          "path": "portraits/41501067.jpg"
+        },
+        {
+          "name": "80 ЛЕТ ЕДИНСТВА",
+          "roles": [
+            "Организатор"
+          ],
+          "owner": -237389053,
+          "path": "portraits/-237389053.webp"
+        }
+      ]
+    },
+    {
+      "id": 763,
+      "canonical_title": "Секреты чёрного золота: экскурсия на Осетровую ферму",
+      "date": "2026-11-22",
+      "time": null,
+      "city": "Калининградская область",
+      "source_title": "Maria Morozova",
+      "guide_names": [
+        "Мария Морозова"
+      ],
+      "organizer_names": [
+        "Мария Морозова"
+      ],
+      "meeting_point": "Осетровая ферма",
+      "digest_blurb": "Увлекательная экскурсия на Осетровую ферму с дегустацией эксклюзивных закусок",
+      "summary_one_liner": "Экскурсия на Осетровую ферму с дегустацией",
+      "audience_fit": [],
+      "duration_text": "not specified",
+      "guide_profile_marketing_name": null,
+      "source_username": "id21093288",
+      "seats_text": "не указано",
+      "fact_pack": {
+        "guide_names": [
+          "Мария Морозова"
+        ],
+        "organizer_names": [
+          "Мария Морозова"
+        ],
+        "city": "Калининградская область",
+        "meeting_point": null,
+        "route_summary": null,
+        "main_hook": "экскурсия на Осетровую ферму с секретами чёрного золота",
+        "main_hook_evidence": [
+          "экскурсия на Осетровую ферму",
+          "Секреты чёрного золота",
+          "выращивают икру"
+        ],
+        "group_format": null,
+        "seats_text": null
+      },
+      "participant_medallions": [
+        {
+          "name": "Мария Морозова",
+          "roles": [
+            "Гид",
+            "Организатор"
+          ],
+          "owner": 21093288,
+          "path": "portraits/21093288.webp"
+        }
+      ]
+    }
+  ],
+  "portraits": "Relative to this JSON. Resolve participant_medallions[].path before calling render_visual_digest_card(rows,issue_id=349).",
+  "comparison": {
+    "reference_sha256": "13c3efca5534c58c4fbcf4f1e051c6747d321a4d8d3d7bc27c68199543215ee7",
+    "rerender_sha256": "968499fc64e7535754f3f3f6754452870149e3922dc19ece411952f03d9c911e",
+    "pixel_diff_bbox": [
+      959,
+      431,
+      1025,
+      993
+    ]
+  }
+}

@@ -130,13 +130,14 @@ async def test_authoritative_empty_roles_clear_old_roles_on_normal_reimport(tmp_
             'prefilter_passed': True, 'llm_status': 'ok', 'occurrences': [occurrence]}]}]}
     results = tmp_path / 'results.json'
     try:
-        for roles in (['Старый организатор'], []):
-            occurrence['organizer_names'] = roles
+        for guides, organizers in ((['Гид'], ['Старый организатор']), ([], [])):
+            occurrence['guide_names'] = guides
+            occurrence['organizer_names'] = organizers
             results.write_text(json.dumps(payload))
             await service._import_results_file_inner(db, results_path=str(results))
         async with db.raw_conn() as conn:
             row = await (await conn.execute('SELECT guide_names_json,organizer_names_json FROM guide_occurrence')).fetchone()
-        assert json.loads(row[0]) == ['Гид']
+        assert json.loads(row[0]) == []
         assert json.loads(row[1]) == []
     finally:
         await db.close()
