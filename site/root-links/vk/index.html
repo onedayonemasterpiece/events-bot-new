@@ -18,23 +18,21 @@
 <body>
 <main>
   <h1>Наше сообщество ВКонтакте</h1>
-  <p>Открываем сообщество в приложении ВКонтакте…</p>
+  <p>Нажмите кнопку — сообщество откроется в приложении ВКонтакте, а если его нет, на сайте.</p>
   <a id="app" href="https://vk.com/klgdevents">Открыть в приложении ВКонтакте</a>
   <a id="web" href="https://vk.com/klgdevents">Открыть на сайте vk.com</a>
 </main>
 <script>
-  // Android: intent addressed to the VK app opens the community regardless of
-  // the phone's "open supported links" setting; without the app Chrome opens the site.
-  // iPhone: only a user tap on a vk.com link from another domain opens the app.
+  // A browser asks before an app is launched without a tap and then follows the
+  // fallback, so the app opens only from a tap on the button.
+  // Android: intent addressed to the VK app, independent of the phone's link settings;
+  // without the app Chrome opens the site. iPhone: a tap on a vk.com link from another
+  // domain opens the app (Universal Link).
   var web = 'https://vk.com/klgdevents';
   var ua = navigator.userAgent;
   if (/Android/i.test(ua)) {
-    var intent = 'intent://vk.com/klgdevents#Intent;scheme=https;package=com.vkontakte.android;S.browser_fallback_url=' + encodeURIComponent(web) + ';end';
-    document.getElementById('app').href = intent;
-    location.replace(intent);
-  } else if (/iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && 'ontouchend' in document)) {
-    document.querySelector('p').textContent = 'Нажмите кнопку — сообщество откроется в приложении, а если его нет, на сайте.';
-  } else {
+    document.getElementById('app').href = 'intent://vk.com/klgdevents#Intent;scheme=https;package=com.vkontakte.android;S.browser_fallback_url=' + encodeURIComponent(web) + ';end';
+  } else if (!/iPhone|iPad|iPod/i.test(ua) && !(/Macintosh/i.test(ua) && 'ontouchend' in document)) {
     location.replace(web);
   }
 </script>
