@@ -1,5 +1,7 @@
 ## 2026-11-17
 
+- CAPTCHA pause preserves future independent VK retry and comment delays. Exhausted jobs retain the shared pause across restart until recovery, then remain terminal without another write attempt.
+
 - NFC-страницы: `kenigevents.ru/vk/` подписана «Полюбить Калининград Афиша — Самая большая афиша событий региона»; новая `kenigevents.ru/uhty/` по той же схеме открывает сообщество «Ух ты, Калининград!» (дайджесты экскурсий). Workflow выгружает все страницы `site/root-links/*/` и принимает SHA, уже вошедший в main.
 - `kenigevents.ru/vk/` на Android больше не запускает приложение ВК без нажатия: Chrome спрашивал подтверждение и сразу уводил на запасной сайт. Сообщество открывается в приложении кнопкой, как из Telegram/Max.
 - NFC-метка открывает сообщество ВКонтакте через одну страницу `https://kenigevents.ru/vk/`: на Android сразу в приложении ВК (без настроек телефона, без приложения — сайт), на iPhone — по нажатию кнопки. Загружается отдельным workflow только как `vk/index.html`, корень сайта не меняется.

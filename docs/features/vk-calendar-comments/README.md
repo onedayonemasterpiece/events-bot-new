@@ -50,11 +50,14 @@ again after each harmless-read recovery. The shared worker now counts only code
 existing `CAPTCHA_MAX_ATTEMPTS` setting, default 2. Ordinary network failures
 remain in the separate existing `attempts` counter.
 
-On exhaustion the job ends with `status=error`, `terminal_reason=failed` and a
-structured `VK_CAPTCHA_TERMINAL` warning. This means the document/comment was
-not delivered. The real challenge still invokes the existing shared cooldown;
-marker-scoped recovery resumes other tasks and excludes this failed job. No
-write probe, token rotation, challenge bypass or new worker is introduced.
+On exhaustion the job records `terminal_reason=failed` and a structured
+`VK_CAPTCHA_TERMINAL` warning; the document/comment was not delivered. It stays
+paused as the durable shared-cooldown marker, including across a restart when
+all other work is scheduled for the future. Successful marker-scoped recovery
+returns this terminal job to `status=error` without changing its due time,
+error, payload or attempts. The worker excludes terminal jobs from execution.
+Other cohort tasks resume normally. No write probe, token rotation, challenge
+bypass or new worker is introduced.
 
 Restart and same-job enqueue retain the CAPTCHA count. Omitting an enqueue
 payload retains the frozen post URL, selection and publication time. Ordinary
@@ -74,3 +77,9 @@ the existing foreground comment priority. Marker scope, 30-second recovery pacin
 and CAPTCHA budgets are unchanged. Documents remain queued, but recovery backlog
 can delay them beyond their original publication window. Neither this order nor
 a harmless read proves that VK accepts a write or clears the provider challenge.
+
+The bulk pause includes due pending/error VK jobs and all running VK jobs.
+Future independent retries and delayed comments retain their original due time,
+error and attempts; the global VK worker pause still prevents their execution
+until recovery. The triggering job already paused by the handler remains in
+its existing marker cohort. Recovery does not replay future non-CAPTCHA work.

@@ -486,8 +486,108 @@ async def test_captcha_does_not_revive_terminal_vk_jobs(tmp_path):
         assert await main._resume_vk_captcha_outbox(db, marker) == 1
         async with db.get_session() as session:
             jobs = [await session.get(JobOutbox, job_id) for job_id in ids]
-            assert [j.status for j in jobs] == [JobStatus.error, JobStatus.paused, JobStatus.pending]
+            assert [j.status for j in jobs] == [JobStatus.error, JobStatus.error, JobStatus.pending]
             assert jobs[0].last_error == "permanent failure"
             assert jobs[1].terminal_reason == "failed"
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("future_kind", ["missing_media", "flood", "comment"])
+async def test_captcha_preserves_future_retry_and_recovers_running(
+    tmp_path, monkeypatch, future_kind
+):
+    db = Database(str(tmp_path / "captcha-future-retry.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    future_due = now + timedelta(hours=8)
+    old_updated = now - timedelta(minutes=2)
+    far_due = now + timedelta(days=3650)
+    marker = "captcha_wait:future-retry-regression"
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now.astimezone(tz) if tz else now.replace(tzinfo=None)
+
+    monkeypatch.setattr(main, "datetime", FixedDateTime)
+    monkeypatch.setattr(main, "VK_CAPTCHA_RESUME_SPACING_SEC", 30)
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "_vk_captcha_resume", None)
+    future_status = JobStatus.pending if future_kind == "comment" else JobStatus.error
+    future_error = {
+        "missing_media": "vk_sync_missing_media",
+        "flood": "vk_flood_wait:1795000000:fixture:fixture",
+        "comment": None,
+    }[future_kind]
+    future_task = (
+        JobTask.vk_calendar_comment if future_kind == "comment" else JobTask.vk_sync
+    )
+    try:
+        async with db.get_session() as session:
+            event = Event(
+                title="Future programme", description="source description",
+                source_text="source", date="2099-01-04", time="12:00",
+                location_name="loc",
+            )
+            session.add(event)
+            await session.flush()
+            rows = [
+                JobOutbox(
+                    event_id=event.id, task=future_task, status=future_status,
+                    next_run_at=future_due, updated_at=old_updated,
+                    last_error=future_error, attempts=7,
+                    payload={"relations": {"related": []}} if future_kind == "comment" else {},
+                ),
+                JobOutbox(
+                    event_id=event.id, task=JobTask.vk_sync,
+                    status=JobStatus.pending, next_run_at=now - timedelta(seconds=1),
+                    updated_at=old_updated, attempts=0, payload={},
+                ),
+                # Worker already persisted the current CAPTCHA exception before bulk pause.
+                JobOutbox(
+                    event_id=event.id, task=JobTask.vk_sync,
+                    status=JobStatus.paused, next_run_at=far_due,
+                    updated_at=old_updated, last_error=marker, attempts=2, payload={},
+                ),
+                # A historical/racing due timestamp must not exclude a running holder.
+                JobOutbox(
+                    event_id=event.id, task=JobTask.vk_sync,
+                    status=JobStatus.running, next_run_at=future_due,
+                    updated_at=old_updated, attempts=3, payload={},
+                ),
+            ]
+            session.add_all(rows)
+            await session.flush()
+            ids = [row.id for row in rows]
+            await session.commit()
+
+        def snapshot(job):
+            return (
+                job.status, job.last_error, main._ensure_utc(job.next_run_at),
+                job.attempts, main._ensure_utc(job.updated_at),
+            )
+
+        independent = (future_status, future_error, future_due, 7, old_updated)
+        triggering = (JobStatus.paused, marker, far_due, 2, old_updated)
+        await main.vk_captcha_pause_outbox(db, marker=marker)
+        async with db.get_session() as session:
+            jobs = [await session.get(JobOutbox, job_id) for job_id in ids]
+            assert snapshot(jobs[0]) == independent
+            assert snapshot(jobs[2]) == triggering
+            for index in (1, 3):
+                assert jobs[index].status == JobStatus.paused
+                assert jobs[index].last_error == marker
+                assert main._ensure_utc(jobs[index].next_run_at) == far_due
+
+        assert await main._resume_vk_captcha_outbox(db, marker) == 3
+        async with db.get_session() as session:
+            jobs = [await session.get(JobOutbox, job_id) for job_id in ids]
+            assert snapshot(jobs[0]) == independent
+            for index in (1, 2, 3):
+                assert jobs[index].status == JobStatus.pending
+                assert now <= main._ensure_utc(jobs[index].next_run_at) <= now + timedelta(seconds=60)
+            assert [jobs[index].attempts for index in (1, 2, 3)] == [0, 2, 3]
     finally:
         await db.close()

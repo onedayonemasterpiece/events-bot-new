@@ -5603,6 +5603,10 @@ async def _resume_vk_captcha_outbox(
     resumed = 0
     skipped = 0
     async with db.get_session() as session:
+        await session.execute(update(JobOutbox).where(
+            JobOutbox.task.in_(VK_JOB_TASKS), JobOutbox.status == JobStatus.paused,
+            JobOutbox.last_error == marker, JobOutbox.terminal_reason == "failed",
+        ).values(status=JobStatus.error))
         rows = await session.execute(
             select(JobOutbox).outerjoin(Event, Event.id == JobOutbox.event_id)
             .where(
@@ -5767,6 +5771,7 @@ async def vk_captcha_pause_outbox(
             .where(
                 JobOutbox.task.in_(VK_JOB_TASKS),
                 JobOutbox.terminal_reason.is_(None),
+                (JobOutbox.status == JobStatus.running) | (JobOutbox.next_run_at <= now),
                 JobOutbox.status.in_(
                     [JobStatus.pending, JobStatus.error, JobStatus.running]
                 ),
@@ -19889,6 +19894,7 @@ async def _run_due_jobs_once_locked(
             select(JobOutbox)
             .where(
                 JobOutbox.status.in_([JobStatus.pending, JobStatus.error]),
+                JobOutbox.terminal_reason.is_(None),
                 JobOutbox.next_run_at <= now,
                 JobOutbox.task.in_(known_job_tasks),
             )
@@ -20716,7 +20722,6 @@ async def _run_due_jobs_once_locked(
                     payload["captcha_attempts"] = int(payload.get("captcha_attempts") or 0) + 1
                     obj.payload = payload
                     if payload["captcha_attempts"] >= CAPTCHA_MAX_ATTEMPTS:
-                        status = JobStatus.error
                         obj.terminal_reason = "failed"
                         logging.warning(
                             "VK_CAPTCHA_TERMINAL job_id=%s task=%s event_id=%s captcha_attempts=%s limit=%s",
