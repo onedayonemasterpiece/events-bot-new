@@ -214,15 +214,13 @@ def _identity_names(profile: dict[str, Any]) -> set[str]:
     return names
 
 
-def _scheduled_guide_tags(row: dict[str, Any]) -> dict[str, set[int]]:
-    """Personal VK tags explicitly credited as guides on the exact dated programme line."""
+def _dated_programmes(row):
     from guide_excursions.parser import QUOTE_TITLE_RE, extract_date_iso, extract_time_text, normalize_title_key
     title = normalize_title_key(row.get("canonical_title")).replace("ё", "е")
     day = row.get("date")
     start = extract_time_text(str(row.get("time") or ""))
-    slots: dict[str, set[int]] = {}
     if not title or not day or not start:
-        return slots
+        return
     for post in row.get("linked_posts") or []:
         if not vk_post_owners(post.get("url") or post.get("source_url")):
             continue
@@ -230,17 +228,34 @@ def _scheduled_guide_tags(row: dict[str, Any]) -> dict[str, set[int]]:
             published = datetime.fromisoformat(str(post.get("post_date") or day))
         except ValueError:
             continue
+        text = str(post.get("text") or "")
+        lines = text.splitlines()
+        slots = []
+        header = []
+        started = False
+        for line in lines:
+            clock = extract_time_text(line)
+            titles = list(QUOTE_TITLE_RE.finditer(line)) if clock else []
+            if not titles:
+                if not started:
+                    header.append(line)
+                continue
+            started = True
+            if len(titles) == 1 and extract_date_iso(line, post_date=published) == day:
+                matches = clock == start and normalize_title_key(titles[0][1]).replace("ё", "е") == title
+                slots.append((line[titles[0].end():], matches))
+        if slots:
+            yield "\n".join(header), slots, text
+
+
+def _scheduled_guide_tags(programmes) -> dict[str, set[int]]:
+    """Personal VK tags explicitly credited as guides on the exact dated programme line."""
+    slots: dict[str, set[int]] = {}
+    for _, day_slots, _ in programmes:
         day_tags: dict[str, set[int]] = {}
         plain_credits = set()
-        for line in str(post.get("text") or "").splitlines():
-            clock = extract_time_text(line)
-            if not clock or extract_date_iso(line, post_date=published) != day:
-                continue
-            titles = list(QUOTE_TITLE_RE.finditer(line))
-            if len(titles) != 1:
-                continue
-            matches_slot = clock == start and normalize_title_key(titles[0][1]).replace("ё", "е") == title
-            credit = re.match(r"\s*[,;—–-]?\s*гид(?:ы)?\b\s*[:—–-]?\s*(\S.*)", line[titles[0].end():], re.I)
+        for after_title, matches_slot in day_slots:
+            credit = re.match(r"\s*[,;—–-]?\s*гид(?:ы)?\b\s*[:—–-]?\s*(\S.*)", after_title, re.I)
             if not credit:
                 continue
             names = credit[1].strip().rstrip(".!")
@@ -260,18 +275,45 @@ def _scheduled_guide_tags(row: dict[str, Any]) -> dict[str, set[int]]:
     return slots
 
 
+_PROJECT_PROGRAMME = re.compile(
+    r"\b(?:вс[её] это\s*[—–-]\s*на (?:экскурсиях|прогулках)|"
+    r"(?:расписание|программа) (?:экскурсий|прогулок)|"
+    r"приглашаем (?:вас )?на (?:экскурсии|прогулки))\s+проекта\s+"
+    r"\[(?:club|public)([1-9]\d*)\|([^\]\n]{1,100})\]", re.I,
+)
+
+
+def _programme_project(programmes):
+    """An explicitly credited community presents the programme containing this exact departure."""
+    projects = set()
+    for header, day_slots, text in programmes:
+        if not any(matches for _, matches in day_slots):
+            continue
+        credits = set(_PROJECT_PROGRAMME.findall(header))
+        if credits and credits != set(_PROJECT_PROGRAMME.findall(text)):
+            return None  # This announcement groups departures from different projects.
+        projects.update((" ".join(label.split()), -int(uid)) for uid, label in credits)
+    return next(iter(projects)) if len(projects) == 1 else None
+
+
 def guide_participants(row: dict[str, Any], profiles: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Bind already extracted roles to explicit public profile identities, never surnames."""
     from guide_excursions.visual_digest import _AVATAR_DIR, _AVATAR_FILES
     result: dict[str, dict[str, Any]] = {}
     facts = row.get("fact_pack") or {}
-    tags = _scheduled_guide_tags(row)
+    programmes = list(_dated_programmes(row))
+    project = _programme_project(programmes)
+    tags = _scheduled_guide_tags(programmes)
     tagged_owners: dict[str, set[int]] = {}
     for label, ids in tags.items():
         tagged_owners.setdefault(label.casefold().replace("ё", "е"), set()).update(ids)
     for field, role in (("guide_names", "Гид"), ("organizer_names", "Организатор")):
         # The latest extracted facts supersede older role metadata left by upsert.
         names = facts.get(field, row.get(field, []))
+        project_name = project[0] if role == "Организатор" and project else None
+        listed = {str(n).casefold() for n in names} if isinstance(names, list) else set()
+        if project_name and project_name.casefold() not in listed:
+            names = [*(names if isinstance(names, list) else []), project_name]
         if role == "Гид" and tags:
             names = list(dict.fromkeys([*(names if isinstance(names, list) else []), *tags]))
         for name in names if isinstance(names, list) else []:
@@ -302,6 +344,16 @@ def guide_participants(row: dict[str, Any], profiles: list[dict[str, Any]]) -> l
             owner = next(iter(owners)) if len(owners) == 1 else None
             path = next(iter(paths)) if len(paths) == 1 else None
             conflicting_tags = False
+            if project_name and key == project_name.casefold().replace("ё", "е"):
+                if owners and owners != {project[1]}:
+                    if project_name.casefold() not in listed:
+                        continue
+                    conflicting_tags = True
+                    owner = path = None
+                else:
+                    owner = project[1]
+                    # Both the editorial writer and card consume the recovered role.
+                    row[field] = row.setdefault("fact_pack", {})[field] = list(names)
             if role == "Гид" and key in tagged_owners:
                 ids = tagged_owners[key]
                 known_people = {uid for uid in owners if uid > 0}
@@ -331,7 +383,8 @@ def guide_participants(row: dict[str, Any], profiles: list[dict[str, Any]]) -> l
             if tg_peer is not None:
                 result[identity].update(avatar_platform="telegram", avatar_peer_id=tg_peer)
             if conflicting_tags:
-                result[identity]["conflicting_guide_tags"] = True
+                conflict = "conflicting_guide_tags" if role == "Гид" else "conflicting_profile_owners"
+                result[identity][conflict] = True
             if len(owners) > 1 and not owner:
                 result[identity]["conflicting_profile_owners"] = True
     return list(result.values())
