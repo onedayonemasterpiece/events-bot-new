@@ -1,10 +1,11 @@
 services:
   events:
-    image: runcoveer/events:guide-transport-20261116
+    image: runcoveer/events:guide-vk-narrative-20261117
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
     environment:
+      GUIDE_DIGEST_SOL_SOCKET: /data/guide-sol/writer.sock
       STATIC_SITE_BUILD_PROFILE: "related-only"
       STATIC_SITE_GEMMA_RELATED_VERIFY: "1"
       ENABLE_GUIDE_VISUAL_DIGEST_MAX: "1"

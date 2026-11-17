@@ -59,7 +59,7 @@ def test_card_uses_existing_description_without_generation(monkeypatch):
         texts.append(text)
         return original(self, xy, text, *args, **kwargs)
     monkeypatch.setattr(ImageDraw.ImageDraw, 'text', text)
-    render_visual_digest_card([{'canonical_title': 'Поездка', 'date': '2026-11-29', 'city': 'Город', 'digest_blurb': 'Увидим лес и старые кирхи.'}], issue_id=1)
+    render_visual_digest_card([{'canonical_title': 'Поездка', 'date': '2026-11-29', 'city': 'Город', 'fact_pack': {'main_hook': 'Увидим лес и старые кирхи.'}}], issue_id=1)
     assert any('Увидим лес' in str(x) for x in texts)
 
 
@@ -88,16 +88,27 @@ def test_latest_roles_clear_stale_organizer_and_same_person_keeps_both_roles():
     assert len(people) == 1 and people[0]['roles'] == ['Гид', 'Организатор']
 
 
-def test_card_renders_every_participant_without_using_source_photo(monkeypatch):
+def test_card_renders_pictured_participants_without_using_source_photo(monkeypatch, tmp_path):
+    # Owner rule 2026-11-16: a row shows only people with a picture; initials appear once and
+    # only when nobody in the row has one.
     from guide_excursions import visual_digest as visual
     drawn = []
     monkeypatch.setattr(visual, '_draw_avatar', lambda img, row, *args: drawn.append(row))
-    people = [{'name': 'Ноза Усманова', 'roles': ['Гид'], 'path': '/nosa.webp'},
+    nosa, project = str(tmp_path / 'nosa.webp'), str(tmp_path / 'project.webp')
+    for path in (nosa, project):
+        Image.new('RGB', (10, 10)).save(path, 'WEBP')
+    people = [{'name': 'Ноза Усманова', 'roles': ['Гид'], 'path': nosa},
         {'name': 'Другой гид', 'roles': ['Гид'], 'path': None},
-        {'name': 'Проект', 'roles': ['Организатор'], 'path': '/project.webp'}]
-    visual.render_visual_digest_card([{'canonical_title': 'Прогулка', 'date': '2026-11-29',
-        'source_avatar_path': '/source.webp', 'participant_medallions': people}], issue_id=1)
-    assert [r['source_avatar_path'] for r in drawn] == ['/nosa.webp', '', '/project.webp']
+        {'name': 'Проект', 'roles': ['Организатор'], 'path': project}]
+    row = {'canonical_title': 'Прогулка', 'date': '2026-11-29', 'source_avatar_path': '/source.webp',
+        'participant_medallions': people}
+    visual.render_visual_digest_card([row], issue_id=1)
+    assert [r['source_avatar_path'] for r in drawn] == [nosa, project]
+    drawn.clear()
+    visual.render_visual_digest_card([dict(row, participant_medallions=[
+        {'name': 'Проект', 'roles': ['Организатор'], 'path': None},
+        {'name': 'Другой гид', 'roles': ['Гид'], 'path': None}])], issue_id=1)
+    assert [r['guide_names'] for r in drawn] == [['Другой гид']]
 
 
 @pytest.mark.asyncio
@@ -114,6 +125,107 @@ async def test_source_matching_an_explicit_organizer_gets_that_role_once(tmp_pat
     people = row['participant_medallions']
     assert len(people) == 2
     assert people[1]['owner'] == -237389053 and people[1]['roles'] == ['Организатор']
+
+
+@pytest.mark.asyncio
+async def test_two_source_aliases_merge_after_vk_resolution_and_keep_other_people(tmp_path, monkeypatch):
+    source = -237389053
+    guide_owner = 123
+    photo = tmp_path / 'public.webp'
+    async def ensure(owner):
+        return photo
+    monkeypatch.setattr(avatars, 'ensure_vk_avatar', ensure)
+    monkeypatch.setattr(avatars, 'avatar_metadata', lambda owner: {'name': '80 лет единства'})
+    profiles = [{'display_name': 'Анна Орлова', 'facts_rollup_json': '{"vk_user_id":123}'}]
+    participants = avatars.guide_participants
+    monkeypatch.setattr(avatars, 'guide_participants', lambda row, _: participants(row, profiles))
+    row = {'source_platform': 'vk', 'source_flags_json': '{"vk_id":237389053}',
+           'guide_names': ['Анна Орлова', '80 лет единства — экскурсионный контур', 'Мария Орлова'],
+           'organizer_names': ['80 лет единства']}
+    await avatars.prepare_guide_avatars([row])
+    assert [(p['name'], p['owner'], p['roles']) for p in row['participant_medallions']] == [
+        ('Анна Орлова', guide_owner, ['Гид']),
+        ('80 лет единства', source, ['Гид', 'Организатор']),
+        ('Мария Орлова', None, ['Гид']),
+    ]
+
+
+def test_old_card_features_and_full_size_horizontal_participants_are_preserved(monkeypatch, tmp_path):
+    from guide_excursions import visual_digest as visual
+    avatars_drawn, badges, chips, texts = [], [], [], []
+    monkeypatch.setattr(visual, '_draw_avatar', lambda img, row, x, y, size, *args: avatars_drawn.append((x,y,size)))
+    original_badges, original_chip, original_text = visual._draw_icon_badges, visual._draw_chip, ImageDraw.ImageDraw.text
+    def badge(img, modes, *args): badges.extend(modes); return original_badges(img,modes,*args)
+    def chip(draw, text, *args): chips.append(text); return original_chip(draw,text,*args)
+    def text(draw, xy, value, *args, **kwargs): texts.append(value); return original_text(draw,xy,value,*args,**kwargs)
+    monkeypatch.setattr(visual, '_draw_icon_badges', badge)
+    monkeypatch.setattr(visual, '_draw_chip', chip)
+    monkeypatch.setattr(ImageDraw.ImageDraw, 'text', text)
+    row = {'canonical_title': 'Амалиенау', 'date': '2026-11-20', 'seats_text':'10 мест',
+        'fact_pack': {'group_format':'walking_tour', 'route_summary':'Амалиенау',
+                      'main_hook':'архитектура · виллы · детали'},
+        'participant_medallions': [ {'name':'Гид Один','roles':['Гид'],'path':str(tmp_path/'a.webp')},
+            {'name':'Проект','roles':['Организатор'],'path':str(tmp_path/'b.webp')} ]}
+    for name in ('a.webp', 'b.webp'):
+        Image.new('RGB', (10, 10)).save(tmp_path / name, 'WEBP')
+    visual.render_visual_digest_card([row], issue_id=309)
+    assert [a[2] for a in avatars_drawn] == [140,140]
+    assert avatars_drawn[0][1] == avatars_drawn[1][1]
+    assert avatars_drawn[1][0]-avatars_drawn[0][0] == 112
+    assert 'walk' in badges and chips == ['10 мест']
+    assert 'архитектура · виллы · детали' in texts
+    assert not set(texts) & {'Гид','Организатор','Источник','Источник ВКонтакте'}
+    assert visual._modes_for({'fact_pack':{'group_format':'bus_tour'}}) == ['bus']
+    assert visual._seats_text({'seats_text':'7+', 'fact_pack':{'seats_text':None}}) == ''
+
+
+def test_route_title_is_not_repeated_as_the_place_for_real_new_tour():
+    from guide_excursions.visual_digest import _place_line
+    assert _place_line({'canonical_title':'Зелёные истории', 'city':'Калининград',
+        'fact_pack':{'route_summary':'Зелёные истории'}}) == 'Калининград'
+
+
+def test_existing_person_profile_alias_keeps_one_portrait_for_both_roles():
+    profiles = [
+        {'display_name':'Amber Fringilla','profile_kind':'person',
+         'facts_rollup_json':'{"guide_line":"Юлия Гришанова, орнитолог и гид"}'},
+        {'display_name':'Юлия Гришанова — экопрогулки','profile_kind':'guide',
+         'facts_rollup_json':'{"vk_user_id":51545052}'},
+    ]
+    people = avatars.guide_participants({'guide_names':['Юлия Гришанова'],
+        'organizer_names':['Amber Fringilla']},profiles)
+    assert len(people) == 1 and people[0]['owner'] == 51545052
+    assert people[0]['roles'] == ['Гид','Организатор']
+    profiles[0]['profile_kind']='project'
+    assert len(avatars.guide_participants({'guide_names':['Юлия Гришанова'],
+        'organizer_names':['Amber Fringilla']},profiles)) == 2
+
+
+def test_card_description_keeps_the_entire_hook():
+    from guide_excursions.visual_digest import _card_description
+    row = {'canonical_title': 'Зелёные истории', 'guide_names': ['Ольга Рубцова'],
+           'organizer_names': ['80 ЛЕТ ЕДИНСТВА'],
+           'fact_pack': {'main_hook': 'экскурсия проекта 80 ЛЕТ ЕДИНСТВА с музыкой, играми и квестами'},
+           'digest_blurb': 'Приглашаем на экскурсию «Зелёные истории» 17 ноября в 14:00. Гид — Ольга Рубцова.'}
+    assert _card_description(row) == row['fact_pack']['main_hook']
+    row = {'canonical_title': 'Секреты чёрного золота: экскурсия на Осетровую ферму',
+           'fact_pack': {'main_hook': 'экскурсия на Осетровую ферму с секретами чёрного золота'},
+           'digest_blurb': 'Увлекательная экскурсия на Осетровую ферму с дегустацией эксклюзивных закусок'}
+    assert _card_description(row) == row['fact_pack']['main_hook']
+    assert _card_description({'canonical_title': 'Поездка', 'digest_blurb': 'Поездка'}) == ''
+
+
+def test_card_does_not_repeat_named_venue_below_title(monkeypatch):
+    from guide_excursions.visual_digest import render_visual_digest_card
+    texts = []
+    original = ImageDraw.ImageDraw.text
+    def capture(self, xy, text, *args, **kwargs):
+        texts.append(text)
+        return original(self, xy, text, *args, **kwargs)
+    monkeypatch.setattr(ImageDraw.ImageDraw, 'text', capture)
+    render_visual_digest_card([{'canonical_title': 'Экскурсия на Осетровую ферму',
+        'route_summary': 'Осетровую ферму', 'date': '2026-11-22'}], issue_id=1)
+    assert 'Осетровую ферму' not in texts
 
 
 @pytest.mark.parametrize('original_cached', [False, True])
@@ -150,3 +262,121 @@ async def test_site_medallion_uses_original_while_source_links_keep_publication(
         assert [item['owner_id'] for item in event['source_medallions']] == [-123]
     finally:
         await db.close()
+
+
+def test_dated_guide_credit_supplies_writer_identity_without_a_profile():
+    title = 'Время первых: через тернии к звёздам'
+    line = f'28.11 (сб) 11:00 — «{title}», гид [id123|Варвара Лалэко]'
+    post = {'url': 'https://vk.com/wall-10_20', 'post_date': '2026-11-10', 'text': line}
+    row = {'id': 749, 'canonical_title': title, 'date': '2026-11-28', 'time': '11:00',
+           'linked_posts': [post], 'source_roles_checked': True, 'fact_pack': {'guide_names': []}}
+    row['participant_medallions'] = avatars.guide_participants(row, [])
+    from guide_excursions.visual_digest import _vk_narrative_payload
+    payload, identities = _vk_narrative_payload([row])
+    assert list(identities.values()) == [(123, 'Варвара Лалэко')]
+    assert payload['excursions'][0]['guides'] == ['Варвара Лалэко']
+
+    for different in (dict(date='2026-11-29'), dict(time='12:00'), dict(canonical_title='Другой маршрут')):
+        assert not avatars.guide_participants(dict(row, **different), [])
+    for wrong in (dict(url='https://t.me/example/20'), dict(text=line.replace('гид', 'организатор')),
+                  dict(text=line.replace('[id123', '[club123'))):
+        assert not avatars.guide_participants(dict(row, linked_posts=[dict(post, **wrong)]), [])
+    other = dict(post, text=line.replace('[id123', '[id456'))
+    conflict, = avatars.guide_participants(dict(row, linked_posts=[post, other]), [])
+    assert conflict['name'] == 'Варвара Лалэко' and conflict['owner'] is None
+    stale = {'display_name': 'Варвара Лалэко', 'facts_rollup_json': '{"vk_user_id":456}'}
+    conflict, = avatars.guide_participants(row, [stale])
+    assert conflict['owner'] is None and conflict['path'] is None
+
+
+def test_same_announced_guide_on_two_departures_keeps_one_writer_identity():
+    from guide_excursions.visual_digest import _vk_narrative_payload
+
+    linked = '29.11 (вс) 11:00 — «Созидание: люди и судьбы», гид [id90171626|Татьяна Медведева]'
+    plain = '29.11 (вс) 14:00 — «От Победы до Победы», гид Татьяна Медведева'
+    post = dict(url='https://vk.com/wall-211429559_3892', post_date='2026-11-15', text=linked+'\n'+plain)
+    first = dict(id=751, canonical_title='Созидание: люди и судьбы', date='2026-11-29', time='11:00', linked_posts=[post])
+    second = dict(first, id=752, canonical_title='От Победы до Победы', time='14:00')
+    for row in (first, second):
+        row['participant_medallions'] = avatars.guide_participants(row, [])
+        assert row['participant_medallions'][0]['owner'] == 90171626
+    payload, people = _vk_narrative_payload([first, second])
+    assert people == {1: (90171626, 'Татьяна Медведева')}
+    assert payload['people'][0]['excursions'] == [751, 752]
+
+    # Another post, date, role, or namesake cannot identify the second departure's guide.
+    for text in (plain, linked.replace('29.11', '28.11')+'\n'+plain,
+                 linked.replace('гид ', 'запись у ')+'\n'+plain,
+                 linked.replace('Татьяна Медведева', 'Тамара Медведева')+'\n'+plain):
+        people = avatars.guide_participants(dict(second, linked_posts=[dict(post, text=text)]), [])
+        assert not any(person.get('owner') for person in people)
+    conflicting = linked.replace('11:00', '10:00').replace('id90171626', 'id999')
+    people = avatars.guide_participants(dict(second, linked_posts=[dict(post, text='\n'.join([linked, conflicting, plain]))]), [])
+    assert people[0]['owner'] is None
+
+
+@pytest.mark.asyncio
+async def test_first_party_operator_community_works_from_telegram_and_a_third_party_wall(tmp_path, monkeypatch):
+    import aiosqlite
+    import main
+
+    db_path = tmp_path / 'registry.sqlite'
+    db = SimpleNamespace(raw_conn=lambda: aiosqlite.connect(db_path))
+    async with db.raw_conn() as conn:
+        await conn.executescript('''
+            CREATE TABLE guide_profile (id, display_name, marketing_name, profile_kind, source_links_json, facts_rollup_json);
+            CREATE TABLE guide_source (primary_profile_id, title, about_text, platform);
+            INSERT INTO guide_profile VALUES (1, 'Профи-тур', '', 'operator', '[]', '{}');
+            INSERT INTO guide_source VALUES (1, 'Экскурсии от «Профи-тур»', 'Мы ВКонтакте: https://vk.com/profi_tur39', 'telegram');
+            INSERT INTO guide_profile VALUES (2, 'Клуб Прогулок', '', 'project', '["https://vk.com/club_walks"]', '{}');
+        ''')
+    image = tmp_path / 'portrait.webp'
+    Image.new('RGB', (64,64), 'red').save(image)
+    handles = []
+    async def resolve(handle):
+        handles.append(handle)
+        if handle == 'club_walks': return 46, 'Клуб прогулок', handle, 'group'
+        return 12286984, 'ПУТЕШЕСТВИЯ "ПРОФИ-ТУР"', handle, 'group'
+    async def ensure(owner): return image if owner in {-12286984, -46} else None
+    monkeypatch.setattr(main, 'vk_resolve_group', resolve)
+    monkeypatch.setattr(avatars, 'ensure_vk_avatar', ensure)
+    primary = dict(source_platform='telegram', source_title='Экскурсии от «Профи-тур»',
+                   source_about_text='Мы ВКонтакте: https://vk.com/profi_tur39', organizer_names=['Профи-тур'])
+    secondary = dict(source_platform='vk', source_title='Завод OSQ', source_flags_json='{"vk_id":123}',
+                     organizer_names=['Профи-тур', 'Клуб прогулок'], guide_names=['Татьяна'])
+    await avatars.prepare_guide_avatars([primary, secondary, dict(primary)], db)
+    assert set(handles) == {'profi_tur39', 'club_walks'} and len(handles) == 2
+    assert primary['participant_medallions'] == [{'name':'Профи-тур','roles':['Организатор'],'owner':-12286984,'path':str(image)}]
+    assert [p['owner'] for p in secondary['participant_medallions']] == [None,-12286984,-46]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(('about', 'source', 'title', 'kind'), [
+    ('Контакт: https://vk.com/example', 'Экскурсии от «Бюро»', 'Бюро', 'group'),
+    ('Мы ВКонтакте: https://vk.com/example', 'Другой издатель', 'Бюро', 'group'),
+    ('Мы ВКонтакте: https://vk.com/example', 'Бюро', 'Друзья бюро', 'group'),
+    ('Мы ВКонтакте: https://vk.com/example', 'Бюро', 'Бюро', 'user'),
+    ('Мы ВКонтакте: https://vk.com/first и https://vk.com/second', 'Бюро', 'Бюро', 'group'),
+    ('Мы ВКонтакте: https://vk.com/example/posts', 'Бюро', 'Бюро', 'group'),
+])
+async def test_organizer_portrait_needs_an_unambiguous_first_party_group(monkeypatch, about, source, title, kind):
+    import main
+    async def resolve(handle): return 123, title, handle, kind
+    async def no_portrait(owner): pytest.fail(f'Unexpected portrait request for {owner}')
+    monkeypatch.setattr(main, 'vk_resolve_group', resolve)
+    monkeypatch.setattr(avatars, 'ensure_vk_avatar', no_portrait)
+    row = dict(source_platform='telegram', source_title=source, source_about_text=about,
+               organizer_names=['Бюро'], guide_names=['Инга Петрова'])
+    await avatars.prepare_guide_avatars([row])
+    assert [p['owner'] for p in row['participant_medallions']] == [None, None]
+
+
+@pytest.mark.asyncio
+async def test_competing_registered_and_declared_communities_remain_unassigned(monkeypatch):
+    import main
+    async def unexpected(handle): pytest.fail(f'Unexpected VK lookup for {handle}')
+    monkeypatch.setattr(main, 'vk_resolve_group', unexpected)
+    row = dict(source_platform='telegram', source_title='Бюро', source_about_text='Мы ВКонтакте: https://vk.com/second')
+    organizer = {'name':'Бюро', 'roles':['Организатор'], 'owner':None}
+    await avatars._attach_organizer_communities(row, [organizer], {'бюро':{'first'}}, {})
+    assert organizer['owner'] is None

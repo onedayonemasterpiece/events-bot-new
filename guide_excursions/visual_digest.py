@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Mapping, Sequence
+from typing import Any, Awaitable, Callable, Iterator, Mapping, Sequence
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import aiosqlite
@@ -33,7 +33,9 @@ from telegram_sources import canonicalize_tg_url, parse_tg_post_url
 
 from .dedup import deduplicate_occurrence_rows
 from .digest import RU_MONTH_GEN, format_date_time
-from .parser import collapse_ws
+from .digest_writer import VK_NAME_MARK_RE, ask_vk_narrative
+from .parser import collapse_ws, extract_date_iso, normalize_title_key, occurrence_fare, price_for_publication, split_occurrence_blocks
+from .tic_catalog import load_tic_background
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +89,12 @@ VISUAL_DIGEST_TELEGRAM_ENABLED = (
     (os.getenv("ENABLE_GUIDE_VISUAL_DIGEST_TELEGRAM") or "1").strip().lower()
     in {"1", "true", "yes", "on"}
 )
+# Owner decision 2026-11-16: personal VK mentions are tested in the sandbox only;
+# ordinary editions keep plain names until he enables them.
+VISUAL_DIGEST_VK_MENTIONS_ENABLED = (
+    (os.getenv("GUIDE_VISUAL_DIGEST_VK_MENTIONS") or "").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
 VISUAL_DIGEST_STORIES_ENABLED = (
     (os.getenv("ENABLE_GUIDE_VISUAL_DIGEST_VK_STORIES") or "").strip().lower()
     in {"1", "true", "yes", "on"}
@@ -104,6 +112,7 @@ _MAIN_FONT = _FONT_DIR / "Cygre-ExtraBold.ttf"
 _BOLD_FONT = _FONT_DIR / "Cygre-Bold.ttf"
 _SEMI_FONT = _FONT_DIR / "Cygre-SemiBold.ttf"
 _DEJAVU_BOLD = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
+_NUMERO_FONT = _FONT_DIR.resolve().parents[1] / "video_announce" / "assets" / "DrukCyr-Bold.ttf"
 
 W, H = 1080, 1350
 RU_MONTH_SHORT = {
@@ -360,7 +369,30 @@ def _alpha_circle_layer(size: tuple[int, int], bbox: tuple[int, int, int, int], 
     return layer
 
 
-def _wrap_by_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, max_width: int, max_lines: int) -> list[str]:
+def _card_text_runs(text: str, font: ImageFont.FreeTypeFont):
+    for word in re.split("(№)", text):
+        if word:
+            yield word, _font(_NUMERO_FONT, font.size) if word == "№" else font
+
+
+def _draw_card_line(draw, xy, text, font, fill):
+    if "№" not in text:
+        draw.text(xy, text, font=font, fill=fill)
+        return
+    x, y = xy
+    baseline = y + font.getmetrics()[0]
+    for run, face in _card_text_runs(text, font):
+        draw.text((x, baseline), run, font=face, fill=fill, anchor="ls")
+        x += draw.textlength(run, font=face)
+
+
+def _wrap_by_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, max_width: int,
+                   max_lines: int, *, use_numero: bool = False) -> list[str]:
+    def width(line: str) -> float:
+        if use_numero and "№" in line:
+            return sum(draw.textlength(run, font=face) for run, face in _card_text_runs(line, font))
+        return draw.textlength(line, font=font)
+
     words = _plain(text).split()
     if not words:
         return []
@@ -370,7 +402,7 @@ def _wrap_by_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTyp
     consumed = 0
     for idx, word in enumerate(words):
         candidate = f"{current} {word}".strip()
-        if not current or draw.textlength(candidate, font=font) <= max_width:
+        if not current or width(candidate) <= max_width:
             current = candidate
             consumed = idx + 1
             continue
@@ -385,7 +417,7 @@ def _wrap_by_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTyp
     if len(lines) == max_lines and (truncated or consumed < len(words)):
         # Ensure visibly truncated titles end with ellipsis, not an abrupt word.
         last = lines[-1]
-        while last and draw.textlength(last + "…", font=font) > max_width:
+        while last and width(last + "…") > max_width:
             last = last[:-1].rstrip()
         lines[-1] = (last + "…") if last else "…"
     return lines
@@ -547,6 +579,8 @@ def _is_katya_kostyugova(row: Mapping[str, Any]) -> bool:
 
 
 def _source_name(row: Mapping[str, Any]) -> str:
+    if people := row.get("participant_medallions"):
+        return ", ".join(dict.fromkeys(_plain(p["name"]) for p in people))
     row = {**row, **{k: v for k, v in (row.get("fact_pack") or {}).items() if k in ("guide_names", "organizer_names")}}
     guides = [_plain(x) for x in (row.get("guide_names") or []) if _plain(x)] if isinstance(row.get("guide_names"), list) else []
     orgs = [_plain(x) for x in (row.get("organizer_names") or []) if _plain(x)] if isinstance(row.get("organizer_names"), list) else []
@@ -558,6 +592,8 @@ def _source_name(row: Mapping[str, Any]) -> str:
         return ", ".join(guides)
     if orgs:
         return ", ".join(orgs)
+    if row.get("source_roles_checked"):
+        return ""
     return _plain(row.get("guide_line") or row.get("organizer_line") or row.get("guide_profile_marketing_name") or row.get("source_title"))
 
 
@@ -580,80 +616,186 @@ def _short_meeting_point(value: Any) -> str:
     return _fit(text, 42)
 
 
-def _place_line(row: Mapping[str, Any]) -> str:
+_PLACE_CASE_ENDINGS = (
+    r"(?:а|я|у|ю|е|и|ы|о|ой|ей|ом|ем|ам|ям|ах|ях|ов|ев|ый|ий|ая|яя|ое|ее|"
+    r"ую|юю|ые|ие|ого|его|ому|ему|ым|им|ых|их)?"
+)
+
+
+def _place_phrase(value: str) -> re.Pattern[str]:
+    """Match the same consecutive words with ordinary Russian case endings."""
+    words = []
+    for word in re.findall(r"[а-яa-z0-9]+", value.casefold().replace("ё", "е")):
+        stem = re.sub(r"(?:ый|ий|ая|яя|ое|ее|а|я|о|е|ы|и)$", "", word)
+        if len(stem) >= 4 and re.fullmatch("[а-я]+", word):
+            words.append(re.escape(stem) + _PLACE_CASE_ENDINGS)
+        else:
+            words.append(re.escape(word))
+    return re.compile(r"(?<!\w)" + r"""[\s«»„“”’'":,–—-]+""".join(words) + r"(?!\w)")
+
+
+def _card_source_blocks(row: Mapping[str, Any], title: str) -> Iterator[str]:
+    day = _plain(row.get("date"))
+    posts = row.get("linked_posts")
+    if posts is None:
+        posts = [{"text": row.get("dedup_source_text"), "post_date": day}]
+    title_match = _place_phrase(title)
+    for post in posts:
+        text = str(post.get("text") or "").casefold().replace("ё", "е")
+        if not text:
+            continue
+        try:
+            published = datetime.fromisoformat(str(post.get("post_date") or day))
+        except ValueError:
+            continue
+        blocks = split_occurrence_blocks(text, post_date=published, keep_lines=True)
+        for block in blocks:
+            block_day = extract_date_iso(block, post_date=published)
+            linked_single = not block_day and len(blocks) == 1 and post.get("post_kind") == "announce_single"
+            if (block_day == day or linked_single) and title_match.search(block):
+                yield block
+
+
+def _confirmed_card_labels(row: Mapping[str, Any], labels: Sequence[str]) -> list[str]:
+    """Choose labels from a single source block in the order they appear there."""
+    patterns = [(label, _place_phrase(label)) for label in dict.fromkeys(labels) if re.search(r"\w", label)]
     title = _plain(row.get("canonical_title"))
-    low = title.lower().replace("ё", "е")
+    if not title or not patterns:
+        return []
+    best = []
+    for block in _card_source_blocks(row, title):
+        matches = [(m.start(), label) for label, pattern in patterns if (m := pattern.search(block))]
+        if len(matches) > len(best):
+            best = sorted(matches)
+    return [label for _, label in best[:3]]
+
+
+def _place_line(row: Mapping[str, Any]) -> str:
     meeting = _short_meeting_point(_fact(row, "meeting_point") or row.get("meeting_point"))
-    route = _route_raw(row)
     if meeting:
-        point = re.sub(r"(?iu)^от\s+", "", meeting)
-        if "железнодорожн" in low and "ворот" in low:
-            return "Железнодорожные ворота" if re.search("Железнодорожные ворота", point, re.I) else f"{point} → Железнодорожные ворота"
-        if "трамва" in low or "зеленоградск" in low:
-            return point
-        if "культурная революция: туда" in low:
-            return f"{point} → Хуфен"
-        if re.search(r"(?iu)^(Гвардейский|Железнодорожный$|Железнодорожные ворота$)", point):
-            return point
-        return point
-    if re.search(r"(?iu)балтийск|балткос", low):
-        return "Балтийск → Балтийская коса"
-    if re.search(r"(?iu)куршск|дюн", low):
-        return "Куршская коса"
-    if re.search(r"(?iu)коса, коты|сыр", low):
-        return "побережье области"
-    if "амалиенау" in low:
-        return "Калининград · Амалиенау"
-    if "понарт" in low:
-        return "Калининград · Понарт"
-    if "проспект мира" in low:
-        return "Калининград · проспект Мира"
-    if "фрунзе" in low:
-        return "Калининград · улица Фрунзе"
-    if "вармийск" in low:
-        return "Ушаково → Ладушкин → Багратионовск"
-    if "самб" in low:
-        return "Варген → Куменен → берег Балтики"
-    if "река города к" in low:
-        return "Кнайпхоф → мосты → порт → гавани"
-    if "трамва" in low:
-        return "Калининград · трамвайная история"
-    if "обзорная прогулка" in low:
-        return "Калининград · обзорный маршрут"
-    if route and len(route) < 58 and route.lower() != low:
-        return route
-    return _plain(row.get("city") or _fact(row, "city")) or "детали в тексте"
+        return re.sub(r"(?iu)^от\s+", "", meeting)
+    title = _plain(row.get("canonical_title"))
+    route = _route_raw(row)
+    if title and route and normalize_title_key(route) != normalize_title_key(title):
+        parts = [p.strip() for p in re.split(r"\s*(?:[,;→·]|\s[–—]\s)\s*", route) if p.strip()]
+        if confirmed := _confirmed_card_labels(row, parts):
+            return " · ".join(confirmed)
+    return _plain(_fact(row, "city") or row.get("city")) or "детали в тексте"
+
+
+def _schedule_attributes_day_to_other_title(post: Mapping[str, Any], title: str, day: str) -> bool:
+    """A named outing in the introduction is not automatically the first dated entry."""
+    text = str(post.get("text") or "").casefold().replace("ё", "е")
+    sections = re.split(r"(?m)^\s*расписание\s*:\s*", text, maxsplit=1)
+    if len(sections) != 2 or not title or not day:
+        return False
+    intro, schedule = sections
+    name = _place_phrase(title)
+    try:
+        anchor = datetime.fromisoformat(str(post.get("post_date") or day))
+    except ValueError:
+        return False
+    if not name.search(intro) or any(extract_date_iso(line, post_date=anchor) == day for line in intro.splitlines()):
+        return False
+    entries = [line for line in schedule.splitlines() if extract_date_iso(line, post_date=anchor) == day]
+    if not entries or any(name.search(line) for line in schedule.splitlines()):
+        return False
+    # Require an explicitly titled schedule entry. A terse time or a location alone
+    # gives no reason to override the extracted date.
+    return all(re.search(r"[—–-]\s*[«\"“][^»\"”]+[»\"”]", entry) for entry in entries)
+
+
+def _opening_has_only_published_time(post: Mapping[str, Any], clock: str) -> bool:
+    text = str(post.get("text") or "")
+    if not re.fullmatch(r"\d{1,2}:\d{2}", clock) or text.count(clock) != 1:
+        return False
+    return bool(re.search(
+        r"\b(?:открытие|церемония)\b[^.!?\n]*?\bв\s+" + re.escape(clock) +
+        r"[.!]\s*В\s+(?:этот|тот)\s+(?:же\s+)?день\b[^.!?\n]*?\b(?:экскурси|прогулк)",
+        text, re.I,
+    ))
+
+
+def _apply_published_facts(row: dict[str, Any], posts: Sequence[Mapping[str, Any]]) -> None:
+    """Recover the outing's extracted roles and fare before loading portraits or composing a post."""
+    title = _plain(row.get("canonical_title"))
+    day = _plain(row.get("date"))
+    title_key = normalize_title_key(title).removeprefix("на ")
+    pack = row.setdefault("fact_pack", {})
+    roles: dict[str, set[str]] = {}
+    current_price = price_for_publication(row.get("price_line") or row.get("price_text") or pack.get("price_text"))
+    fares = set()
+    for post in posts:
+        text = post.get("text") or ""
+        extractions = _parse_json_array(post.get("raw_facts_json"))
+        programme = len({e.get("canonical_title") or e.get("title") for e in extractions
+                         if isinstance(e, Mapping)}) > 1 or post.get("post_kind") == "announce_multi"
+        for item in extractions:
+            if not isinstance(item, Mapping) or (item.get("date") or item.get("date_iso")) != day:
+                continue
+            if normalize_title_key(item.get("canonical_title") or item.get("title") or "").removeprefix("на ") != title_key:
+                continue
+            if row.get("time") and item.get("time") and row["time"] != item["time"]:
+                continue
+            for key in ("guide_names", "organizer_names"):
+                if not isinstance(item.get(key), list):
+                    continue
+                names = roles.setdefault(key, set())
+                for name in item[key]:
+                    if not isinstance(name, str):
+                        continue
+                    if key == "organizer_names" and programme:
+                        event_lines = [line.casefold() for line in text.splitlines() if title.casefold() in line.casefold()]
+                        other_guide = any(name.casefold() in line.casefold() and "гид" in line.casefold()
+                                          for line in text.splitlines() if title.casefold() not in line.casefold())
+                        named_here = any(name.casefold() in line and "организ" in line for line in event_lines)
+                        if other_guide and not named_here:
+                            continue
+                    names.add(name.casefold())
+        if not current_price or current_price.casefold() == "по запросу":
+            try:
+                anchor = datetime.fromisoformat(post.get("post_date") or day).replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                continue
+            fare = occurrence_fare(text, title=title, date_iso=day, published=anchor)
+            if fare:
+                fares.add(fare)
+
+    for key, supported in roles.items():
+        names = [n for n in pack.get(key, row.get(key, [])) or [] if isinstance(n, str) and n.casefold() in supported]
+        row[key] = pack[key] = names
+    if roles:
+        row["source_roles_checked"] = True
+        # Frozen editions can already contain resolved portraits. Normal editions resolve them next.
+        if isinstance(row.get("participant_medallions"), list):
+            people = []
+            for person in row["participant_medallions"]:
+                allowed = [role for role in person.get("roles", []) if
+                           (role == "Гид" and person["name"] in row.get("guide_names", [])) or
+                           (role == "Организатор" and person["name"] in row.get("organizer_names", []))]
+                if allowed:
+                    people.append(dict(person, roles=allowed))
+            row["participant_medallions"] = people
+    if len(fares) == 1:
+        current_price = fares.pop()
+    row["price_text"] = pack["price_text"] = current_price
+    if "price_line" in row:
+        row["price_line"] = current_price
+
+
+def _card_description(row: Mapping[str, Any]) -> str:
+    """Keep the source wording of the hook intact on the card and in writer input."""
+    return _plain(_fact(row, "main_hook") or row.get("main_hook"))
 
 
 def _focus_line(row: Mapping[str, Any]) -> str:
-    text = (_plain(row.get("canonical_title")) + " " + _route_raw(row)).lower().replace("ё", "е")
-    if re.search(r"амалиенау|вилл", text):
-        return "архитектура · виллы · детали"
-    if "вармийск" in text:
-        return "руины · кирхи · юго-запад области"
-    if re.search(r"куршск|дюн", text):
-        return "дюны · природа · море"
-    if re.search(r"балтийск|балткос|порт", text):
-        return "форты · порт · море"
-    if re.search(r"коты|сыр", text):
-        return "море · коты · сыр"
-    if re.search(r"река|сплав|анграп", text):
-        return "река · природа · активный формат"
-    if "трамва" in text:
-        return "городской транспорт · история"
-    if re.search(r"понарт|фрунзе|проспект мира|железнодорожн", text):
-        return "городская история · архитектура"
-    if "культурная революция" in text:
-        return "городская история · культура"
-    audience = row.get("audience_fit") if isinstance(row.get("audience_fit"), list) else []
-    ru_audience = [
-        _plain(x)
-        for x in audience[:3]
-        if _plain(x) and re.search(r"[А-Яа-яЁё]", _plain(x))
-    ]
-    if ru_audience:
-        return " · ".join(ru_audience)[:48]
-    return ""
+    if _card_description(row):
+        return ""
+    audience = (row.get("fact_pack") or {}).get("audience_fit", row.get("audience_fit"))
+    if not isinstance(audience, list):
+        return ""
+    labels = [_plain(label) for label in audience if isinstance(label, str) and re.search("[а-яё]", label, re.I)]
+    return " · ".join(_confirmed_card_labels(row, labels))
 
 
 def _modes_for(row: Mapping[str, Any]) -> list[str]:
@@ -676,7 +818,8 @@ def _modes_for(row: Mapping[str, Any]) -> list[str]:
 
 
 def _seats_text(row: Mapping[str, Any]) -> str:
-    text = _plain(row.get("seats_line") or row.get("seats_text"))
+    facts = row.get("fact_pack") or {}
+    text = _plain(facts.get("seats_text") if "seats_text" in facts else (row.get("seats_line") or row.get("seats_text")))
     if not text:
         return ""
     m = re.search(r"\d+", text)
@@ -714,7 +857,7 @@ def _visual_item_state(row: Mapping[str, Any]) -> dict[str, Any]:
         "date": _plain(row.get("date")),
         "time": _plain(row.get("time")),
         "status": _plain(row.get("status")),
-        "place": _place_line(row),
+        "city": _plain(_fact(row, "city") or row.get("city")),
         "meeting_point": _plain(_fact(row, "meeting_point") or row.get("meeting_point")),
         "route": _route_raw(row),
         "booking_url": _visual_booking_url(row),
@@ -724,6 +867,15 @@ def _visual_item_state(row: Mapping[str, Any]) -> dict[str, Any]:
         "is_last_call": bool(int(row.get("is_last_call") or 0)) if str(row.get("is_last_call") or "").strip().isdigit() else bool(row.get("is_last_call")),
     }
     return {key: value for key, value in state.items() if value not in ("", None, False)}
+
+
+def _visual_publication_states(rows: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+    states = {}
+    for row in rows:
+        states.update(row.get("covered_visual_states") or {})
+        if row.get("id"):
+            states.setdefault(str(row["id"]), _visual_item_state(row))
+    return states
 
 
 def _visual_issue_state_map(media_items_json: Any) -> dict[str, dict[str, Any]]:
@@ -776,7 +928,13 @@ def _visual_selection_reason(row: Mapping[str, Any]) -> str:
             return "low_seats"
         return ""
 
-    for key in ("date", "time", "status", "title", "place", "meeting_point", "booking_url", "price_text"):
+    # Old snapshots saved the rendered place line as well as the underlying route
+    # and meeting point. Compare source fields so a renderer update cannot replay them.
+    if "place" not in previous and current.get("city") != previous.get("city"):
+        return "changed_place"
+    if current.get("route") != previous.get("route"):
+        return "changed_place"
+    for key in ("date", "time", "status", "title", "meeting_point", "booking_url", "price_text"):
         if current.get(key) != previous.get(key):
             return f"changed_{key}"
     if current.get("is_last_call") and not previous.get("is_last_call"):
@@ -823,6 +981,24 @@ def _crop_circle(img: Image.Image, size: int) -> Image.Image:
     return out
 
 
+def _medallion_row(person: Mapping[str, Any]) -> dict[str, Any]:
+    return {"guide_names": [person["name"]], "source_title": person["name"],
+            "source_avatar_path": person.get("path") or ""}
+
+
+def _shown_medallions(people: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """People with a picture; when nobody has one, a single initials badge (the guide first)."""
+    def pictured(person: Mapping[str, Any]) -> bool:
+        row = _medallion_row(person)
+        bundled = _AVATAR_FILES.get(_avatar_key(row), "")
+        return Path(str(row["source_avatar_path"])).is_file() or bool(bundled and (_AVATAR_DIR / bundled).is_file())
+
+    shown = [person for person in people if pictured(person)]
+    if shown or not people:
+        return shown
+    return [next((p for p in people if "Гид" in (p.get("roles") or [])), people[0])]
+
+
 def _draw_avatar(draw_img: Image.Image, row: Mapping[str, Any], x: int, y: int, size: int, pal: VisualPalette, accent: str) -> None:
     layer = Image.new("RGBA", draw_img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
@@ -845,30 +1021,6 @@ def _draw_avatar(draw_img: Image.Image, row: Mapping[str, Any], x: int, y: int, 
         bb = d.textbbox((0, 0), txt, font=f)
         d.text((x + size / 2 - (bb[2] - bb[0]) / 2, y + size / 2 - (bb[3] - bb[1]) / 2 - 2), txt, font=f, fill=(255, 255, 255, 255))
     draw_img.alpha_composite(layer)
-
-
-def _draw_participant_medallions(img: Image.Image, row: Mapping[str, Any], x: int, y: int,
-        width: int, height: int, pal: VisualPalette, accent: str) -> None:
-    people = row.get("participant_medallions") or []
-    if not people:
-        _draw_avatar(img, row, x, y + (height - width) // 2, width, pal, accent)
-        return
-    columns = 1 if len(people) <= 2 else 2
-    lines = math.ceil(len(people) / columns)
-    size = min(100, width // columns - 6, (height - 16) // lines - 22)
-    start_y = y + (height - lines * (size + 22)) // 2
-    draw = ImageDraw.Draw(img)
-    for idx, person in enumerate(people):
-        cx = x + (idx % columns) * (width // columns) + (width // columns - size) // 2
-        cy = start_y + (idx // columns) * (size + 22)
-        # An unresolved person gets their own initials, never the source's portrait.
-        portrait_row = {"guide_names": [person["name"]], "source_title": person["name"],
-            "source_avatar_path": person.get("path") or ""}
-        _draw_avatar(img, portrait_row, cx, cy, size, pal, accent)
-        font = _font(_MAIN_FONT, 13 if columns > 1 else 16)
-        for role_idx, role in enumerate(person["roles"]):
-            draw.text((cx + size / 2, cy + size + 4 + role_idx * 18), role,
-                font=font, fill=_hex(pal.guide), anchor="mt")
 
 
 def _draw_icon_badges(img: Image.Image, modes: Sequence[str], x: int, y: int, pal: VisualPalette) -> None:
@@ -1011,7 +1163,6 @@ def render_visual_digest_card(
     title_font = _font(_MAIN_FONT, 36 if expanded else 32)
     guide_font = _font(_MAIN_FONT, 24 if expanded else 21)
     route_font = _font(_MAIN_FONT, 23 if expanded else 20)
-    focus_font = _font(_BOLD_FONT, 20 if expanded else 18)
 
     for i, row in enumerate(page_rows):
         y = y0 + i * (row_h + gap)
@@ -1028,38 +1179,52 @@ def render_visual_digest_card(
         rd = ImageDraw.Draw(row_layer)
         _draw_date_tile(rd, row, row_h, accent, palette)
         tx = 238
-        ty = 42 if expanded else 28
-        title_lines = _wrap_by_width(rd, _plain(row.get("canonical_title")) or "Экскурсия", title_font, 515, 2)
+        participants = _shown_medallions(row.get("participant_medallions") or [])
+        av_size = 140
+        avatar_step = round(av_size * 0.8)
+        av_x = 820 - max(0, len(participants) - 1) * avatar_step
+        text_width = min(515, av_x - 42 - tx - 22)
+        ty = (18 if len(participants) >= 3 else 24) if len(participants) > 1 else (42 if expanded else 28)
+        row_title_font = _font(_MAIN_FONT, 30) if len(participants) >= 3 else title_font
+        title_text = _plain(row.get("canonical_title")) or "Экскурсия"
+        title_lines = _wrap_by_width(rd, title_text, row_title_font, text_width, 3 if len(participants) >= 3 else 2, use_numero=True)
         for line in title_lines:
-            rd.text((tx, ty), line, font=title_font, fill=_hex(palette.text))
-            ty += 40 if expanded else 34
+            _draw_card_line(rd, (tx, ty), line, row_title_font, _hex(palette.text))
+            ty += 34 if len(participants) >= 3 else (40 if expanded else 34)
         guide = _source_name(row)
         if guide:
-            rd.text((tx, ty + 2), "".join(_wrap_by_width(rd, guide, guide_font, 515, 1)), font=guide_font, fill=_hex(palette.guide))
-            ty += 34 if expanded else 27
+            row_guide_font = _font(_MAIN_FONT, 20) if len(participants) >= 3 else guide_font
+            for name_line in _wrap_by_width(rd, guide, row_guide_font, text_width, max(1, len(participants))):
+                rd.text((tx, ty + 2), name_line, font=row_guide_font, fill=_hex(palette.guide))
+                ty += 23 if len(participants) >= 3 else (28 if len(participants) > 1 else (34 if expanded else 27))
         place = _place_line(row)
-        rd.text((tx, ty + 2), "".join(_wrap_by_width(rd, place, route_font, 515, 1)), font=route_font, fill=_hex(palette.route))
-        ty += 34 if expanded else 26
-        focus = _focus_line(row)
-        if focus:
-            rd.text((tx, ty + 2), "".join(_wrap_by_width(rd, focus, focus_font, 515, 1)), font=focus_font, fill=_hex(palette.focus))
-            ty += 27 if expanded else 23
-        description = _plain(_fact(row, "main_hook") or row.get("digest_blurb") or row.get("summary_one_liner"))
+        if place and place.casefold() not in _plain(row.get("canonical_title")).casefold():
+            labels = place.split(" · ")
+            while len(labels) > 1 and rd.textlength(" · ".join(labels), font=route_font) > text_width:
+                labels.pop()
+            rd.text((tx, ty + 2), "".join(_wrap_by_width(rd, " · ".join(labels), route_font, text_width, 1)),
+                    font=route_font, fill=_hex(palette.route))
+            ty += 34 if expanded else 26
+        description = _card_description(row) or _focus_line(row)
         description_font = _font(_MAIN_FONT, 21 if expanded else 18)
         line_h = 25 if expanded else 22
-        available_lines = max(0, min(2, (row_h - ty - 12) // line_h))
-        if description and available_lines:
-            for line in _wrap_by_width(rd, description, description_font, 515, available_lines):
-                rd.text((tx, ty + 2), line, font=description_font, fill=_hex(palette.route))
-                ty += line_h
+        available_lines = max(0, min(2, (row_h - ty - (54 if _seats_text(row) else 12)) // line_h))
+        for line in _wrap_by_width(rd, description, description_font, text_width, available_lines, use_numero=True) if description and available_lines else []:
+            _draw_card_line(rd, (tx, ty + 2), line, description_font, _hex(palette.route))
+            ty += line_h
         seats = _seats_text(row)
         if seats:
-            _draw_chip(rd, seats, 654, row_h - (54 if expanded else 52), accent)
+            chip_width = max(92, int(rd.textlength(seats, font=_font(_MAIN_FONT, 17))) + 28)
+            chip_x = min(654, av_x - 42 - chip_width - 14)
+            _draw_chip(rd, seats, chip_x, row_h - (54 if expanded else 52), accent)
         img.alpha_composite(row_layer, (42, y))
-        av_size = 140
-        av_x = 42 + 778
         av_y = y + round((row_h - av_size) / 2)
-        _draw_participant_medallions(img, row, av_x, y, av_size, row_h, palette, accent)
+        if participants:
+            for idx, person in enumerate(participants):
+                px = av_x + idx * avatar_step
+                _draw_avatar(img, _medallion_row(person), px, av_y, av_size, palette, accent)
+        elif not row.get("source_roles_checked"):
+            _draw_avatar(img, row, av_x, av_y, av_size, palette, accent)
         modes = _modes_for(row)
         _draw_icon_badges(img, modes, 42 + 920, av_y + (12 if len(modes) > 1 else 76), palette)
 
@@ -1133,9 +1298,7 @@ async def _load_transport(conn: aiosqlite.Connection, row: dict[str, Any]) -> No
                             "source_url": first["source_url"], "program_source_url": first["program_source_url"]}
 
 
-async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) -> list[dict[str, Any]]:
-    await ensure_visual_digest_schema(conn)
-    sql = """
+_VISUAL_ROW_QUERY = """
         SELECT
             go.*,
             gs.username AS source_username,
@@ -1155,29 +1318,266 @@ async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) ->
         LEFT JOIN guide_source gs ON gs.id = go.primary_source_id
         LEFT JOIN guide_profile gp ON gp.id = gs.primary_profile_id
         LEFT JOIN guide_digest_issue gdi ON gdi.id = go.published_visual_digest_issue_id
-        WHERE go.digest_eligible = 1
-          AND go.date IS NOT NULL
-          AND go.date GLOB '????-??-??'
-          AND go.date >= ?
-          AND go.date <= ?
-          AND COALESCE(go.status, 'scheduled') != 'cancelled'
-          AND (
-            go.published_visual_digest_issue_id IS NULL
-            OR datetime(go.updated_at) > datetime(COALESCE(gdi.published_at, gdi.created_at, '1970-01-01 00:00:00'))
-          )
-        ORDER BY go.date ASC, COALESCE(go.time, '99:99') ASC, go.updated_at DESC
-        LIMIT ?
-    """
-    cur = await conn.execute(sql, (_visual_start_iso(), _future_cutoff_iso(), int(limit)))
-    rows = await cur.fetchall()
-    out: list[dict[str, Any]] = []
+"""
+
+
+def _shared_departure_identity(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
+    def names(row: Mapping[str, Any], key: str) -> set[str]:
+        values = row.get(key)
+        if values is None:
+            values = _parse_json_array(row.get(f"{key}_json"))
+        return {_plain(name).casefold() for name in values if _plain(name)}
+    guides = names(left, "guide_names")
+    return bool(left.get("date") and left["date"] == right.get("date")
+                and left.get("city") and left["city"] == right.get("city")
+                and guides and guides == names(right, "guide_names")
+                and names(left, "organizer_names").intersection(names(right, "organizer_names")))
+
+
+def _same_visual_departure(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
+    if not left.get("date") or left["date"] != right.get("date"):
+        return False
+    # A schedule may use the public route name in its route field, while a
+    # detailed announcement uses that very name as the main title.
+    title = _plain(left.get("canonical_title")).casefold()
+    other = _plain(right.get("canonical_title")).casefold()
+    if not title or not other:
+        return False
+    linked_urls = {p["url"] for p in left["linked_posts"] if p["url"]}
+    same_post = any(p["url"] in linked_urls for p in right["linked_posts"])
+    guides, other_guides = set(left.get("guide_names") or ()), set(right.get("guide_names") or ())
+    same_organizers = set(left.get("organizer_names") or ()) & set(right.get("organizer_names") or ())
+    start = _plain(left.get("time")).split("-")[0].strip()
+    other_start = _plain(right.get("time")).split("-")[0].strip()
+    same_slot = bool(start and start == other_start and same_organizers
+                     and (not guides or not other_guides or guides & other_guides))
+    if same_post and (_shared_departure_identity(left, right) or same_slot) and (
+        title == other or _place_phrase(title).search(other) or _place_phrase(other).search(title)
+    ):
+        return True
+    if _shared_departure_identity(left, right) and (
+        title == _plain(right.get("route_summary")).casefold() or other == _plain(left.get("route_summary")).casefold()
+    ):
+        return True
+    # Reposts can have no extracted guide, a different city scope, and different
+    # titles. Two identical reservation phones and the same named landmark identify
+    # the offer without treating a shared operator alone as a match.
+    phones, places = _departure_booking_evidence(left)
+    other_phones, other_places = _departure_booking_evidence(right)
+    return len(phones & other_phones) >= 2 and bool(places & other_places)
+
+
+def _departure_booking_evidence(row: Mapping[str, Any]) -> tuple[set[str], set[str]]:
+    sources = [str(p.get("text") or "") for p in row.get("linked_posts") or []]
+    booking = "\n".join([str(row.get("booking_text") or ""), *(line for text in sources for line in text.splitlines()
+                           if re.search(r"брон|телефон|запис", line, re.I))])
+    phones = {re.sub(r"\D", "", m) for m in re.findall(r"(?<!\d)(?:\d{2}-\d{2}-\d{2}|\d{3}-\d{3})(?!\d)", booking)}
+    route = " ".join(_plain(row.get(key)) for key in ("canonical_title", "route_summary"))
+    places = {m.group().casefold() for m in re.finditer(
+        r"\b(?i:замок|монастырь|кирха|усадьба|музей|городище|парк)\s+[«“\"]?[А-ЯЁ][А-Яа-яЁё-]{2,}\b", route)}
+    return phones, places
+
+
+def _crosspost_fare(rows: Sequence[Mapping[str, Any]]) -> str:
+    """Recover the full labelled tariff of one jointly advertised, dated departure."""
+    terms = set()
     for row in rows:
+        phones, places = _departure_booking_evidence(row)
+        if len(phones) < 2 or not places:
+            continue
+        for post in row.get("linked_posts") or []:
+            text = str(post.get("text") or "")
+            try:
+                anchor = datetime.fromisoformat(str(post.get("post_date") or row["date"]))
+            except ValueError:
+                continue
+            lines = text.splitlines()
+            dates = {day for line in lines if (day := extract_date_iso(line, post_date=anchor))}
+            if dates != {row["date"]} or not any(place in text.casefold() for place in places):
+                continue
+            for line in lines:
+                price = re.search(r"(?:^|[.!?]\s+)[^\w\n]*(?:стоимость|цена)(?:\s+(?:участия|поездки))?\s*[:—–-]\s*(\d[^\n]+)", line, re.I)
+                if price and re.search(r"руб|₽", price[1], re.I):
+                    terms.add(price[1].strip().rstrip("."))
+    return terms.pop() if len(terms) == 1 else ""
+
+
+_FARE_LINE = re.compile(r"^\s*(?:стоимость|цена)(?: участия)?\s*:\s*(\d[^.!?\n]+)", re.I | re.M)
+_SUPPLEMENT = re.compile(
+    r"(\b(?:дополнительно|отдельно) оплачивается [а-яё-]+)\s*[—–-]\s*"
+    r"(\d[\d \u00a0]*)\s*(?:руб(?:лей|ля|ль)?|₽)(?: с человека)?", re.I,
+)
+
+
+def _agreed_base_fare(rows: Sequence[Mapping[str, Any]]) -> str:
+    """Remove a disputed supplement only when the two published offers otherwise agree."""
+    terms: dict[str, set[str]] = {}
+    base_amounts: set[str] = set()
+    for row in rows:
+        stored = re.match(r"\d[\d\s]*", _plain(row.get("price_line") or row.get("price_text")))
+        if stored:
+            base_amounts.add("".join(stored[0].split()))
+        for post in row.get("linked_posts", []):
+            text = str(post.get("text") or "")
+            prices = _FARE_LINE.findall(text)
+            if len(prices) != 1:
+                continue
+            price = prices[0].strip()
+            base_amounts.add("".join(re.match(r"\d[\d\s]*", price)[0].split()))
+            supplement = _SUPPLEMENT.search(price)
+            if supplement and supplement.group(2).strip():
+                common = _SUPPLEMENT.sub(r"\1", price, count=1)
+                terms.setdefault(common, set()).add("".join(supplement.group(2).split()))
+    if len(terms) == 1 and len(base_amounts) == 1:
+        common, amounts = next(iter(terms.items()))
+        if len(amounts) > 1:
+            return common
+    return ""
+
+
+def _agreed_fare_source(text: str, agreed_fare: str) -> str:
+    def reconcile(match: re.Match[str]) -> str:
+        price = match[1].strip()
+        if _SUPPLEMENT.sub(r"\1", price, count=1) == agreed_fare:
+            return match[0].replace(match[1], agreed_fare)
+        return match[0]
+    return _FARE_LINE.sub(reconcile, text)
+
+
+def _conflicting_departure_logistics(rows: Sequence[Mapping[str, Any]], *, agreed_fare: str = "") -> bool:
+    times = [_plain(r.get("time")) for r in rows if _plain(r.get("time"))]
+    spans = {re.sub(r"\s*[-–—]\s*", "-", t) for t in times}
+    starts = {span.split("-")[0] for span in spans}
+    fares = {_plain(r.get("price_text")).casefold() for r in rows}
+    known_fares = sorted(fares - {"", "по запросу"}, key=len)
+    # Preserve the fuller fare ("4000 рублей с человека ...") and a compatible
+    # end time. Incompatible prices or starts could describe two separate offers.
+    return (len(starts) > 1 or len({t for t in spans if "-" in t}) > 1
+            or (not agreed_fare and any(not known_fares[-1].startswith(f + " ") for f in known_fares[:-1])))
+
+
+def _select_documented_departures(requested: Sequence[dict[str, Any]], peers: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    selected = []
+    seen = set()
+    for row in requested:
+        if row["id"] in seen:
+            continue
+        # A detailed announcement may connect two source rows through a third
+        # row that carries both original post links.
+        members = [row]
+        member_ids = {row["id"]}
+        for member in members:
+            for peer in peers:
+                if peer["id"] not in member_ids and _same_visual_departure(member, peer):
+                    member_ids.add(peer["id"])
+                    members.append(peer)
+        agreed_fare = _agreed_base_fare(members)
+        incompatible = _conflicting_departure_logistics(members, agreed_fare=agreed_fare)
+        if incompatible or any(m["id"] in seen for m in members):
+            members = [row]
+            agreed_fare = _agreed_base_fare(members)
+        source = max(members, key=lambda m: (
+            bool(m.get("time") and _plain(m.get("price_text"))), len(_plain(m.get("time"))),
+            len(_plain(m.get("route_summary"))), -int(m["id"])))
+        representative = dict(source)
+        if len(members) > 1:
+            representative["fact_pack"] = dict(source.get("fact_pack") or {})
+            if _plain(price_for_publication(representative.get("price_text"))).casefold() in ("", "по запросу"):
+                if tariff := _crosspost_fare(members):
+                    representative["price_line"] = representative["price_text"] = representative["fact_pack"]["price_text"] = tariff
+            for role in ("guide_names", "organizer_names"):
+                names = list(dict.fromkeys(n for m in [source, *members] for n in m.get(role) or []))
+                representative[role] = representative["fact_pack"][role] = names
+            transport = [m["transport"] for m in members if (m.get("transport") or {}).get("modes")]
+            if not representative.get("transport") and len({tuple(t["modes"]) for t in transport}) == 1:
+                representative["transport"] = transport[0]
+            # Portraits already computed by an older caller belong to only one
+            # row. Normal loading resolves portraits after the group is chosen.
+            if "participant_medallions" in representative:
+                people = {}
+                for member in [source, *members]:
+                    for person in member.get("participant_medallions") or []:
+                        key = (person.get("owner"), person["name"])
+                        merged = people.setdefault(key, dict(person))
+                        merged["roles"] = list(dict.fromkeys([*merged["roles"], *person["roles"]]))
+                representative["participant_medallions"] = list(people.values())
+        if len(members) > 1:
+            representative["covered_visual_states"] = {str(m["id"]): _visual_item_state(m) for m in members}
+        representative["covered_visual_ids"] = sorted(m["id"] for m in members)
+        representative["linked_posts"] = [post for member in members for post in member["linked_posts"]]
+        if agreed_fare:
+            representative["price_line"] = representative["price_text"] = agreed_fare
+            representative["fact_pack"] = {**(representative.get("fact_pack") or {}), "price_text": agreed_fare}
+            # Preserve the originals for provenance while excluding the disputed figure from writer input.
+            representative["linked_posts"] = [
+                {**post, "writer_text": _agreed_fare_source(post.get("text") or "", agreed_fare)}
+                for post in representative["linked_posts"]
+            ]
+        representative["visual_selection_reason"] = row.get("visual_selection_reason")
+        seen.update(representative["covered_visual_ids"])
+        selected.append(representative)
+    return selected
+
+
+async def _load_earlier_route_posts(
+    conn: aiosqlite.Connection, ids: Sequence[int], linked: Mapping[int, Sequence[Mapping[str, Any]]],
+) -> dict[int, list[dict[str, Any]]]:
+    """Up to two earlier announcements of the same title led by the same guide, per occurrence."""
+    params = ",".join("?" for _ in ids)
+    # A timetable line often names a route that the same guide described in an earlier
+    # announcement. Those posts supply the theme only; dates and prices stay with the row.
+    cur = await conn.execute(f"""
+        SELECT cur.id AS occurrence_id, cur.guide_names_json AS guides, old.guide_names_json AS old_guides,
+               gmp.text, gmp.post_date, gmp.source_url AS url
+        FROM guide_occurrence cur
+        JOIN guide_occurrence old ON old.title_normalized = cur.title_normalized
+             AND old.id != cur.id AND old.date < cur.date
+        JOIN guide_occurrence_source gos ON gos.occurrence_id = old.id
+        JOIN guide_monitor_post gmp ON gmp.id = gos.post_id
+        WHERE cur.id IN ({params})
+        ORDER BY cur.id, gmp.post_date DESC, gmp.id DESC
+    """, tuple(ids))
+    earlier: dict[int, list[dict[str, Any]]] = {}
+    for post in await cur.fetchall():
+        names = {n.casefold() for n in _parse_json_array(post["guides"])}
+        if not names & {n.casefold() for n in _parse_json_array(post["old_guides"])}:
+            continue  # the same title led by somebody else is another excursion
+        text = (post["text"] or "").strip()
+        if not text:
+            continue
+        bucket = earlier.setdefault(post["occurrence_id"], [])
+        known = {(p.get("text") or "").strip() for p in (*bucket, *linked.get(post["occurrence_id"], []))}
+        if len(bucket) < 2 and text not in known:
+            bucket.append({"text": text, "post_date": post["post_date"], "url": post["url"]})
+    return earlier
+
+
+async def _load_visual_rows(conn: aiosqlite.Connection, records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    if not records:
+        return []
+    ids = [int(row["id"]) for row in records]
+    params = ",".join("?" for _ in ids)
+    cur = await conn.execute(f"""
+        SELECT gos.occurrence_id, gmp.id, gmp.text, gmp.post_date, gmp.source_url AS url, gmp.source_url,
+               gmp.post_kind, gmp.raw_facts_json
+        FROM guide_occurrence_source gos
+        JOIN guide_monitor_post gmp ON gmp.id = gos.post_id
+        WHERE gos.occurrence_id IN ({params})
+        ORDER BY gos.occurrence_id, CASE WHEN gos.role='primary' THEN 0 ELSE 1 END,
+                 gmp.post_date DESC, gmp.id DESC
+    """, tuple(ids))
+    linked: dict[int, list[dict[str, Any]]] = {}
+    for post in await cur.fetchall():
+        linked.setdefault(post["occurrence_id"], []).append(dict(post))
+    earlier = await _load_earlier_route_posts(conn, ids, linked)
+    out = []
+    for row in records:
         item = dict(row)
         item["guide_names"] = _parse_json_array(item.get("guide_names_json"))
         item["organizer_names"] = _parse_json_array(item.get("organizer_names_json"))
         item["audience_fit"] = _parse_json_array(item.get("audience_fit_json"))
         item["fact_pack"] = _safe_json_object(item.get("fact_pack_json"))
-        await _load_transport(conn, item)
+        item["guide_profile_facts"] = _safe_json_object(item.get("guide_profile_facts_rollup_json"))
         for key in (
             "canonical_title",
             "date",
@@ -1202,26 +1602,79 @@ async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int) ->
         item["source_flags"] = _safe_json_object(item.get("source_flags_json"))
         state_map = _visual_issue_state_map(item.get("visual_issue_media_items_json"))
         item["published_visual_digest_state"] = state_map.get(str(item.get("id") or ""))
-        post_cur = await conn.execute(
-            """
-            SELECT gmp.text, gmp.source_url
-            FROM guide_occurrence_source gos
-            JOIN guide_monitor_post gmp ON gmp.id = gos.post_id
-            WHERE gos.occurrence_id=?
-            ORDER BY CASE WHEN gos.role='primary' THEN 0 ELSE 1 END, gmp.post_date DESC, gmp.id DESC
-            LIMIT 1
-            """,
-            (int(item.get("id") or 0),),
-        )
-        post_row = await post_cur.fetchone()
-        item["dedup_source_text"] = collapse_ws(str((post_row["text"] if post_row else "") or ""))
-        payload_url = item["fact_pack"].get("source_post_url") if isinstance(item["fact_pack"], dict) else None
-        item["source_post_url"] = _source_post_url(payload_url, (post_row["source_url"] if post_row else None) or item.get("channel_url"))
+        posts = linked.get(item["id"], [])
+        if posts and all(_schedule_attributes_day_to_other_title(post, _plain(item.get("canonical_title")),
+                                                                _plain(item.get("date"))) for post in posts):
+            continue
+        clock = _plain(item.get("time"))
+        if posts and clock and all(_opening_has_only_published_time(post, clock) for post in posts):
+            item["time"] = item["fact_pack"]["time"] = None
+            for key in ("summary_one_liner", "digest_blurb", "main_hook", "main_hook_evidence", "route_summary"):
+                if clock in str(item.get(key) or "") or clock in str(item["fact_pack"].get(key) or ""):
+                    item.pop(key, None)
+                    item["fact_pack"].pop(key, None)
+        item["linked_posts"] = posts
+        item["earlier_route_posts"] = earlier.get(item["id"], [])
+        primary = posts[0] if posts else {}
+        item["dedup_source_text"] = collapse_ws(primary.get("text") or "")
+        item["dedup_source_url"] = primary.get("url")
+        item["source_post_url"] = _source_post_url(item["fact_pack"].get("source_post_url"),
+                                                  item["dedup_source_url"] or item.get("channel_url"))
+        await _load_transport(conn, item)
+        _apply_published_facts(item, posts)
+        out.append(item)
+    route_background = await load_tic_background(conn, out)
+    for item in out:
+        if item["id"] in route_background:
+            item["route_background"] = route_background[item["id"]]
+    return out
+
+
+async def _include_documented_departures(conn: aiosqlite.Connection, requested: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not requested:
+        return []
+    # Older issues may contain only the programme row even though a detailed
+    # announcement for the same departure has since been imported.
+    days = sorted({row["date"] for row in requested if row.get("date")})
+    if not days:
+        return requested
+    cur = await conn.execute(_VISUAL_ROW_QUERY + f"""
+        WHERE go.date IN ({",".join("?" for _ in days)}) AND go.digest_eligible = 1
+          AND COALESCE(go.status, 'scheduled') != 'cancelled'
+    """, tuple(days))
+    by_id = {row["id"]: row for row in requested}
+    # A secondary VK announcement need not contain the same extracted city or
+    # personal name. Hydrate its actual dated source evidence before comparison.
+    extras = [dict(record) for record in await cur.fetchall() if record["id"] not in by_id]
+    peers = [*requested, *await _load_visual_rows(conn, extras)]
+    return _select_documented_departures(requested, peers)
+
+
+async def _fetch_visual_candidates(conn: aiosqlite.Connection, *, limit: int, as_of: date | None = None) -> list[dict[str, Any]]:
+    if as_of is None:
+        await ensure_visual_digest_schema(conn)
+    sql = _VISUAL_ROW_QUERY + """
+        WHERE go.digest_eligible = 1
+          AND go.date IS NOT NULL
+          AND go.date GLOB '????-??-??'
+          AND go.date >= ?
+          AND go.date <= ?
+          AND COALESCE(go.status, 'scheduled') != 'cancelled'
+          AND (
+            go.published_visual_digest_issue_id IS NULL
+            OR datetime(go.updated_at) > datetime(COALESCE(gdi.published_at, gdi.created_at, '1970-01-01 00:00:00'))
+          )
+        ORDER BY go.date ASC, COALESCE(go.time, '99:99') ASC, go.updated_at DESC
+        LIMIT ?
+    """
+    cur = await conn.execute(sql, (_visual_start_iso(as_of), _future_cutoff_iso(as_of), int(limit)))
+    candidates = []
+    for item in await _load_visual_rows(conn, await cur.fetchall()):
         reason = _visual_selection_reason(item)
         if reason:
             item["visual_selection_reason"] = reason
-            out.append(item)
-    return out
+            candidates.append(item)
+    return await _include_documented_departures(conn, candidates)
 
 
 def _is_tg_post_url(url: str | None) -> bool:
@@ -1238,15 +1691,46 @@ def _source_post_url(payload_url: Any, fallback_url: Any) -> str | None:
     return primary or fallback or None
 
 
-async def select_visual_digest_rows(db: Database, *, max_items: int = VISUAL_DIGEST_CARD_LIMIT) -> list[dict[str, Any]]:
+async def select_visual_digest_rows(db: Database, *, max_items: int = VISUAL_DIGEST_CARD_LIMIT,
+                                    as_of: date | None = None, previous_ids: Sequence[int] = ()) -> list[dict[str, Any]]:
     async with db.raw_conn() as conn:
         await _enable_row_factory(conn)
         raw_limit = max(int(max_items) * 4, 48)
-        rows = await _fetch_visual_candidates(conn, limit=raw_limit)
+        if as_of is None:
+            rows = await _fetch_visual_candidates(conn, limit=raw_limit)
+        else:
+            rows = await _fetch_visual_candidates(conn, limit=raw_limit + len(previous_ids), as_of=as_of)
+        candidates = {r["id"] for r in rows}
+        if previous_ids and rows:
+            # Compare today's candidates with yesterday's departures using the
+            # normal deduplicator, even when a prior row has since been marked.
+            previous = await _fetch_rows_by_ids(conn, previous_ids)
+            previous_ids = tuple(set(previous_ids).union(
+                i for row in previous for i in row.get("covered_visual_ids", [row["id"]])))
+            rows.extend(row for row in previous if row["id"] not in candidates)
     if not rows:
         return []
     dedup = await deduplicate_occurrence_rows(rows, family=VISUAL_DIGEST_FAMILY, limit=max(len(rows), int(max_items)))
     display_rows = [dict(row) for row in dedup.display_rows]
+    # The ordinary deduplicator may choose among candidates more broadly. Keep
+    # distinct rows when a single apparent route has conflicting published starts.
+    by_id = {r["id"]: r for r in rows}
+    covered = {}
+    for canonical_id, member_ids in dedup.coverage_by_display_id.items():
+        group = [by_id[i] for i in member_ids]
+        if len(group) > 1 and _conflicting_departure_logistics(group):
+            display_rows.extend(dict(r) for r in group if r["id"] != canonical_id)
+        elif as_of is not None:
+            covered[canonical_id] = sorted({i for r in group for i in r.get("covered_visual_ids", [r["id"]])})
+    if as_of is not None:
+        shown = set(previous_ids)
+        remaining = []
+        for row in display_rows:
+            ids = covered.get(row["id"], row.get("covered_visual_ids", [row["id"]]))
+            if row["id"] in candidates and not shown.intersection(ids):
+                row["covered_visual_ids"] = ids
+                remaining.append(row)
+        display_rows = remaining
     display_rows.sort(key=lambda r: (str(r.get("date") or ""), str(r.get("time") or "99:99"), int(r.get("id") or 0)))
     return display_rows[: int(max_items)]
 
@@ -1265,7 +1749,7 @@ async def build_visual_digest_issue(
     media_payload = {
         "kind": "visual_schedule_card",
         "card_limit": int(card_limit),
-        "item_states": {str(int(row["id"])): _visual_item_state(row) for row in rows if int(row.get("id") or 0) > 0},
+        "item_states": _visual_publication_states(rows),
         "selection_reasons": {str(int(row["id"])): _plain(row.get("visual_selection_reason")) for row in rows if int(row.get("id") or 0) > 0},
     }
     async with db.raw_conn() as conn:
@@ -1298,62 +1782,9 @@ async def _fetch_rows_by_ids(conn: aiosqlite.Connection, occurrence_ids: Sequenc
     if not ids:
         return []
     placeholders = ",".join("?" for _ in ids)
-    cur = await conn.execute(
-        f"""
-        SELECT
-            go.*,
-            gs.username AS source_username,
-            gs.platform AS source_platform,
-            gs.title AS source_title,
-            gs.source_kind AS source_kind,
-            gs.flags_json AS source_flags_json,
-            gs.about_text AS source_about_text,
-            gs.about_links_json AS source_about_links_json,
-            gs.priority_weight AS priority_weight,
-            gp.display_name AS guide_profile_display_name,
-            gp.marketing_name AS guide_profile_marketing_name,
-            gp.summary_short AS guide_profile_summary,
-            gp.facts_rollup_json AS guide_profile_facts_rollup_json
-        FROM guide_occurrence go
-        LEFT JOIN guide_source gs ON gs.id = go.primary_source_id
-        LEFT JOIN guide_profile gp ON gp.id = gs.primary_profile_id
-        WHERE go.id IN ({placeholders})
-        """,
-        tuple(ids),
-    )
-    rows = await cur.fetchall()
-    by_id: dict[int, dict[str, Any]] = {}
-    for row in rows:
-        item = dict(row)
-        item["guide_names"] = _parse_json_array(item.get("guide_names_json"))
-        item["organizer_names"] = _parse_json_array(item.get("organizer_names_json"))
-        item["audience_fit"] = _parse_json_array(item.get("audience_fit_json"))
-        item["fact_pack"] = _safe_json_object(item.get("fact_pack_json"))
-        await _load_transport(conn, item)
-        for key in (
-            "canonical_title", "date", "time", "duration_text", "city", "meeting_point", "route_summary",
-            "price_text", "booking_text", "booking_url", "status", "seats_text", "summary_one_liner",
-            "digest_blurb", "availability_mode", "post_kind", "group_format",
-        ):
-            if not item.get(key) and item["fact_pack"].get(key) is not None:
-                item[key] = item["fact_pack"].get(key)
-        post_cur = await conn.execute(
-            """
-            SELECT gmp.text, gmp.source_url
-            FROM guide_occurrence_source gos
-            JOIN guide_monitor_post gmp ON gmp.id = gos.post_id
-            WHERE gos.occurrence_id=?
-            ORDER BY CASE WHEN gos.role='primary' THEN 0 ELSE 1 END, gmp.post_date DESC, gmp.id DESC
-            LIMIT 1
-            """,
-            (int(item.get("id") or 0),),
-        )
-        post_row = await post_cur.fetchone()
-        item["dedup_source_text"] = collapse_ws(str((post_row["text"] if post_row else "") or ""))
-        payload_url = item["fact_pack"].get("source_post_url") if isinstance(item["fact_pack"], dict) else None
-        item["source_post_url"] = _source_post_url(payload_url, (post_row["source_url"] if post_row else None) or item.get("channel_url"))
-        by_id[int(item["id"])] = item
-    return [by_id[i] for i in ids if i in by_id]
+    cur = await conn.execute(_VISUAL_ROW_QUERY + f" WHERE go.id IN ({placeholders})", tuple(ids))
+    by_id = {row["id"]: row for row in await _load_visual_rows(conn, await cur.fetchall())}
+    return await _include_documented_departures(conn, [by_id[i] for i in ids if i in by_id])
 
 
 def _issue_occurrence_ids(items_json: Any) -> list[int]:
@@ -1371,10 +1802,11 @@ def _issue_occurrence_ids(items_json: Any) -> list[int]:
     return out
 
 
-async def load_visual_digest_issue(db: Database, issue_id: int | None = None) -> dict[str, Any] | None:
+async def load_visual_digest_issue(db: Database, issue_id: int | None = None, *, selection_only: bool = False) -> dict[str, Any] | None:
     async with db.raw_conn() as conn:
         await _enable_row_factory(conn)
-        await ensure_visual_digest_schema(conn)
+        if not selection_only:
+            await ensure_visual_digest_schema(conn)
         if issue_id is not None:
             cur = await conn.execute(
                 "SELECT * FROM guide_digest_issue WHERE id=? AND family=?",
@@ -1391,8 +1823,9 @@ async def load_visual_digest_issue(db: Database, issue_id: int | None = None) ->
         ids = _issue_occurrence_ids(issue["items_json"])
         rows = await _fetch_rows_by_ids(conn, ids)
     payload = dict(issue)
-    from source_avatars import prepare_guide_avatars
-    await prepare_guide_avatars(rows, db)
+    if not selection_only:
+        from source_avatars import prepare_guide_avatars
+        await prepare_guide_avatars(rows, db)
     payload["items"] = rows
     return payload
 
@@ -1524,7 +1957,7 @@ async def publish_visual_digest_to_telegram(
         cur = await conn.execute("SELECT published_targets_json FROM guide_digest_issue WHERE id=?", (int(issue_id),))
         saved = await cur.fetchone()
         existing_targets = _json_load(saved[0] if saved else None, {})
-    occurrence_ids = [int(row["id"]) for row in rows if int(row.get("id") or 0) > 0]
+    occurrence_ids = list(dict.fromkeys(i for row in rows for i in row.get("covered_visual_ids", [row["id"]])))
     published_targets: dict[str, dict[str, Any]] = {}
     errors: dict[str, str] = {}
     primary_caption = ""
@@ -1640,6 +2073,10 @@ def _visual_booking_url(row: Mapping[str, Any]) -> str:
 
     booking_url = _plain(row.get("booking_url"))
     if not booking_url:
+        return ""
+    # Bare Telegram usernames cannot contain a dot. Keep post, invite and deep links.
+    if re.fullmatch(r"(?:https?://)?(?:t\.me|telegram\.me)/[a-z0-9_]+(?:\.[a-z0-9_]+)+/?(?:[?#].*)?",
+                    booking_url, re.I):
         return ""
     source = _plain(row.get("source_post_url") or row.get("channel_url"))
     booking_ref = _vk_wall_ref(booking_url)
@@ -1796,7 +2233,7 @@ def _hashtag_token(label: str) -> str:
 
 
 def _digest_hashtags(rows: Sequence[Mapping[str, Any]]) -> list[str]:
-    tags: list[str] = ["#экскурсии", "#Калининград", "#УхтыКалининград"]
+    tags: list[str] = ["#экскурсия", "#Калининград", "#УхтыКалининград"]
     blob_parts: list[str] = []
     for row in rows:
         blob_parts.extend(
@@ -1928,6 +2365,272 @@ async def build_visual_digest_telegram_text(
     return "\n".join(compact_lines).strip()
 
 
+_VK_MOVEMENT = {"walk": "пешком", "bus": "автобус", "tram": "трамвай", "boat": "по воде"}
+
+
+def _vk_narrative_payload(items: Sequence[Mapping[str, Any]]) -> tuple[dict[str, Any], dict[int, tuple[int, str]]]:
+    """Writer input for the whole edition plus {person number: (personal VK id, name)} for confirmed guides."""
+    people: dict[str, dict[str, Any]] = {}
+    mention_ids: dict[int, tuple[int, str]] = {}
+    sources: dict[tuple[str, str], dict[str, Any]] = {}
+    earlier_posts: dict[str, dict[str, Any]] = {}
+    excursions: list[dict[str, Any]] = []
+    for row in items:
+        row_id = int(row.get("id") or 0)
+        participants = row.get("participant_medallions")
+        if not isinstance(participants, list):
+            participants = [{"name": name, "roles": [role]} for field, role in
+                            (("guide_names", "Гид"), ("organizer_names", "Организатор"))
+                            for name in ((row.get("fact_pack") or {}).get(field, row.get(field)) or [])]
+        guides = []
+        organizers = []
+        for person in participants:
+            roles = [role for role in person.get("roles") or [] if role != "Источник"]
+            name = _plain(person.get("name"))
+            if not roles or not name:
+                continue
+            if "Гид" in roles:
+                guides.append(name)
+            if "Организатор" in roles:
+                organizers.append(name)
+            owner = int(person.get("owner") or 0)
+            entry = people.setdefault(f"vk:{owner}" if owner else name.casefold(),
+                                      {"n": len(people) + 1, "name": name, "roles": [], "excursions": []})
+            entry["roles"] = sorted({*entry["roles"], *roles})
+            entry["excursions"].append(row_id)
+            if owner > 0 and "Гид" in roles:
+                mention_ids[entry["n"]] = (owner, name)
+        posts = row.get("linked_posts")
+        if posts is None:
+            posts = [{"url": row.get("dedup_source_url", row.get("source_post_url")),
+                      "text": row.get("dedup_source_text")}]
+        for post in posts:
+            source_text = (post.get("writer_text") or post.get("text") or "").strip()
+            if not source_text:
+                continue
+            source_url = _plain(post.get("url"))
+            source = sources.setdefault((source_url, source_text), {
+                "url": source_url, "text": source_text, "excursions": [],
+            })
+            if post.get("post_date"):
+                source["post_date"] = _plain(post["post_date"])[:10]
+            if row_id not in source["excursions"]:
+                source["excursions"].append(row_id)
+        own_texts = {(post.get("text") or "").strip() for post in posts}
+        for post in row.get("earlier_route_posts") or []:
+            text = (post.get("text") or "").strip()
+            if not text or text in own_texts:
+                continue
+            earlier = earlier_posts.setdefault(text, {
+                "url": _plain(post.get("url")), "post_date": _plain(post.get("post_date"))[:10],
+                "text": text, "excursions": [],
+            })
+            if row_id not in earlier["excursions"]:
+                earlier["excursions"].append(row_id)
+        try:
+            weekday = RU_WEEK_FULL[date.fromisoformat(_plain(row.get("date"))).weekday()]
+        except ValueError:
+            weekday = ""
+        facts = {key: value for key in ("summary_one_liner", "digest_blurb", "route_summary", "meeting_point",
+                                        "duration_text", "group_format", "audience_fit", "main_hook", "main_hook_evidence")
+                 if (value := _fact(row, key) or row.get(key)) and (not isinstance(value, str) or _plain(value))}
+        caption = _card_description(row)
+        if caption:
+            facts["card_caption"] = caption
+        profile = {"kind": _plain(row.get("source_kind")), "title": _plain(row.get("source_title")),
+                   "about": _plain(row.get("source_about_text"))[:600],
+                   "summary": _plain(row.get("guide_profile_summary")), "facts": row.get("guide_profile_facts") or {}}
+        if row.get("source_roles_checked") and row.get("source_kind") == "guide_personal":
+            profile_names = {_plain(row.get(k)).casefold() for k in
+                             ("source_title", "guide_profile_display_name", "guide_profile_marketing_name")}
+            profile_owner = (row.get("guide_profile_facts") or {}).get("vk_user_id")
+            matched = any(p.get("roles") and (
+                (profile_owner and str(p.get("owner")) == str(profile_owner))
+                or _plain(p.get("name")).casefold() in profile_names) for p in participants)
+            if not matched:
+                profile = {}
+        excursions.append({
+            "occurrence_id": row_id, "title": _plain(row.get("canonical_title")),
+            "date": _plain(row.get("date")), "time": _plain(row.get("time")), "weekday": weekday,
+            "city": _plain(row.get("city")),
+            "movement": [_VK_MOVEMENT[mode] for mode in _modes_for(row) if mode in _VK_MOVEMENT],
+            "guides": guides, "organizers": organizers,
+            "facts": facts, "source_profile": {key: value for key, value in profile.items() if value},
+            **({"route_background": row["route_background"]} if row.get("route_background") else {}),
+        })
+    payload = {"excursions": excursions, "people": list(people.values()), "sources": list(sources.values())}
+    if earlier_posts:
+        payload["earlier_announcements"] = list(earlier_posts.values())
+    return payload, mention_ids
+
+
+def _vk_schedule_lines(details: Sequence[tuple[str, str, str, str]]) -> list[str]:
+    """Combine compatible descriptions of one start; keep conflicting times and prices visible."""
+    slots: list[tuple[str, str, str, str]] = []
+    for when, price, contact, destination in details:
+        for i, (prev_when, prev_price, prev_contact, prev_dest) in enumerate(slots):
+            if not when or not destination or destination != prev_dest:
+                continue
+            times = sorted((prev_when, when), key=len)
+            prices = sorted((prev_price, price), key=len)
+            same_start = times[0] == times[1] or re.fullmatch(re.escape(times[0]) + r"\s*[-–—]\s*\d{1,2}:\d{2}", times[1])
+            same_fare = prices[0] == prices[1] or (prices[0] and prices[1].startswith(prices[0] + " "))
+            if not (same_start and same_fare):
+                continue
+            booking = next((c for c in (prev_contact, contact) if "Запись" in c), contact)
+            slots[i] = (times[1], prices[1], booking, destination)
+            break
+        else:
+            slots.append((when, price, contact, destination))
+    if not slots:
+        return []
+    if len({(p, c) for _, p, c, _ in slots}) == 1:
+        price, contact = slots[0][1:3]
+        return [" · ".join(w for w, _, _, _ in slots if w),
+                " · ".join(x for x in (f"💳 {price}" if price else "", contact) if x)]
+    return [" · ".join(x for x in (w, f"💳 {p}" if p else "", c) if x) for w, p, c, _ in slots]
+
+
+def _same_person(label: str, name: str) -> bool:
+    """True when the label is the stored name in any grammatical case ("Нозы Усмановой" for "Ноза Усманова")."""
+    words = collapse_ws(label).casefold().replace("ё", "е").split()
+    parts = collapse_ws(name).casefold().replace("ё", "е").split()
+    return bool(parts) and len(words) == len(parts) and all(
+        word[:max(3, len(part) - 2)] == part[:max(3, len(part) - 2)] for word, part in zip(words, parts))
+
+
+def _vk_time_label(row: Mapping[str, Any]) -> str:
+    clock = _plain(row.get("time"))
+    if not re.fullmatch(r"\d{1,2}:\d{2}", clock):
+        return clock
+    day = _plain(row.get("date"))
+    primary = row.get("source_post_url") or row.get("dedup_source_url")
+    for post in row.get("linked_posts") or []:
+        if not primary or (post.get("url") or post.get("source_url")) != primary:
+            continue
+        text = post.get("text") or ""
+        if not re.search(r"\bвыезд\s+(?:в\s+)?" + re.escape(clock) + r"(?!\d)", text, re.I):
+            continue
+        try:
+            published = datetime.fromisoformat(str(post.get("post_date") or day))
+        except ValueError:
+            continue
+        if len(split_occurrence_blocks(text, post_date=published)) == 1 and extract_date_iso(text, post_date=published) == day:
+            return f"выезд в {clock}"
+    return clock
+
+
+async def _assemble_vk_narrative(
+    items: Sequence[Mapping[str, Any]],
+    narrative: Mapping[str, Any],
+    *,
+    period: str,
+    mention_ids: Mapping[int, tuple[int, str]],
+    mentions_enabled: bool,
+    shorten: Callable[[str], Awaitable[str]],
+    test_mention: int | None = None,
+    mention_coverage: dict[str, int] | None = None,
+) -> str | None:
+    """Wrap the written prose with exact titles, dates, prices, contacts and hashtags from the rows."""
+    texts = [narrative["lead"], narrative.get("outro") or "", *(p["text"] for p in narrative["paragraphs"])]
+    if any(re.search(r"[\[\]]", VK_NAME_MARK_RE.sub(lambda m: m[2], text)) for text in texts):
+        return None
+
+    test_tags: set[str] = set()
+    tagged_guides: set[int] = set()
+    wall_links: set[str] = set()
+
+    def mention(m: re.Match[str]) -> str:
+        label = m[2]
+        owner, name = mention_ids.get(int(m[1]), (0, ""))
+        if not owner or not _same_person(label, name):
+            return label
+        if test_mention is not None:
+            # Every identified guide is rewritten to the approved test recipient, so a review
+            # post shows exactly the names that production would turn into mentions.
+            tagged_guides.add(owner)
+            test_tags.add(f"[id{test_mention}|{label}]")
+            return f"[id{test_mention}|{label}]"
+        return f"[id{owner}|{label}]" if mentions_enabled else label
+
+    def names(text: str) -> str:
+        return VK_NAME_MARK_RE.sub(mention, text)
+
+    by_id = {int(row.get("id") or 0): row for row in items}
+    tags = _digest_hashtags(items)
+    lead = re.sub(r"(?<!\w)#(?=\w)", "", narrative["lead"])
+    blocks = [f"ЭКСКУРСИИ {period.upper()}".strip() + "\n" + names(lead)]
+    for paragraph in narrative["paragraphs"]:
+        rows = sorted((by_id[i] for i in paragraph["occurrence_ids"]),
+                      key=lambda r: (_plain(r.get("date")), _plain(r.get("time")) or "99:99"))
+        details: list[tuple[str, str, str, str]] = []
+        for row in rows:
+            try:
+                day = date.fromisoformat(_plain(row.get("date")))
+                when = f"{day.day} {RU_MONTH_GEN.get(day.month, '')} ({RU_WEEK_SHORT[day.weekday()]})"
+            except ValueError:
+                when = ""
+            if clock := _vk_time_label(row):
+                when = f"{when}, {clock}".strip(", ")
+            link, is_phone = _primary_link(row)
+            source_url = _plain(row.get("source_post_url"))
+            booking_note = _plain(row.get("booking_text") or _fact(row, "booking_text"))
+            two_steps = source_url and re.search(
+                r"регистраци\w*\s+на\s+сайте\b[^\n]*?\s+и\s+заполн\w+\s+(?:форм\w*|анкет\w*)",
+                booking_note, re.I,
+            )
+            if two_steps:
+                link, is_phone = source_url, False
+            destination = ""
+            if link and is_phone:
+                destination = _normalize_phone(link) or _plain(link)
+                contact = f"☎ Запись по телефону: {destination}"
+            elif link:
+                is_booking = _plain(link) != _plain(row.get("source_post_url") or row.get("channel_url"))
+                label = "Запись" if is_booking else "Подробности"
+                if two_steps:
+                    label = booking_note
+                url = link if _is_vk_url(link) else await shorten(link)
+                destination = url
+                if re.fullmatch(r"(?:https?://)?(?:m\.)?vk\.(?:com|ru)/wall-?\d+_\d+/?", url, re.I):
+                    contact = _vk_link(label, url)
+                    wall_links.add(contact)
+                else:
+                    contact = f"{label}: {url}"
+                contact = "🔗 " + contact
+            else:
+                contact = ""
+            price = _plain(row.get("price_line") or row.get("price_text"))
+            # A short URL may represent both a booking link and the source post.
+            details.append((when, price, contact, destination))
+        lines = _vk_schedule_lines(details)
+        title = _plain(rows[0].get("canonical_title")) or "Экскурсия"
+        heading = title.upper()
+        body = paragraph["text"]
+        first_line, separator, rest = body.partition("\n")
+        if separator and first_line.strip() == heading:
+            body = rest
+        body = collapse_ws(body)
+        blocks.append("\n".join(x for x in [heading, names(body), *lines] if x))
+    if narrative.get("outro"):
+        blocks.append(names(narrative["outro"]))
+    blocks.append("Это дайджест экскурсий по Калининградской области от «Ух ты, Калининград!».")
+    blocks.append(" ".join(tags))
+    text = "\n\n".join(blocks)
+    if mention_coverage is not None:
+        mention_coverage.update(eligible=len({owner for owner, _ in mention_ids.values()}),
+                                substituted=len(tagged_guides))
+    if test_mention is not None:
+        remaining = text
+        for link_markup in (*test_tags, *wall_links):
+            remaining = remaining.replace(link_markup, "")
+        if re.search(r"[\[\]@]|\*[\w.-]+", remaining):
+            raise ValueError("Unexpected VK mention markup in test digest")
+        if not test_tags:
+            text += f"\n\nПроверка уведомления: [id{test_mention}|тестовый получатель]"
+    return text
+
+
 async def build_visual_digest_vk_text(
     rows: Sequence[Mapping[str, Any]],
     *,
@@ -1935,16 +2638,40 @@ async def build_visual_digest_vk_text(
     db: Database | None = None,
     bot: Any | None = None,
     vk_api_fn: Callable[..., Awaitable[Any]] | None = None,
+    test_mention: int | None = None,
+    review: dict[str, Any] | None = None,
+    mention_coverage: dict[str, int] | None = None,
 ) -> str:
     items = [dict(r) for r in rows]
     period = _period_of(items)
+    short_cache: dict[str, str | None] = {}
+
+    async def shorten(link: str) -> str:
+        cache_key = _ensure_https(_plain(link))
+        if cache_key not in short_cache:
+            short_cache[cache_key] = await _shorten_external_for_vk(link, db=db, bot=bot, vk_api_fn=vk_api_fn)
+        return short_cache[cache_key] or link
+
+    payload, mention_ids = _vk_narrative_payload(items)
+    if review is not None:
+        review["input"] = payload
+    writer_options = {"review": review} if review is not None else {}
+    narrative = await ask_vk_narrative(payload, issue_id=int(issue_id), **writer_options) if items else None
+    if narrative:
+        text = await _assemble_vk_narrative(items, narrative, period=period, mention_ids=mention_ids,
+                                            mentions_enabled=VISUAL_DIGEST_VK_MENTIONS_ENABLED,
+                                            shorten=shorten, test_mention=test_mention, mention_coverage=mention_coverage)
+        if text:
+            return text
+        logger.warning("guide_vk_narrative issue_id=%s outcome=rejected reason=stray_markup", issue_id)
+    if test_mention is not None:
+        raise ValueError("No narrative was generated for the requested test post")
     lines = [
         f"Дайджест экскурсий №{int(issue_id)}",
         "",
         f"Коротко: {len(items)} будущих экскурсий" + (f" на {period}" if period else "") + ". Смотрите карточку, а детали и запись — ниже.",
         "",
     ]
-    short_cache: dict[str, str | None] = {}
     for idx, row in enumerate(items, start=1):
         title = _plain(row.get("canonical_title")) or "Экскурсия"
         link, is_phone = _primary_link(row)
@@ -1954,11 +2681,7 @@ async def build_visual_digest_vk_text(
         elif link and _is_vk_url(link):
             line = f"{idx}. {_vk_link(title, link)}"
         elif link:
-            cache_key = _ensure_https(_plain(link))
-            if cache_key not in short_cache:
-                short_cache[cache_key] = await _shorten_external_for_vk(link, db=db, bot=bot, vk_api_fn=vk_api_fn)
-            short = short_cache.get(cache_key)
-            line = f"{idx}. {title} — {short or link}"
+            line = f"{idx}. {title} — {await shorten(link)}"
         else:
             line = f"{idx}. {title}"
         lines.append(line)
@@ -2025,23 +2748,39 @@ async def publish_visual_digest_to_vk(
     post_to_vk_fn: Callable[..., Awaitable[str | None]] | None = None,
     upload_vk_photo_bytes_fn: Callable[..., Awaitable[str | None]] | None = None,
     publish_stories: bool = False,
+    test_mention: int | None = None,
+    review_dir: Path | None = None,
+    review_rows: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     from .max_delivery import run_legacy_delivery
+    if review_dir is not None and test_mention is None:
+        raise ValueError("A VK review capture requires a test publication")
+    if review_rows is not None and (test_mention is None or issue_id is None):
+        raise ValueError("Projected rows require a numbered test publication")
+    if test_mention is not None and (
+        str(group_id).lstrip("-") != "243343951" or test_mention not in (858363572, 1134828279)
+    ):
+        raise ValueError("Choose the review community and one of the two approved test recipients")
     if issue_id is None:
         built = await build_visual_digest_issue(db, max_cards=max_cards)
         issue_id = int(built["issue_id"])
     group = await _resolve_vk_group_id(db=db, bot=bot, group_id=group_id, target=target, vk_api_fn=vk_api_fn)
+    async def send_one():
+        return await _publish_visual_digest_to_vk_once(
+            db, bot, issue_id=issue_id, max_cards=max_cards, group_id=group, target=target,
+            publish_date=publish_date, vk_api_fn=vk_api_fn, post_to_vk_fn=post_to_vk_fn,
+            upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn, publish_stories=publish_stories, test_mention=test_mention,
+            review_dir=review_dir, review_rows=review_rows)
+    if test_mention is not None:
+        # Each deliberate review run is a new post, including for the same issue.
+        return await send_one()
+
     async with db.raw_conn() as conn:
         cur = await conn.execute("SELECT published_targets_json FROM guide_digest_issue WHERE id=?", (issue_id,))
         saved = await cur.fetchone()
     for key, receipt in _json_load(saved[0] if saved else None, {}).items():
         if key.startswith("vk:") and int(receipt.get("group_id") or 0) == group and receipt.get("post_urls"):
             return dict(receipt, published=True, issue_id=issue_id, target=key, url=receipt["post_urls"][0])
-    async def send_one():
-        return await _publish_visual_digest_to_vk_once(
-            db, bot, issue_id=issue_id, max_cards=max_cards, group_id=group, target=target,
-            publish_date=publish_date, vk_api_fn=vk_api_fn, post_to_vk_fn=post_to_vk_fn,
-            upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn, publish_stories=publish_stories)
     return await run_legacy_delivery(db, issue_id=issue_id, provider="vk", target_id=str(group), send=send_one)
 
 
@@ -2058,7 +2797,12 @@ async def _publish_visual_digest_to_vk_once(
     post_to_vk_fn: Callable[..., Awaitable[str | None]] | None = None,
     upload_vk_photo_bytes_fn: Callable[..., Awaitable[str | None]] | None = None,
     publish_stories: bool = False,
+    test_mention: int | None = None,
+    review_dir: Path | None = None,
+    review_rows: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    if review_rows is not None and (test_mention is None or issue_id is None):
+        raise ValueError("Projected rows require a numbered test publication")
     if vk_api_fn is None:
         import main
 
@@ -2072,7 +2816,9 @@ async def _publish_visual_digest_to_vk_once(
 
         upload_vk_photo_bytes_fn = main.upload_vk_photo_bytes  # type: ignore[attr-defined]
 
-    if issue_id is None:
+    if review_rows is not None:
+        rows = list(review_rows)
+    elif issue_id is None:
         built = await build_visual_digest_issue(db, max_cards=max_cards)
         issue_id = int(built["issue_id"])
         rows = list(built.get("items") or [])
@@ -2086,7 +2832,18 @@ async def _publish_visual_digest_to_vk_once(
 
     rows = rows[: max(1, min(int(max_cards), 10)) * VISUAL_DIGEST_CARD_LIMIT]
     group = await _resolve_vk_group_id(db=db, bot=bot, group_id=group_id, target=target, vk_api_fn=vk_api_fn)
-    text = await build_visual_digest_vk_text(rows, issue_id=int(issue_id), db=db, bot=bot, vk_api_fn=vk_api_fn)
+    review = {"issue_id": int(issue_id)} if review_dir is not None else None
+    coverage: dict[str, int] = {}
+    try:
+        text = await build_visual_digest_vk_text(
+            rows, issue_id=int(issue_id), db=db, bot=bot, vk_api_fn=vk_api_fn,
+            test_mention=test_mention, review=review, mention_coverage=coverage if test_mention is not None else None,
+        )
+    finally:
+        if review_dir is not None:
+            (review_dir / "generation.json").write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
+    if review_dir is not None:
+        (review_dir / "wall-text.txt").write_text(text, encoding="utf-8")
     card_bytes = render_visual_digest_cards(rows, issue_id=int(issue_id))
     attachments: list[str] = []
     for idx, payload in enumerate(card_bytes, start=1):
@@ -2097,6 +2854,8 @@ async def _publish_visual_digest_to_vk_once(
             card.save(png, format="PNG")
             logger.info("guide_visual_digest_vk_card issue_id=%s card=%s format=PNG width=%s height=%s bytes=%s",
                         issue_id, idx, card.width, card.height, png.tell())
+        if review_dir is not None:
+            (review_dir / f"card-{idx}.png").write_bytes(png.getvalue())
         att = await upload_vk_photo_bytes_fn(str(group), png.getvalue(), db, bot, filename=f"guide_visual_digest_{issue_id}_{idx}.png")
         if not att:
             raise RuntimeError(f"Guide visual digest VK upload failed for card {idx}/{len(card_bytes)}")
@@ -2104,6 +2863,12 @@ async def _publish_visual_digest_to_vk_once(
     url = await post_to_vk_fn(str(group), text, db, bot, attachments=attachments, carousel=True, publish_date=publish_date)
     if not url:
         raise RuntimeError("Guide visual digest VK wall.post failed")
+
+    if test_mention is not None:
+        # A review post leaves the issue available for regular daily publication.
+        return {"published": True, "issue_id": issue_id, "url": url, "group_id": group,
+                "text": text, "cards_count": len(card_bytes), "attachments_count": len(attachments),
+                "guide_mentions": coverage}
 
     post_id = _extract_wall_post_id(url)
     target_key = _vk_public_target_key(group_id=group, target=target or VISUAL_DIGEST_VK_TARGET)
@@ -2135,7 +2900,7 @@ async def _publish_visual_digest_to_vk_once(
                 logger.warning("guide_visual_digest_story_failed issue_id=%s: %s", issue_id, exc, exc_info=True)
                 story_payload = {"published": False, "reason": str(exc) or type(exc).__name__}
 
-    occurrence_ids = [int(row["id"]) for row in rows if int(row.get("id") or 0) > 0]
+    occurrence_ids = list(dict.fromkeys(i for row in rows for i in row.get("covered_visual_ids", [row["id"]])))
     async with db.raw_conn() as conn:
         await _enable_row_factory(conn)
         await ensure_visual_digest_schema(conn)
@@ -2161,7 +2926,7 @@ async def _publish_visual_digest_to_vk_once(
             {
                 "kind": "visual_schedule_card",
                 "card_limit": VISUAL_DIGEST_CARD_LIMIT,
-                "item_states": {str(int(row["id"])): _visual_item_state(row) for row in rows if int(row.get("id") or 0) > 0},
+                "item_states": _visual_publication_states(rows),
                 "selection_reasons": {str(int(row["id"])): _plain(row.get("visual_selection_reason")) for row in rows if int(row.get("id") or 0) > 0},
             }
         )

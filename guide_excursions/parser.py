@@ -127,9 +127,9 @@ def _parse_date(day: int, month: int, year: int, *, anchor: date) -> date | None
 def extract_date_iso(text: str, *, post_date: datetime) -> str | None:
     anchor = post_date.astimezone(timezone.utc).date()
     low = text.lower()
-    if "завтра" in low:
+    if re.search(r"\bзавтра(?:шн\w*)?\b", low):
         return (anchor + timedelta(days=1)).isoformat()
-    if "сегодня" in low:
+    if re.search(r"\bсегодня(?:шн\w*)?\b", low):
         return anchor.isoformat()
 
     match = DATE_NUMERIC_RE.search(text)
@@ -479,12 +479,10 @@ def _has_schedule_anchor(line: str, *, post_date: datetime) -> bool:
         return False
     if extract_date_iso(line, post_date=post_date):
         return True
-    if "завтра" in low or "сегодня" in low:
-        return True
     return False
 
 
-def split_occurrence_blocks(text: str, *, post_date: datetime) -> list[str]:
+def split_occurrence_blocks(text: str, *, post_date: datetime, keep_lines: bool = False) -> list[str]:
     lines = [_line_cleanup(line) for line in str(text or "").splitlines()]
     lines = [line for line in lines if line]
     if not lines:
@@ -521,8 +519,34 @@ def split_occurrence_blocks(text: str, *, post_date: datetime) -> list[str]:
         blocks.append(current)
 
     if anchors <= 1 and not section_break_seen:
-        return [collapse_ws(text)]
-    return [collapse_ws("\n".join(block)) for block in blocks if collapse_ws("\n".join(block))]
+        return ["\n".join(lines) if keep_lines else collapse_ws(text)]
+    separator = "\n" if keep_lines else " "
+    return [separator.join(block) for block in blocks if block]
+
+
+def occurrence_fare(text: str, *, title: str, date_iso: str | None, published: datetime) -> str | None:
+    """Read a labelled fare from the dated outing's own block in a programme."""
+    title_key = normalize_title_key(title)
+    if not title_key or not date_iso:
+        return None
+    fares = set()
+    for block in split_occurrence_blocks(text, post_date=published, keep_lines=True):
+        if extract_date_iso(block, post_date=published) != date_iso:
+            continue
+        if title_key not in normalize_title_key(block):
+            continue
+        for line in block.splitlines():
+            match = re.match(r"[^\w]*(?:стоимость|цена)(?:\s+(?:участия|поездки|экскурсии|билета))?\s*[:—–-]?\s*(.+)", line, re.I)
+            if match and re.search(r"\d[\d\s.,–-]*\s*(?:руб|₽|р\b)", match[1], re.I):
+                fares.add(collapse_ws(match[1]))
+    return next(iter(fares)) if len(fares) == 1 else None
+
+
+def price_for_publication(value: str | None) -> str | None:
+    value = collapse_ws(value)
+    if re.match(r"^(?:без\s+)?предоплат", value, re.I) and not re.search(r"\b(?:стоимость|цена|бесплатн)", value, re.I):
+        return None
+    return value or None
 
 
 def build_source_fingerprint(
@@ -670,7 +694,7 @@ def parse_post_occurrences(
             route_summary=None,
             audience_fit=audience_fit,
             group_format=None,
-            price_text=extract_price_text(block),
+            price_text=price_for_publication(extract_price_text(block)),
             booking_text=booking_text,
             booking_url=booking_url,
             channel_url=channel_url,

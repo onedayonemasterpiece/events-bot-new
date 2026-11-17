@@ -1,0 +1,15 @@
+[Unit]
+Description=Connect the Events container to its private excursion writer
+Requires=events-guide-sol.socket
+After=events-guide-sol.socket
+StartLimitIntervalSec=0
+
+[Service]
+# An unclean disconnect can leave a socket file without a listener on RunCoveer.
+ExecStartPre=/usr/bin/ssh -o BatchMode=yes -o ConnectTimeout=10 runcoveer-production "p=/var/lib/runcoveer/events/data/guide-sol/writer.sock; if test -S \"$$p\" && ! ss -xlH | grep -Fq \" $$p \"; then rm -- \"$$p\"; fi"
+ExecStart=/usr/bin/ssh -NT -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -R /var/lib/runcoveer/events/data/guide-sol/writer.sock:%t/events-guide-sol.sock runcoveer-production
+Restart=always
+RestartSec=8
+
+[Install]
+WantedBy=default.target

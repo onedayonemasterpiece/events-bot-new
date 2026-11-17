@@ -46,7 +46,6 @@ from .digest import (
 from .digest_writer import apply_digest_batch_copy
 from .editorial import refine_digest_rows
 from .enrich import apply_occurrence_enrichment, apply_profile_enrichment
-from .identity_policy import allow_fallback_guide_name
 from .kaggle_service import (
     download_guide_results,
     extract_guide_failure_message,
@@ -60,13 +59,16 @@ from .parser import (
     build_source_fingerprint,
     collapse_ws,
     normalize_title_key,
+    occurrence_fare,
     parse_post_occurrences,
+    price_for_publication,
 )
 from .public_identity import resolve_public_guide_names
 from .scanner import GuideScannedPost, scan_source_posts
 from .seed import seed_guide_sources
 from .result_delivery import serialized_guide_process
 from .telethon_client import create_telethon_runtime_client
+from .tic_catalog import record_tic_scan
 
 logger = logging.getLogger(__name__)
 
@@ -1047,23 +1049,7 @@ def _normalize_digest_eligibility(
         return False, reason or "cancelled"
     if digest_eligible:
         return True, reason or None
-    evidence_count = sum(
-        1
-        for value in (
-            time_text,
-            city,
-            meeting_point,
-            route_summary,
-            price_text,
-            booking_text,
-            booking_url,
-            summary_one_liner,
-            digest_blurb,
-        )
-        if collapse_ws(value)
-    )
-    if mode in {"", "scheduled_public", "limited"} and evidence_count >= 2:
-        return True, reason or "fact_policy_promoted"
+    # Field density must not override the extractor's negative eligibility decision.
     return bool(digest_eligible), reason or None
 
 
@@ -1293,6 +1279,13 @@ def _merge_json_objects(base: dict[str, Any] | None, extra: dict[str, Any] | Non
             continue
         out[key] = value
     return out
+
+
+def _occurrence_source_excerpt(parsed: GuideParsedOccurrence, post: GuideScannedPost) -> str:
+    # Older multi-event imports can carry the complete post as every row's block.
+    if parsed.post_kind == "announce_multi" and collapse_ws(parsed.block_text) == collapse_ws(post.text):
+        return ""
+    return parsed.block_text
 
 
 def _build_occurrence_fact_pack(
@@ -2722,11 +2715,6 @@ async def _scan_and_import_source(
     source_context["about_links_json"] = _json_dump(source_meta.about_links) if source_meta.about_links else None
     source_title = source_meta.source_title
     source_report["source_title"] = source_title
-    fallback_name = (
-        collapse_ws(str(source_row["display_name"] or source_title or username))
-        if allow_fallback_guide_name(str(source_row["source_kind"] or ""))
-        else None
-    )
     profile_targets: dict[int, dict[str, Any]] = {}
     for post in posts:
         metrics["posts_scanned"] += 1
@@ -2758,7 +2746,7 @@ async def _scan_and_import_source(
             source_kind=str(source_row["source_kind"] or ""),
             source_title=source_title or collapse_ws(str(source_row["marketing_name"] or source_row["display_name"] or "")),
             channel_url=post.source_url,
-            fallback_guide_name=fallback_name,
+            fallback_guide_name=None,
         )
         if not occurrences:
             source_report["posts"].append(post_report)
@@ -2776,6 +2764,8 @@ async def _scan_and_import_source(
                             "time": occ.time_text,
                             "status": occ.status,
                             "eligible": occ.digest_eligible,
+                            "guide_names": list(occ.guide_names),
+                            "organizer_names": list(occ.organizer_names),
                         }
                         for occ in occurrences
                     ]
@@ -2847,7 +2837,7 @@ async def _scan_and_import_source(
                         "audience_fit": list(parsed.audience_fit),
                         "group_format": parsed.group_format,
                         "guide_names": list(parsed.guide_names),
-                        "post_excerpt": post.text,
+                        "post_excerpt": _occurrence_source_excerpt(parsed, post),
                     }
                 )
                 if created:
@@ -2937,6 +2927,9 @@ def _coerce_occurrence_from_payload(
     date_iso = collapse_ws(payload.get("date") or payload.get("date_iso")) or None
     time_text = collapse_ws(payload.get("time") or payload.get("time_text")) or None
     channel_url = _source_post_url(payload.get("channel_url"), post.source_url)
+    price = price_for_publication(payload.get("price_text"))
+    if not price or price.casefold() == "по запросу":
+        price = occurrence_fare(post.text, title=title, date_iso=date_iso, published=post.post_date) or price
     digest_eligible, digest_reason = _normalize_digest_eligibility(
         date_iso=date_iso,
         availability_mode=collapse_ws(payload.get("availability_mode")) or "scheduled_public",
@@ -2945,7 +2938,7 @@ def _coerce_occurrence_from_payload(
         city=collapse_ws(payload.get("city")) or None,
         meeting_point=collapse_ws(payload.get("meeting_point")) or None,
         route_summary=collapse_ws(payload.get("route_summary")) or None,
-        price_text=collapse_ws(payload.get("price_text")) or None,
+        price_text=price,
         booking_text=collapse_ws(payload.get("booking_text")) or None,
         booking_url=_booking_url_for_digest(payload.get("booking_url")),
         summary_one_liner=collapse_ws(payload.get("summary_one_liner")) or None,
@@ -2953,6 +2946,8 @@ def _coerce_occurrence_from_payload(
         digest_eligible=bool(payload.get("digest_eligible")),
         digest_reason=collapse_ws(payload.get("digest_eligibility_reason")) or None,
     )
+    if payload.get("digest_eligible") is False:
+        logger.info("guide_import.exclusion_preserved source=%s message_id=%s", source_row["username"], post.message_id)
     return GuideParsedOccurrence(
         block_text=collapse_ws(payload.get("source_excerpt") or post.text),
         canonical_title=title,
@@ -2965,7 +2960,7 @@ def _coerce_occurrence_from_payload(
         route_summary=collapse_ws(payload.get("route_summary")) or None,
         audience_fit=_normalize_string_list(payload.get("audience_fit"), limit=8),
         group_format=collapse_ws(payload.get("group_format")) or None,
-        price_text=collapse_ws(payload.get("price_text")) or None,
+        price_text=price,
         booking_text=collapse_ws(payload.get("booking_text")) or None,
         booking_url=_booking_url_for_digest(payload.get("booking_url")),
         channel_url=channel_url,
@@ -2978,11 +2973,7 @@ def _coerce_occurrence_from_payload(
         is_last_call=bool(payload.get("is_last_call")),
         post_kind=collapse_ws(payload.get("post_kind")) or "announce_single",
         availability_mode=collapse_ws(payload.get("availability_mode")) or "scheduled_public",
-        guide_names=_normalize_string_list(
-            payload.get("guide_names")
-            or [_mapping_value(source_row, "display_name"), _mapping_value(source_row, "marketing_name")],
-            limit=4,
-        ),
+        guide_names=_normalize_string_list(payload.get("guide_names"), limit=4),
         organizer_names=_normalize_string_list(payload.get("organizer_names"), limit=4),
         source_fingerprint=collapse_ws(payload.get("source_fingerprint"))
         or build_source_fingerprint(title_normalized=title_normalized, date_iso=date_iso, time_text=time_text),
@@ -3205,7 +3196,7 @@ async def _import_source_payload(
                         "audience_fit": list(parsed.audience_fit),
                         "group_format": parsed.group_format,
                         "guide_names": list(parsed.guide_names),
-                        "post_excerpt": post.text,
+                        "post_excerpt": _occurrence_source_excerpt(parsed, post),
                     }
                 )
                 if created:
@@ -3626,6 +3617,7 @@ async def run_guide_import_from_results(
             results_path=str(results_path),
         )
         import_completed = True
+        await record_tic_scan(db, run_details, mode)
         run_details["import_summary"] = dict(import_summary or {})
         run_details["source_reports"] = list(import_summary.get("sources") or [])
         run_details["occurrence_changes"] = list(import_summary.get("occurrence_changes") or [])
@@ -3918,6 +3910,7 @@ async def run_guide_monitor(
                 except Exception:
                     logger.warning("guide_monitor: failed to disconnect telethon client", exc_info=True)
 
+    await record_tic_scan(db, run_details, mode)
     metrics["duration_sec"] = int(max(0, round(time.monotonic() - started_monotonic)))
     if remote_session_busy:
         status = "skipped"

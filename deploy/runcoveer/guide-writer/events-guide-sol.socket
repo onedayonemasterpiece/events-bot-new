@@ -1,0 +1,12 @@
+[Unit]
+Description=Events excursion narrative requests
+
+[Socket]
+ListenStream=%t/events-guide-sol.sock
+SocketMode=0600
+Accept=yes
+MaxConnections=2
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target
