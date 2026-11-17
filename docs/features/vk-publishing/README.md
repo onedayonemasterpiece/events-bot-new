@@ -15,6 +15,8 @@
 
 - Delayed recommendation comments resolve a changed public post ID using the combined linked-time view only for occurrences sharing the same saved publication URL. Individually published occurrences retain their own header. The saved carousel selection is reused unchanged; the local view does not alter canonical occurrence times or add VK reads.
 
+- Related recommendations keep one occurrence per existing canonical linked programme, in graph order. Fewer than five distinct programmes produce a shorter list; repeat dates are not added to fill slots. Identical titles without canonical links do not establish identity and remain the ingestion/identity path's responsibility. The same saved selection feeds cards and delayed comments.
+
 - Calendar target resolution reuses the linked-time publication view for a shared saved publication URL when VK omits the original postponed ID; an individual receipt uses its own occurrence header. The calendar still describes the individual canonical occurrence. This adds no VK reads or new identity state.
 
 - A second source containing only facts already known to the semantic merge preserves the existing description, short description and search digest. Recording the source or age-evidence provenance does not regenerate public wording. New facts, conflicting facts, actual age/anchor/ticket changes, required schedule cleanup and an initially empty description retain their existing update paths; gallery additions still use the existing media projection.

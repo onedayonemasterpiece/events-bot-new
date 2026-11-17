@@ -62,16 +62,17 @@ async def presentation(db, event):
                 programme.update(known)
                 programmes.remove(known)
         programmes.append(programme)
-    related, repeats, seen_programmes, seen_urls = [], [], set(), {event.source_vk_post_url}
+    related, seen_programmes, seen_urls = [], set(), {event.source_vk_post_url}
     for i in similar_ids:
         row = rows.get(i)
         if not row or peer_ids.get(i) not in public_ids or row.source_vk_post_url in seen_urls:
             continue
         seen_urls.add(row.source_vk_post_url)
         programme = next(index for index, ids in enumerate(programmes) if row.id in ids)
-        (repeats if programme in seen_programmes else related).append(row)
+        if programme not in seen_programmes:
+            related.append(row)
         seen_programmes.add(programme)
-    related = (related + repeats)[:5]
+    related = related[:5]
     from tg_graphic_medallions import resolve_event_graphic_medallions
     def item(row):
         start, _, span_end = row.date.partition('..')
