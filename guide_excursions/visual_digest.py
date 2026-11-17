@@ -2609,7 +2609,9 @@ async def _assemble_vk_narrative(
         if separator and first_line.strip() == heading:
             body = rest
         body = collapse_ws(body)
-        blocks.append("\n".join(x for x in [heading, names(body), *lines] if x))
+        blocks.append("\n\n".join(x for x in (
+            heading, names(body), "\n".join(line for line in lines if line)
+        ) if x))
     if narrative.get("outro"):
         blocks.append(names(narrative["outro"]))
     blocks.append("Это дайджест экскурсий по Калининградской области от «Ух ты, Калининград!».")
