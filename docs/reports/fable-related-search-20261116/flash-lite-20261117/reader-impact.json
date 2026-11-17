@@ -1,0 +1,202 @@
+{
+  "as_of_utc": "2026-11-17T09:14:15.146570+00:00",
+  "public_receipt_utc": "2026-11-16T16:06:42.464924+00:00",
+  "method": "Deployed vk_event_relations.presentation(), current production SQLite read-only, graph injected in memory from archived 20-pair Gemma and new measured Lite grades. The saved wall.getById response was used only for the exact URL. Zero live VK sends, zero model calls, no production writes. pi_only_visibility_probe checks eligibility only.",
+  "weights_source": "0.82 score + 0.12 vector_similarity + 0.06 confidence",
+  "vk_code_sha256": "a3543eacbbe1b0ac789f2364aa695eebaafe2ca47d67b0b3e4dc77f92390e3b4",
+  "facts": {
+    "9950": {
+      "title": "С. Дроботенко «Новый Год По-Русски»",
+      "url": null,
+      "linked": [],
+      "date": "2027-01-08",
+      "time": "19:00",
+      "eligible": true,
+      "has_photo": false
+    },
+    "10883": {
+      "title": "Жизнь Пи",
+      "url": "https://vk.com/wall-231920894_14148",
+      "linked": [
+        8630,
+        9258,
+        9615,
+        9618
+      ],
+      "date": "2026-11-22",
+      "time": "19:00",
+      "eligible": true,
+      "has_photo": true
+    },
+    "10938": {
+      "title": "Стендап: Сборный стендап-концерт",
+      "url": "https://vk.com/wall-231920894_14807",
+      "linked": [
+        7061,
+        7315,
+        8405,
+        8191,
+        8793,
+        9220,
+        9351,
+        9608,
+        9653,
+        10152,
+        10181
+      ],
+      "date": "2026-11-20",
+      "time": "19:00",
+      "eligible": true,
+      "has_photo": true
+    },
+    "10939": {
+      "title": "Стендап: Сольный стендап-концерт Тани Виноградовой",
+      "url": "https://vk.com/wall-231920894_14296",
+      "linked": [
+        7315,
+        9351
+      ],
+      "date": "2026-11-21",
+      "time": "19:00",
+      "eligible": true,
+      "has_photo": true
+    },
+    "10940": {
+      "title": "Стендап: Шоу «Девочки, это пипец»",
+      "url": "https://vk.com/wall-231920894_14342",
+      "linked": [
+        6935,
+        9195
+      ],
+      "date": "2026-11-21",
+      "time": "21:30",
+      "eligible": true,
+      "has_photo": true
+    },
+    "10976": {
+      "title": "Стендап с Максом Кузнецовым",
+      "url": "https://vk.com/wall-231920894_14406",
+      "linked": [
+        9351
+      ],
+      "date": "2026-11-20",
+      "time": "19:30",
+      "eligible": true,
+      "has_photo": false
+    },
+    "11010": {
+      "title": "Стендап: «Проверка материала опытных комиков»",
+      "url": "https://vk.com/wall-231920894_14778",
+      "linked": [
+        11009
+      ],
+      "date": "2026-11-21",
+      "time": "",
+      "eligible": true,
+      "has_photo": true
+    },
+    "11068": {
+      "title": "Властелин колец: Две крепости",
+      "url": "https://vk.com/wall-231920894_14756",
+      "linked": [],
+      "date": "2026-11-21",
+      "time": "19:00",
+      "eligible": true,
+      "has_photo": true
+    }
+  },
+  "result": {
+    "gemma": {
+      "anchor": 11010,
+      "strong_ids": [
+        9950,
+        10938
+      ],
+      "reader": [
+        {
+          "id": 10938,
+          "url": "https://vk.com/wall-231920894_14807",
+          "title": "Стендап: Сборный стендап-концерт",
+          "date": "20.11",
+          "time": "19:00"
+        }
+      ]
+    },
+    "technical_singleton": {
+      "anchor": 11010,
+      "strong_ids": [
+        10939,
+        9950,
+        10938
+      ],
+      "reader": [
+        {
+          "id": 10939,
+          "url": "https://vk.com/wall-231920894_14296",
+          "title": "Стендап: Сольный стендап-концерт Тани Виноградовой",
+          "date": "21.11",
+          "time": "19:00"
+        },
+        {
+          "id": 10938,
+          "url": "https://vk.com/wall-231920894_14807",
+          "title": "Стендап: Сборный стендап-концерт",
+          "date": "20.11",
+          "time": "19:00"
+        }
+      ]
+    },
+    "technical_and_two_near_pairs": {
+      "anchor": 11010,
+      "strong_ids": [
+        10939,
+        9950,
+        10938,
+        10976
+      ],
+      "reader": [
+        {
+          "id": 10939,
+          "url": "https://vk.com/wall-231920894_14296",
+          "title": "Стендап: Сольный стендап-концерт Тани Виноградовой",
+          "date": "21.11",
+          "time": "19:00"
+        },
+        {
+          "id": 10938,
+          "url": "https://vk.com/wall-231920894_14807",
+          "title": "Стендап: Сборный стендап-концерт",
+          "date": "20.11",
+          "time": "19:00"
+        },
+        {
+          "id": 10976,
+          "url": "https://vk.com/wall-231920894_14406",
+          "title": "Стендап с Максом Кузнецовым",
+          "date": "20.11",
+          "time": "19:30"
+        }
+      ]
+    },
+    "pi_only_visibility_probe": {
+      "anchor": 11068,
+      "strong_ids": [
+        10883
+      ],
+      "reader": [
+        {
+          "id": 10883,
+          "url": "https://vk.com/wall-231920894_14148",
+          "title": "Жизнь Пи",
+          "date": "22.11",
+          "time": "19:00"
+        }
+      ]
+    }
+  },
+  "job_id": "job_35a1416745dc3a27276fe76b",
+  "scope": {
+    "measured": "Lite scores, current database fields and actual VK projection code output for the fixed candidate lists",
+    "conditional": "no promotion or reader publication; the two selected boundary cases had been measured in one 5-pair diagnostic prompt; unseen boundary grades 7360 and 7578 held unchanged; film is a single-candidate visibility check"
+  }
+}

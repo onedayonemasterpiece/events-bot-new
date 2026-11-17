@@ -1,0 +1,348 @@
+{
+  "snapshot_started_at": "2026-11-17T09:04:13.369792+00:00",
+  "accounting_timezone": "America/Los_Angeles",
+  "window_open": "2026-11-17",
+  "normal_configured_aliases": 6,
+  "normal_active_scopes": 6,
+  "limits_per_project_model": [
+    {
+      "model": "gemini-3.1-flash-lite",
+      "rpm": 15,
+      "tpm": 250000,
+      "rpd": 500,
+      "tpm_reserve_extra": 1000
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "rpm": 15,
+      "tpm": 250000,
+      "rpd": 500,
+      "tpm_reserve_extra": 1000
+    }
+  ],
+  "daily_used_per_scope": {
+    "2026-11-10": {
+      "gemini-3.1-flash-lite": {
+        "S1": 104,
+        "S2": 108,
+        "S3": 105,
+        "S4": 259,
+        "S5": 151,
+        "S6": 103
+      },
+      "gemini-3.5-flash-lite": {
+        "S1": 61,
+        "S2": 55,
+        "S3": 53,
+        "S4": 68,
+        "S5": 51,
+        "S6": 78
+      }
+    },
+    "2026-11-11": {
+      "gemini-3.1-flash-lite": {
+        "S1": 84,
+        "S2": 92,
+        "S3": 90,
+        "S4": 216,
+        "S5": 111,
+        "S6": 95
+      },
+      "gemini-3.5-flash-lite": {
+        "S1": 27,
+        "S2": 24,
+        "S3": 29,
+        "S4": 28,
+        "S5": 31,
+        "S6": 23
+      }
+    },
+    "2026-11-12": {
+      "gemini-3.1-flash-lite": {
+        "S1": 500,
+        "S2": 221,
+        "S3": 304,
+        "S4": 500,
+        "S5": 400,
+        "S6": 500
+      },
+      "gemini-3.5-flash-lite": {
+        "S1": 223,
+        "S2": 177,
+        "S3": 121,
+        "S4": 128,
+        "S5": 145,
+        "S6": 217
+      }
+    },
+    "2026-11-13": {
+      "gemini-3.1-flash-lite": {
+        "S1": 306,
+        "S2": 162,
+        "S3": 163,
+        "S4": 456,
+        "S5": 181,
+        "S6": 500
+      },
+      "gemini-3.5-flash-lite": {
+        "S1": 159,
+        "S2": 146,
+        "S3": 78,
+        "S4": 99,
+        "S5": 81,
+        "S6": 117
+      }
+    },
+    "2026-11-14": {
+      "gemini-3.1-flash-lite": {
+        "S1": 268,
+        "S2": 121,
+        "S3": 117,
+        "S4": 259,
+        "S5": 180,
+        "S6": 424
+      },
+      "gemini-3.5-flash-lite": {
+        "S1": 119,
+        "S2": 74,
+        "S3": 62,
+        "S4": 57,
+        "S5": 66,
+        "S6": 61
+      }
+    },
+    "2026-11-15": {
+      "gemini-3.1-flash-lite": {
+        "S1": 500,
+        "S2": 257,
+        "S3": 248,
+        "S4": 500,
+        "S5": 385,
+        "S6": 500
+      },
+      "gemini-3.5-flash-lite": {
+        "S1": 446,
+        "S2": 233,
+        "S3": 73,
+        "S4": 33,
+        "S5": 46,
+        "S6": 74
+      }
+    },
+    "2026-11-16": {
+      "gemini-3.1-flash-lite": {
+        "S1": 500,
+        "S2": 375,
+        "S3": 241,
+        "S4": 500,
+        "S5": 310,
+        "S6": 500
+      },
+      "gemini-3.5-flash-lite": {
+        "S1": 500,
+        "S2": 397,
+        "S3": 141,
+        "S4": 87,
+        "S5": 103,
+        "S6": 134
+      }
+    },
+    "2026-11-17": {
+      "gemini-3.1-flash-lite": {
+        "S1": 25,
+        "S2": 8,
+        "S3": 3,
+        "S4": 10,
+        "S5": 7,
+        "S6": 4
+      },
+      "gemini-3.5-flash-lite": {
+        "S1": 7,
+        "S2": 22,
+        "S3": 0,
+        "S4": 1,
+        "S5": 1,
+        "S6": 1
+      }
+    }
+  },
+  "rolling_60s": {
+    "gemini-3.1-flash-lite": {
+      "S1": {
+        "rpm": 0,
+        "reserved_tpm": 0
+      },
+      "S2": {
+        "rpm": 1,
+        "reserved_tpm": 12938
+      },
+      "S3": {
+        "rpm": 0,
+        "reserved_tpm": 0
+      },
+      "S4": {
+        "rpm": 0,
+        "reserved_tpm": 0
+      },
+      "S5": {
+        "rpm": 0,
+        "reserved_tpm": 0
+      },
+      "S6": {
+        "rpm": 0,
+        "reserved_tpm": 0
+      }
+    },
+    "gemini-3.5-flash-lite": {
+      "S1": {
+        "rpm": 0,
+        "reserved_tpm": 0
+      },
+      "S2": {
+        "rpm": 0,
+        "reserved_tpm": 0
+      },
+      "S3": {
+        "rpm": 0,
+        "reserved_tpm": 0
+      },
+      "S4": {
+        "rpm": 0,
+        "reserved_tpm": 0
+      },
+      "S5": {
+        "rpm": 0,
+        "reserved_tpm": 0
+      },
+      "S6": {
+        "rpm": 0,
+        "reserved_tpm": 0
+      }
+    }
+  },
+  "active_cooldowns": [],
+  "runtime_model_choices": {
+    "EVENT_MEDIA_REVIEW_PRIMARY_MODEL": "gemini-3.1-flash-lite",
+    "TG_MONITORING_VISION_MODEL": "gemini-3.1-flash-lite",
+    "KENIGSBERG_STORIES_TEXT_SPLIT_MODEL": "gemini-3.1-flash-lite",
+    "VK_AUTO_IMPORT_PARSE_GEMMA_MODEL": "gemini-3.1-flash-lite",
+    "TG_MONITORING_TEXT_MODEL": "gemini-3.1-flash-lite",
+    "GOOGLE_AI_FALLBACK_MODELS": "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemma-4-31b-it",
+    "POLL_TO_FORWARD_LLM_MODEL": "gemini-3.1-flash-lite",
+    "GUIDE_MONITORING_EXTRACT_MODEL": "models/gemini-3.1-flash-lite",
+    "GUIDE_DIGEST_WRITER_MODEL": "gemini-3.1-flash-lite",
+    "POSTER_OCR_GOOGLE_FALLBACK_MODEL": "gemini-3.5-flash-lite"
+  },
+  "last24h_ending": "2026-11-17T09:04:13.369792+00:00",
+  "physical_attempts_by_model": {
+    "gemini-3.1-flash-lite": {
+      "total": 2417,
+      "statuses": {
+        "succeeded": 1929,
+        "failed_provider": 487,
+        "sent": 1
+      },
+      "provider_error_codes": {
+        "MAX_TOKENS": 92
+      },
+      "consumers": {
+        "smart_update": 606,
+        "kaggle": 386,
+        "event_parse": 365,
+        "tg_event_publish": 229,
+        "route_weaver_enrich": 208,
+        "guide_scout_announce_tier1_extract": 128,
+        "guide_scout_ocr": 114,
+        "event_media_role": 91,
+        "event_media_review": 90,
+        "guide_occurrence_enrich": 83,
+        "guide_scout_screen": 35,
+        "guide_scout_template_extract": 25,
+        "guide_scout_tier1_extract_block": 20,
+        "guide_profile_enrich": 20,
+        "guide_scout_status_claim_extract": 7,
+        "guide_excursions_dedup": 7,
+        "guide_excursions_digest_batch": 2,
+        "tg_monitor_video_quality": 1
+      },
+      "last_hour_statuses": {
+        "succeeded": 51,
+        "failed_provider": 1
+      },
+      "last_success": "2026-11-17T09:03:43.499751+00:00"
+    },
+    "gemini-3.5-flash-lite": {
+      "total": 1341,
+      "statuses": {
+        "succeeded": 887,
+        "failed_provider": 454
+      },
+      "provider_error_codes": {
+        "MAX_TOKENS": 46
+      },
+      "consumers": {
+        "smart_update": 474,
+        "guide_scout_screen": 223,
+        "guide_occurrence_enrich": 157,
+        "route_weaver_enrich": 110,
+        "event_topics": 75,
+        "guide_excursions_digest_batch": 63,
+        "guide_profile_enrich": 46,
+        "guide_scout_ocr": 31,
+        "tg_event_publish": 30,
+        "event_parse": 28,
+        "guide_scout_announce_tier1_extract": 22,
+        "kaggle": 20,
+        "video_partner_filter": 17,
+        "guide_scout_template_extract": 13,
+        "guide_scout_tier1_extract_block": 13,
+        "guide_excursions_dedup": 12,
+        "bot": 5,
+        "guide_scout_status_claim_extract": 1,
+        "poster_ocr_fallback": 1
+      },
+      "last_hour_statuses": {
+        "succeeded": 25,
+        "failed_provider": 5
+      },
+      "last_success": "2026-11-17T09:02:11.157194+00:00"
+    }
+  },
+  "production_outcome_detail": {
+    "cutoff": "2026-11-17T09:04:13.369792+00:00",
+    "classified_lite_errors_last24h": {
+      "gemini-3.1-flash-lite": {
+        "MAX_TOKENS": 92,
+        "http_503": 71,
+        "timeout": 14,
+        "http_429": 305,
+        "cancelled": 5
+      },
+      "gemini-3.5-flash-lite": {
+        "http_503": 134,
+        "MAX_TOKENS": 46,
+        "timeout": 1,
+        "http_429": 271,
+        "cancelled": 2
+      }
+    },
+    "earlier_Gemma_study_window_utc": [
+      "2026-11-17T08:06:00+00:00",
+      "2026-11-17T08:25:00+00:00"
+    ],
+    "all_production_and_study_statuses_in_window": {
+      "gemma-4-26b-a4b": {
+        "failed_provider": 11,
+        "succeeded": 13,
+        "sent": 1
+      },
+      "gemini-3.1-flash-lite": {
+        "succeeded": 20
+      },
+      "gemini-3.5-flash-lite": {
+        "succeeded": 4,
+        "failed_provider": 3
+      }
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "frozen_at": "2026-11-17T09:08:47.345355+00:00",
+  "planned_sends": 1,
+  "question": "Даст ли Lite однозначный проходящий ответ для 11010→10939 в точном одиночном запросе, который у Gemma получил 503?",
+  "generation_config": {
+    "temperature": 0.1,
+    "max_output_tokens": 768,
+    "response_mime_type": "application/json",
+    "response_schema": {
+      "type": "OBJECT",
+      "properties": {
+        "ranked": {
+          "type": "ARRAY",
+          "items": {
+            "type": "OBJECT",
+            "properties": {
+              "event_id": {
+                "type": "INTEGER"
+              },
+              "llm_semantic_score": {
+                "type": "NUMBER"
+              },
+              "similarity_class": {
+                "type": "STRING"
+              },
+              "confidence": {
+                "type": "NUMBER"
+              },
+              "reject": {
+                "type": "BOOLEAN"
+              }
+            },
+            "required": [
+              "event_id",
+              "llm_semantic_score",
+              "similarity_class",
+              "confidence",
+              "reject"
+            ]
+          }
+        }
+      },
+      "required": [
+        "ranked"
+      ]
+    },
+    "thinking_config": {
+      "include_thoughts": false,
+      "thinking_level": "MINIMAL"
+    }
+  },
+  "labels": [
+    {
+      "anchor": 11010,
+      "candidate": 10939,
+      "title": "Стендап: Сольный стендап-концерт Тани Виноградовой",
+      "expected": true,
+      "role": "unanswered",
+      "label_source": "ORIG",
+      "basis": "Сольный стендап Тани Виноградовой, самостоятельный концерт.",
+      "gemma": null
+    }
+  ],
+  "new_unique_pairs": 0,
+  "packet_sha256": "805dcc4cf12ec4d7b51cde99ad8486ab5f6c6171a5118c681bb2f04590111376",
+  "failed_gemma": {
+    "fable17": "error",
+    "utc": "2026-11-17T08:24:54.418458+00:00",
+    "anchor": 11010,
+    "label": "M",
+    "packet_sha256": "805dcc4cf12ec4d7b51cde99ad8486ab5f6c6171a5118c681bb2f04590111376",
+    "sends": 1,
+    "error_type": "ProviderError",
+    "status_code": 503,
+    "blocked_reason": "",
+    "retry_after_ms": 0,
+    "job": "job_5859776eaf508a2dc19eb545",
+    "interpretation": "The single ambiguous candidate was submitted alone, matching #1045 retry behaviour. Its sole actual provider send failed with HTTP 503. No verdict exists for that request."
+  }
+}

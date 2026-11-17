@@ -1,0 +1,207 @@
+{
+  "frozen_at": "2026-11-17T09:06:23.022382+00:00",
+  "planned_sends": 3,
+  "generation_config": {
+    "temperature": 0.1,
+    "max_output_tokens": 768,
+    "response_mime_type": "application/json",
+    "response_schema": {
+      "type": "OBJECT",
+      "properties": {
+        "ranked": {
+          "type": "ARRAY",
+          "items": {
+            "type": "OBJECT",
+            "properties": {
+              "event_id": {
+                "type": "INTEGER"
+              },
+              "llm_semantic_score": {
+                "type": "NUMBER"
+              },
+              "similarity_class": {
+                "type": "STRING"
+              },
+              "confidence": {
+                "type": "NUMBER"
+              },
+              "reject": {
+                "type": "BOOLEAN"
+              }
+            },
+            "required": [
+              "event_id",
+              "llm_semantic_score",
+              "similarity_class",
+              "confidence",
+              "reject"
+            ]
+          }
+        }
+      },
+      "required": [
+        "ranked"
+      ]
+    },
+    "thinking_config": {
+      "include_thoughts": false,
+      "thinking_level": "MINIMAL"
+    }
+  },
+  "show_threshold": 0.72,
+  "labels": [
+    {
+      "anchor": 11010,
+      "candidate": 10939,
+      "title": "Стендап: Сольный стендап-концерт Тани Виноградовой",
+      "expected": true,
+      "role": "unanswered",
+      "label_source": "ORIG",
+      "basis": "Сольный стендап Тани Виноградовой, самостоятельный концерт.",
+      "gemma": null
+    },
+    {
+      "anchor": 11010,
+      "candidate": 10938,
+      "title": "Стендап: Сборный стендап-концерт",
+      "expected": true,
+      "role": "accepted_control",
+      "label_source": "ORIG",
+      "basis": "Самостоятельный сборный стендап.",
+      "gemma": {
+        "llm_semantic_score": 0.75,
+        "reject": false,
+        "confidence": 0.9,
+        "similarity_class": "thematically_close"
+      }
+    },
+    {
+      "anchor": 11010,
+      "candidate": 10976,
+      "title": "Стендап с Максом Кузнецовым",
+      "expected": true,
+      "role": "below_threshold",
+      "label_source": "ORIG",
+      "basis": "Стендап Макса Кузнецова, отдельная программа.",
+      "gemma": {
+        "llm_semantic_score": 0.7,
+        "reject": false,
+        "confidence": 0.95,
+        "similarity_class": "thematically_close"
+      }
+    },
+    {
+      "anchor": 11010,
+      "candidate": 10940,
+      "title": "Стендап: Шоу «Девочки, это пипец»",
+      "expected": true,
+      "role": "below_threshold",
+      "label_source": "ORIG",
+      "basis": "Самостоятельное женское стендап-шоу.",
+      "gemma": {
+        "llm_semantic_score": 0.7,
+        "reject": false,
+        "confidence": 0.95,
+        "similarity_class": "thematically_close"
+      }
+    },
+    {
+      "anchor": 11010,
+      "candidate": 9708,
+      "title": "Премьера! Комедия «Нехорошая квартирка»",
+      "expected": false,
+      "role": "rejected_control",
+      "label_source": "prospective_executor",
+      "basis": "Сюжетный театральный спектакль, общая комедийность не подтверждает близость к вечеру stand-up.",
+      "gemma": {
+        "llm_semantic_score": 0.45,
+        "reject": true,
+        "confidence": 0.9,
+        "similarity_class": "different_topic"
+      }
+    },
+    {
+      "anchor": 11068,
+      "candidate": 10443,
+      "title": "Кинопоказ «Гарри Поттер и Тайная комната»",
+      "expected": true,
+      "role": "accepted_control",
+      "label_source": "ORIG",
+      "basis": "Другой фэнтези-фильм с показом на экране.",
+      "gemma": {
+        "llm_semantic_score": 0.78,
+        "reject": false,
+        "confidence": 0.95,
+        "similarity_class": "thematically_close"
+      }
+    },
+    {
+      "anchor": 11068,
+      "candidate": 10883,
+      "title": "Жизнь Пи",
+      "expected": true,
+      "role": "weak_pair",
+      "label_source": "ORIG",
+      "basis": "Кинопоказ, заранее размеченная владельцем подходящая программа.",
+      "gemma": {
+        "llm_semantic_score": 0.65,
+        "reject": false,
+        "confidence": 0.85,
+        "similarity_class": "weak_or_adjacent_related"
+      }
+    },
+    {
+      "anchor": 11068,
+      "candidate": 9794,
+      "title": "Крестовые походы в кинематографе",
+      "expected": false,
+      "role": "rejected_control",
+      "label_source": "prospective_executor",
+      "basis": "Историко-религиозная лекция об истории крестовых походов в кино, иной предмет и формат.",
+      "gemma": {
+        "llm_semantic_score": 0.35,
+        "reject": true,
+        "confidence": 0.95,
+        "similarity_class": "different_topic"
+      }
+    },
+    {
+      "anchor": 11084,
+      "candidate": 10186,
+      "title": "Янтарный бал",
+      "expected": false,
+      "role": "weak_counterexample",
+      "label_source": "Fable_review2",
+      "basis": "Благотворительный бал той же индустрии; Fable и владелец разбора считают общую аудиторию недостаточной для сильной рекомендации вместо делового форума.",
+      "gemma": {
+        "llm_semantic_score": 0.6,
+        "similarity_class": "thematically_close",
+        "reject": null
+      }
+    },
+    {
+      "anchor": 11084,
+      "candidate": 9934,
+      "title": "Практикум с психологом «Синдром самозванца»",
+      "expected": false,
+      "role": "weak_counterexample",
+      "label_source": "Fable_review2",
+      "basis": "Общий психологический практикум не посвящён индустрии гостеприимства.",
+      "gemma": {
+        "llm_semantic_score": 0.58,
+        "similarity_class": "weak_or_adjacent_related",
+        "reject": null
+      }
+    }
+  ],
+  "packet_sha256": [
+    "bc42be01acf3e33404cbdf390b0576c0fbaf31c13b4d301d90b1bf19b94fac3c",
+    "64423b5277e82347adf288be8c40a6e6f3424ba14bb8fe4ec1d95ce83dc2e8c4",
+    "40f1d46d5aa5adb0307f5afc2e5f43045bbe135d57b55bd3e200d61e3648af97"
+  ],
+  "sources": {
+    "ORIG": "https://github.com/onedayonemasterpiece/events-bot-new/blob/35b1ab110714d6b08ccbcccec7b7c25fc056ec1c/docs/reports/fable-related-search-20261116/fable_analysis.py",
+    "Fable_review2": "https://github.com/onedayonemasterpiece/events-bot-new/blob/d7b667ed6c01ef104aed2186d5797fbb39539f0a/docs/reports/fable-related-search-20261116/FABLE-REVIEW-2.md",
+    "Gemma_A": "https://github.com/onedayonemasterpiece/events-bot-new/blob/7ee773ceabed87d0bc9be30ce33bda80656115e5/docs/reports/fable-related-search-20261116/review-2-followup/combined.jsonl"
+  }
+}

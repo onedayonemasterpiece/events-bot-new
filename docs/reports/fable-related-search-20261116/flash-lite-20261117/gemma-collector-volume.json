@@ -1,0 +1,84 @@
+{
+  "snapshot_utc": "2026-11-17T09:11:38.534870+00:00",
+  "tracked_consumer": "static_site_related_builder",
+  "requested_model": "models/gemma-4-26b-a4b-it",
+  "canonical_ledger_model": "gemma-4-26b-a4b",
+  "normal_active_scopes": 6,
+  "prev24h": {
+    "all_admitted_attempt_rows": 608,
+    "statuses": {
+      "failed_provider": 331,
+      "succeeded": 276,
+      "sent": 1
+    }
+  },
+  "prev7x24h": {
+    "all_admitted_attempt_rows": 3503,
+    "statuses": {
+      "failed_provider": 1453,
+      "succeeded": 2049,
+      "sent": 1
+    }
+  },
+  "calendar_days_pacific": {
+    "2026-11-10": {
+      "all_admitted_attempt_rows": 0,
+      "statuses": {}
+    },
+    "2026-11-11": {
+      "all_admitted_attempt_rows": 0,
+      "statuses": {}
+    },
+    "2026-11-12": {
+      "all_admitted_attempt_rows": 0,
+      "statuses": {}
+    },
+    "2026-11-13": {
+      "all_admitted_attempt_rows": 0,
+      "statuses": {}
+    },
+    "2026-11-14": {
+      "all_admitted_attempt_rows": 855,
+      "statuses": {
+        "failed_provider": 297,
+        "succeeded": 558
+      }
+    },
+    "2026-11-15": {
+      "all_admitted_attempt_rows": 2023,
+      "statuses": {
+        "failed_provider": 816,
+        "succeeded": 1207
+      }
+    },
+    "2026-11-16": {
+      "all_admitted_attempt_rows": 600,
+      "statuses": {
+        "failed_provider": 329,
+        "succeeded": 271
+      }
+    },
+    "2026-11-17": {
+      "all_admitted_attempt_rows": 25,
+      "statuses": {
+        "failed_provider": 11,
+        "succeeded": 13,
+        "sent": 1
+      }
+    }
+  },
+  "includes_study_traffic": "yes: same consumer plus model. Counts include prior controlled repeats and other research/replays via the same consumer. The 24h and 7d windows are gross traffic, not isolated scheduled production traffic.",
+  "lite_used_today_when_queried": {
+    "gemini-3.1-flash-lite": 67,
+    "gemini-3.5-flash-lite": 37
+  },
+  "rpd_checked_at_utc": "2026-11-17T09:11:46.448447+00:00",
+  "known_same_consumer_in_previous_study": {
+    "controlled_repeat_sends": 18,
+    "two_reader_second_packets": 2,
+    "ambiguous_id_reader_retry": 1,
+    "known_total": 21,
+    "included_in_prev24h": true
+  },
+  "scope_interpretation": "One Lite attempt for every admitted Gemma attempt would add the measured gross volume. Logical batches, qualifying distinct pairs, retries and background imports have different denominators."
+}
