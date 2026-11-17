@@ -50,11 +50,14 @@ again after each harmless-read recovery. The shared worker now counts only code
 existing `CAPTCHA_MAX_ATTEMPTS` setting, default 2. Ordinary network failures
 remain in the separate existing `attempts` counter.
 
-On exhaustion the job ends with `status=error`, `terminal_reason=failed` and a
-structured `VK_CAPTCHA_TERMINAL` warning. This means the document/comment was
-not delivered. The real challenge still invokes the existing shared cooldown;
-marker-scoped recovery resumes other tasks and excludes this failed job. No
-write probe, token rotation, challenge bypass or new worker is introduced.
+On exhaustion the job records `terminal_reason=failed` and a structured
+`VK_CAPTCHA_TERMINAL` warning; the document/comment was not delivered. It stays
+paused as the durable shared-cooldown marker, including across a restart when
+all other work is scheduled for the future. Successful marker-scoped recovery
+returns this terminal job to `status=error` without changing its due time,
+error, payload or attempts. The worker excludes terminal jobs from execution.
+Other cohort tasks resume normally. No write probe, token rotation, challenge
+bypass or new worker is introduced.
 
 Restart and same-job enqueue retain the CAPTCHA count. Omitting an enqueue
 payload retains the frozen post URL, selection and publication time. Ordinary

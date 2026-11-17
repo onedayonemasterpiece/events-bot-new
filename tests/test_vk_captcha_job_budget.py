@@ -122,3 +122,113 @@ async def test_exact_captcha_counter_preserves_other_failure_budget_and_frozen_c
                 assert exhausted.payload == expected and exhausted.attempts == starting_attempts
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+async def test_exhausted_captcha_keeps_restart_pause_with_only_future_work(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    monkeypatch.setattr(main, 'CAPTCHA_MAX_ATTEMPTS', 2)
+    monkeypatch.setattr(main, 'VK_CAPTCHA_AUTO_RECOVERY_SEC', 0)
+    monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '231920894')
+    monkeypatch.setattr(main, '_vk_captcha_needed', False)
+    monkeypatch.setattr(main, '_vk_captcha_resume', None)
+    monkeypatch.setattr(main, '_vk_user_token', lambda: 'offline-only')
+    calls, probes = [], []
+    blocked = True
+
+    async def handler(event_id, *args):
+        calls.append(event_id)
+        main._vk_captcha_needed = True
+        raise main.VKAPIError(14, 'offline challenge', method='docs.save')
+
+    async def probe(method, params, *args, **kwargs):
+        assert method == 'wall.get' and kwargs['skip_captcha'] is True
+        probes.append(method)
+        if blocked:
+            raise main.VKAPIError(14, 'offline challenge', method=method)
+        return {'response': {'count': 0, 'items': []}}
+
+    monkeypatch.setitem(main.JOB_HANDLERS, 'vk_calendar_comment', handler)
+    monkeypatch.setattr(main, '_vk_api', probe)
+    path = str(tmp_path / 'terminal-marker.sqlite')
+    db = main.Database(path)
+    await db.init()
+    future_due = datetime.now(timezone.utc) + timedelta(hours=8)
+    try:
+        async with db.get_session() as session:
+            event = main.Event(title='Future', description='facts', source_text='facts',
+                               date='2099-01-04', time='12:00', location_name='Venue')
+            session.add(event)
+            await session.flush()
+            culprit = main.JobOutbox(event_id=event.id, task=main.JobTask.vk_calendar_comment,
+                                     payload={'captcha_attempts': 1}, attempts=7)
+            future = main.JobOutbox(event_id=event.id, task=main.JobTask.vk_sync,
+                                    status=main.JobStatus.error, attempts=4,
+                                    next_run_at=future_due, last_error='vk_sync_missing_media')
+            session.add_all([culprit, future])
+            await session.flush()
+            culprit_id, future_id = culprit.id, future.id
+            await session.commit()
+        assert await main._run_due_jobs_once(db, None, max_jobs=1) == 1
+        await db.close()
+        db = main.Database(path)
+        await db.init()
+        monkeypatch.setattr(main, '_vk_captcha_needed', False)
+        monkeypatch.setattr(main, '_vk_captcha_resume', None)
+        monkeypatch.setattr(main, '_vk_captcha_auto_probe_last_monotonic', 0.0)
+        assert await main._maybe_auto_recover_vk_captcha_outbox(db, None) is True
+        async with db.get_session() as session:
+            row = await session.get(main.JobOutbox, culprit_id)
+            assert row.status == main.JobStatus.paused and row.terminal_reason == 'failed'
+            terminal_snapshot = (row.last_error, row.attempts, row.payload, row.next_run_at)
+        blocked = False
+        monkeypatch.setattr(main, '_vk_captcha_auto_probe_last_monotonic', 0.0)
+        assert await main._maybe_auto_recover_vk_captcha_outbox(db, None) is False
+        assert await main._maybe_auto_recover_vk_captcha_outbox(db, None) is False
+        assert await main._run_due_jobs_once(db, None, max_jobs=1) == 0
+        async with db.get_session() as session:
+            row = await session.get(main.JobOutbox, culprit_id)
+            peer = await session.get(main.JobOutbox, future_id)
+            assert row.status == main.JobStatus.error and row.terminal_reason == 'failed'
+            assert (row.last_error, row.attempts, row.payload, row.next_run_at) == terminal_snapshot
+            assert row.payload == {'captcha_attempts': 2}
+            assert peer.status == main.JobStatus.error and peer.attempts == 4
+            assert peer.last_error == 'vk_sync_missing_media'
+            assert main._ensure_utc(peer.next_run_at) == future_due
+        assert len(calls) == 1 and probes == ['wall.get', 'wall.get']
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_consuming_terminal_marker_does_not_revive_due_failed_job(tmp_path, monkeypatch):
+    marker = 'captcha_wait:terminal-due'
+    monkeypatch.setattr(main, '_vk_captcha_needed', False)
+    calls = []
+
+    async def handler(event_id, *args):
+        calls.append(event_id)
+        return True
+
+    monkeypatch.setitem(main.JOB_HANDLERS, 'vk_calendar_comment', handler)
+    db = main.Database(str(tmp_path / 'due-terminal.sqlite'))
+    await db.init()
+    try:
+        async with db.get_session() as session:
+            row = main.JobOutbox(event_id=0, task=main.JobTask.vk_calendar_comment,
+                                 status=main.JobStatus.paused, terminal_reason='failed',
+                                 last_error=marker, payload={'captcha_attempts': 2})
+            session.add(row)
+            await session.flush()
+            job_id = row.id
+            await session.commit()
+        assert await main._resume_vk_captcha_outbox(db, marker) == 0
+        assert await main._run_due_jobs_once(db, None, max_jobs=1) == 0
+        async with db.get_session() as session:
+            row = await session.get(main.JobOutbox, job_id)
+            assert row.status == main.JobStatus.error and row.terminal_reason == 'failed'
+            assert row.last_error == marker and row.payload == {'captcha_attempts': 2}
+        assert calls == []
+    finally:
+        await db.close()

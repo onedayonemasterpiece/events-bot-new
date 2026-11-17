@@ -486,7 +486,7 @@ async def test_captcha_does_not_revive_terminal_vk_jobs(tmp_path):
         assert await main._resume_vk_captcha_outbox(db, marker) == 1
         async with db.get_session() as session:
             jobs = [await session.get(JobOutbox, job_id) for job_id in ids]
-            assert [j.status for j in jobs] == [JobStatus.error, JobStatus.paused, JobStatus.pending]
+            assert [j.status for j in jobs] == [JobStatus.error, JobStatus.error, JobStatus.pending]
             assert jobs[0].last_error == "permanent failure"
             assert jobs[1].terminal_reason == "failed"
     finally:

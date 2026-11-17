@@ -1,6 +1,6 @@
 ## 2026-11-17
 
-- CAPTCHA pause preserves future independent VK retry and comment delays instead of bringing them forward on recovery; running jobs retain marker-scoped recovery.
+- CAPTCHA pause preserves future independent VK retry and comment delays. Exhausted jobs retain the shared pause across restart until recovery, then remain terminal without another write attempt.
 
 - NFC-страницы: `kenigevents.ru/vk/` подписана «Полюбить Калининград Афиша — Самая большая афиша событий региона»; новая `kenigevents.ru/uhty/` по той же схеме открывает сообщество «Ух ты, Калининград!» (дайджесты экскурсий). Workflow выгружает все страницы `site/root-links/*/` и принимает SHA, уже вошедший в main.
 - `kenigevents.ru/vk/` на Android больше не запускает приложение ВК без нажатия: Chrome спрашивал подтверждение и сразу уводил на запасной сайт. Сообщество открывается в приложении кнопкой, как из Telegram/Max.
