@@ -1,0 +1,126 @@
+name: NFC VK link production release
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact current main SHA to publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kenigevents-nfc-vk-page
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: production
+    env:
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      KENIGEVENTS_SITE_YC_BUCKET: ${{ secrets.KENIGEVENTS_SITE_YC_BUCKET || vars.KENIGEVENTS_SITE_YC_BUCKET }}
+      KENIGEVENTS_SITE_YC_ACCESS_KEY_ID: ${{ secrets.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID || vars.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID }}
+      KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY: ${{ secrets.KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY }}
+      KENIGEVENTS_SITE_YC_ENDPOINT: ${{ secrets.KENIGEVENTS_SITE_YC_ENDPOINT || vars.KENIGEVENTS_SITE_YC_ENDPOINT || 'https://storage.yandexcloud.net' }}
+      KENIGEVENTS_SITE_YC_REGION: ${{ secrets.KENIGEVENTS_SITE_YC_REGION || vars.KENIGEVENTS_SITE_YC_REGION || 'ru-central1' }}
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.12.0
+
+      - name: Check exact source and destination contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git fetch origin main --no-tags
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_SHA"
+          test -z "$(git status --porcelain)"
+          : "${KENIGEVENTS_SITE_YC_BUCKET:?Bucket required}"
+          : "${KENIGEVENTS_SITE_YC_ACCESS_KEY_ID:?Access key required}"
+          : "${KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY:?Secret key required}"
+          test -f site/public/vk.html
+          node --test site/tests/nfc-vk-landing.test.mjs
+
+      - name: Publish only vk.html, verify public URL, rollback on failure
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export AWS_ACCESS_KEY_ID="$KENIGEVENTS_SITE_YC_ACCESS_KEY_ID"
+          export AWS_SECRET_ACCESS_KEY="$KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY"
+          export AWS_DEFAULT_REGION="$KENIGEVENTS_SITE_YC_REGION"
+          aws_cmd() { aws --endpoint-url "$KENIGEVENTS_SITE_YC_ENDPOINT" "$@"; }
+
+          source=site/public/vk.html
+          key=vk.html
+          release="_static/nfc-vk-releases/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          stage="$release/staged-vk.html"
+          backup="$release/previous-vk.html"
+          url="https://kenigevents.ru/vk.html"
+          expected_hash="$(sha256sum "$source" | cut -d' ' -f1)"
+          existed=0
+          changed=0
+
+          aws_cmd s3 cp "$source" "s3://$KENIGEVENTS_SITE_YC_BUCKET/$stage" \
+            --content-type 'text/html; charset=utf-8' \
+            --cache-control 'public, max-age=0, must-revalidate' --no-progress
+          staged_hash="$(aws_cmd s3 cp "s3://$KENIGEVENTS_SITE_YC_BUCKET/$stage" - --no-progress | sha256sum | cut -d' ' -f1)"
+          test "$staged_hash" = "$expected_hash"
+
+          if aws_cmd s3api head-object --bucket "$KENIGEVENTS_SITE_YC_BUCKET" --key "$key" >/dev/null 2>&1; then
+            existed=1
+            aws_cmd s3 cp "s3://$KENIGEVENTS_SITE_YC_BUCKET/$key" \
+              "s3://$KENIGEVENTS_SITE_YC_BUCKET/$backup" --metadata-directive COPY --no-progress
+          fi
+
+          rollback() {
+            status=$?
+            if (( changed )); then
+              if (( existed )); then
+                aws_cmd s3 cp "s3://$KENIGEVENTS_SITE_YC_BUCKET/$backup" \
+                  "s3://$KENIGEVENTS_SITE_YC_BUCKET/$key" --metadata-directive COPY --no-progress || true
+              else
+                aws_cmd s3 rm "s3://$KENIGEVENTS_SITE_YC_BUCKET/$key" --no-progress || true
+              fi
+            fi
+            exit "$status"
+          }
+          trap rollback ERR INT TERM
+          changed=1
+          aws_cmd s3 cp "s3://$KENIGEVENTS_SITE_YC_BUCKET/$stage" \
+            "s3://$KENIGEVENTS_SITE_YC_BUCKET/$key" --metadata-directive COPY --no-progress
+
+          matched=0
+          for attempt in $(seq 1 12); do
+            if curl --fail --silent --show-error -H 'Cache-Control: no-cache' \
+              "$url?sha=${EXPECTED_SHA:0:12}&attempt=$attempt" \
+              -o "$RUNNER_TEMP/nfc-vk-live.html" &&
+              test "$(sha256sum "$RUNNER_TEMP/nfc-vk-live.html" | cut -d' ' -f1)" = "$expected_hash"; then
+              matched=1
+              break
+            fi
+            sleep 3
+          done
+          test "$matched" = 1
+          trap - ERR INT TERM
+          echo "Verified public page: $url"
+          echo "Source SHA: $EXPECTED_SHA"
+          {
+            echo '## NFC VK production publication'
+            echo "- URL: $url"
+            echo "- Repository SHA: $EXPECTED_SHA"
+            echo "- SHA256 of live HTML: $expected_hash"
+            echo '- Validation: exact public-byte readback PASS'
+            echo '- Android/iOS app handoff: not device-verified by this job'
+          } >> "$GITHUB_STEP_SUMMARY"
