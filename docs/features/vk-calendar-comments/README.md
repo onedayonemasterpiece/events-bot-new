@@ -63,3 +63,14 @@ New jobs without CAPTCHA and non-VK tasks do not acquire this metadata.
 Existing delivered receipts are not changed, replayed or rewritten. Source
 checks and mocked tests do not establish that VK has cleared an account block;
 ordinary new publication and comment receipts remain the live acceptance.
+
+## CAPTCHA recovery ordering, 17 November
+
+Within one resumed CAPTCHA cohort, frozen text-related comments and new posts
+receive paced due slots before calendar document uploads. Already due documents
+that retain the CAPTCHA marker also follow ready text comments and VK posts
+when a delayed worker picks work. Ordinary documents without that marker retain
+the existing foreground comment priority. Marker scope, 30-second recovery pacing
+and CAPTCHA budgets are unchanged. Documents remain queued, but recovery backlog
+can delay them beyond their original publication window. Neither this order nor
+a harmless read proves that VK accepts a write or clears the provider challenge.

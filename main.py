@@ -5622,6 +5622,8 @@ async def _resume_vk_captcha_outbox(
             )
         )
         jobs = [_normalize_job(job) for job in rows.scalars().all()]
+        jobs.sort(key=lambda job: job.task == JobTask.vk_calendar_comment
+                  and not (job.payload if isinstance(job.payload, dict) else {}).get("relations"))
         for job in jobs:
             payload = job.payload if isinstance(job.payload, dict) else {}
             if job.task == JobTask.vk_calendar_comment and int(payload.get("publish_date") or 0) > now.timestamp():
@@ -20001,6 +20003,9 @@ async def _run_due_jobs_once_locked(
     media_today = now.astimezone(LOCAL_TZ).date().isoformat()
 
     def _job_due_sort_key(j: JobOutbox) -> tuple[int, int, int, int]:
+        if j.task == JobTask.vk_calendar_comment and (j.last_error or "").startswith("captcha_wait:") and not (
+                j.payload if isinstance(j.payload, dict) else {}).get("relations"):
+            return (-1, 0, int(_ensure_utc(j.next_run_at).timestamp()), j.id)
         task_priority = priority.get(j.task, 99)
         related_only = os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only"
         if j.task == JobTask.vk_sync and j.id in initial_vk_jobs and j.last_error != "vk_initial_waiting_related":
