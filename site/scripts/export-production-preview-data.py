@@ -4496,6 +4496,7 @@ def maybe_apply_gemma_audit(
     anchor_ids: set[int] | None = None,
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
     changed_event_ids = set(changed_event_ids or set())
+    lite_rescue_model = "models/gemini-3.5-flash-lite"
     meta = {
         "enabled": enabled,
         "model": model,
@@ -4510,7 +4511,7 @@ def maybe_apply_gemma_audit(
         "errors": [],
         "verified_event_ids": [],
         "retry_policy": {
-            "fallback_models": [],
+            "fallback_models": [lite_rescue_model],
             "max_attempts": max(
                 1,
                 int(os.getenv("STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS", "2") or "2"),
@@ -4708,6 +4709,41 @@ def maybe_apply_gemma_audit(
                             "pass_index": pass_index + 1,
                             "error": str(last_exc)[:500] if last_exc else "Gemma related audit failed",
                         })
+                    # Only recover omitted IDs from a partially answered Gemma pass.
+                    # A wholly failed pass is never rerouted wholesale to Lite.
+                    if pass_audit and pass_audit.keys() != pass_ids:
+                        missing = [event for event in pass_candidates if event["id"] not in pass_audit]
+                        try:
+                            rescued = call_gemma_related_audit(
+                                model=lite_rescue_model, key_env=key_env, anchor=anchor,
+                                candidates=missing,
+                                timeout_seconds=int(meta["retry_policy"]["timeout_seconds"]),
+                                candidate_limit=candidate_limit,
+                            )
+                        except Exception as exc:
+                            meta["attempts"].append({
+                                "anchor_event_id": anchor_int_id, "pass_index": pass_index + 1,
+                                "model": lite_rescue_model, "status": "error",
+                                "error": str(exc)[:200],
+                            })
+                        else:
+                            meta["provider_calls"] += 1
+                            pass_audit.update({event["id"]: {
+                                **rescued[event["id"]], "_verified_model": lite_rescue_model,
+                            } for event in missing if event["id"] in rescued})
+                            audit.update(pass_audit)
+                            audit_cache[pass_key] = {str(k): v for k, v in pass_audit.items()}
+                            complete = pass_audit.keys() == pass_ids
+                            meta["attempts"].append({
+                                "anchor_event_id": anchor_int_id, "pass_index": pass_index + 1,
+                                "model": lite_rescue_model,
+                                "candidate_count": len(missing),
+                                "status": "ok" if complete else "partial",
+                            })
+                            if complete:
+                                successful_passes += 1
+                                pass_failures[:] = [failure for failure in pass_failures
+                                                    if failure["pass_index"] != pass_index + 1]
                 if not audit:
                     raise RuntimeError(
                         pass_failures[0]["error"] if pass_failures else "Gemma related audit failed"
@@ -4741,7 +4777,10 @@ def maybe_apply_gemma_audit(
             item["gemma_reject"] = bool(verdict.get("reject")) or item["similarity_class"] in {"same_occurrence_group", "duplicate_same_slot"}
             if item["gemma_reject"]:
                 item["display_eligible"] = False
-            item["reason_codes"] = list(dict.fromkeys([*(item.get("reason_codes") or []), "gemma4_26b_audit"]))
+            item["reason_codes"] = list(dict.fromkeys([
+                *(item.get("reason_codes") or []),
+                "gemini35_lite_audit" if verdict.get("_verified_model") else "gemma4_26b_audit",
+            ]))
             item["slot_type"] = "pure_related" if (llm_score >= 0.72 and not item.get("gemma_reject")) else str(item.get("slot_type") or "adjacent_discovery")
             if llm_score < 0.35:
                 item["slot_type"] = "adjacent_discovery"
