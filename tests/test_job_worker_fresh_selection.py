@@ -438,7 +438,7 @@ async def test_due_calendar_precedes_older_missing_media_and_static_work(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ready_comment", [False, "known", "legacy"])
+@pytest.mark.parametrize("ready_comment", [False, "known", "legacy", "related_known", "related_legacy"])
 @pytest.mark.parametrize("include_future", [False, True])
 async def test_captcha_future_comment_keeps_slot_for_initial_then_normal_worker_prioritizes_initial(
     tmp_path, monkeypatch, ready_comment, include_future
@@ -475,8 +475,10 @@ async def test_captcha_future_comment_keeps_slot_for_initial_then_normal_worker_
             session.add_all(jobs + ([future] if include_future else []))
             if ready_comment:
                 ready_payload = {"post_url": managed.source_vk_post_url}
-                if ready_comment == "known":
+                if ready_comment in {"known", "related_known"}:
                     ready_payload["publish_date"] = int((now - timedelta(hours=1)).timestamp())
+                if str(ready_comment).startswith("related_"):
+                    ready_payload["relations"] = {"related": [{"id": 42}]}
                 session.add(main.JobOutbox(event_id=managed.id, task=main.JobTask.vk_calendar_comment,
                                            payload=ready_payload,
                                            status=main.JobStatus.paused, last_error=marker,
@@ -508,8 +510,9 @@ async def test_captcha_future_comment_keeps_slot_for_initial_then_normal_worker_
         monkeypatch.setitem(main.JOB_HANDLERS, main.JobTask.vk_sync.value, publish)
         monkeypatch.setitem(main.JOB_HANDLERS, main.JobTask.vk_calendar_comment.value, comment)
         assert await main._run_due_jobs_once(db, None, max_jobs=1) == 1
-        assert calls[0][0] == ("comment" if ready_comment else "initial")
-        if ready_comment:
+        text_comment = str(ready_comment).startswith("related_")
+        assert calls[0][0] == ("comment" if text_comment else "initial")
+        if text_comment:
             assert await main._run_due_jobs_once(db, None, max_jobs=1) == 1
             assert calls[1] == ("initial", initial.id)
     finally:
