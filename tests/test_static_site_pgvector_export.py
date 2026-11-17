@@ -892,3 +892,80 @@ def test_legacy_verified_packet_repairs_only_missing_verdicts(tmp_path, monkeypa
     assert not any('0' in p for p in json.loads(path.read_text())['gemma_audit_cache'].values())
     assert run(None)['strict_verified_related']
     assert calls == [[3]]
+
+
+@pytest.mark.parametrize('state', ['cold', 'full', 'passes', 'scoped', 'complete'])
+def test_partial_verdict_ids_do_not_complete_full_or_scoped_cache(state, tmp_path, monkeypatch):
+    exporter = _load_exporter_module()
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '2')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT', '10')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS', '1')
+    events = [_related_event(i, f'Event {i}', day=20) for i in range(1, 22)]
+    raw = {'1': [{'event_id': i, 'vector_similarity': .8, 'related_score': .8,
+                  'slot_type': 'pure_related'} for i in range(2, 22)]}
+    raw.update({str(i): [] for i in range(2, 22)})
+    monkeypatch.setattr(exporter, 'build_pgvector_related_chain', lambda *a, **k: raw.copy())
+    cache_path = tmp_path / 'cache.json'
+    calls = []
+    incomplete = False
+
+    def audit(**kwargs):
+        ids = [e['id'] for e in kwargs['candidates']]
+        calls.append(ids)
+        result = {i: {'llm_semantic_score': .8, 'confidence': .9, 'reject': False,
+                      'similarity_class': 'highly_similar'} for i in ids}
+        if incomplete and ids[0] == 2:
+            for i in (2, 3, 4):
+                result.pop(i)
+            result[0] = {'llm_semantic_score': .8, 'confidence': .9, 'reject': False,
+                         'similarity_class': 'highly_similar'}  # Unrequested ID is ignored.
+        return result
+
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+
+    def run(scoped=False):
+        return exporter.build_related(events, current_date='2026-07-20', related_mode='pgvector',
+            cache_path=cache_path, gemma_verify=True, anchor_ids={1} if scoped else None)
+
+    if state != 'cold':
+        assert run()['related']['1']['strict_verified']
+        saved = json.loads(cache_path.read_text())
+        for verdicts in saved['gemma_audit_cache'].values():
+            if '2' in verdicts:
+                for i in ('2', '3', '4'):
+                    verdicts.pop(i)
+                verdicts['0'] = dict(verdicts['5'])
+        if state == 'passes':
+            saved['gemma_audit_cache'] = {
+                key: value for key, value in saved['gemma_audit_cache'].items()
+                if '12' not in value or '5' not in value}
+        cache_path.write_text(json.dumps(saved))
+        calls.clear()
+    incomplete = state != 'complete'
+    result = run(scoped=state == 'scoped')
+    assert result['related']['1']['strict_verified'] == (state == 'complete')
+    assert result['related']['2']['strict_verified']  # Healthy empty anchors still finish.
+    expected_calls = [list(range(2, 12)), list(range(12, 22))] if state == 'cold' else [[2, 3, 4]]
+    assert calls == expected_calls
+    assert 5 in result['related']['1']['pure_related']
+    if state == 'complete':
+        calls.clear()
+        assert run()['related']['1']['strict_verified']
+        assert not calls
+
+
+def test_missing_catalog_candidate_does_not_complete_requested_audit(monkeypatch):
+    exporter = _load_exporter_module()
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
+    events = [{'id': 1, 'title': 'Anchor'}, {'id': 2, 'title': 'Known peer'}]
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', lambda **kwargs: {
+        e['id']: {'llm_semantic_score': .8, 'confidence': .9, 'reject': False,
+                  'similarity_class': 'highly_similar'} for e in kwargs['candidates']})
+    chains = {'1': [{'event_id': i, 'related_score': .8, 'vector_similarity': .8,
+                     'slot_type': 'pure_related'} for i in (2, 999)]}
+    result, meta = exporter.maybe_apply_gemma_audit(events, chains, enabled=True,
+        model='models/gemma-4-26b-a4b-it', key_env='GOOGLE_API_KEY4', cache={}, max_anchors=0)
+    assert 1 not in meta['verified_event_ids']
+    assert 2 in meta['verified_event_ids']
+    assert next(item for item in result['1'] if item['event_id'] == 2)['llm_semantic_score'] == .8

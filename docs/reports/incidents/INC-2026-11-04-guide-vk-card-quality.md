@@ -380,3 +380,46 @@ is sha256:3790fe576507360d35bb3711026492e3daf7408fea0bfb511238a8ca72c23063.
 The FULL 20 one-off remained running after cutover. Live receipt:
 guide-exclusion-live-and-guide20-20261116.json. Production OSQ source
 acceptance has not been executed while that run owns the guide lock.
+
+
+### 16 November 2026 — Real Kaggle push and FULL 20 acceptance
+
+FULL 20, run 0f1ee3ff3b88 / version 20, was materialized in ops 12414
+PARTIAL at 18:44:41 UTC (20:44 Kaliningrad). The real Kaggle sender produced
+a durable guide_result_saved receipt at 18:36:40 UTC. The saved package has
+280 media files, its pending marker is removed, and its JSON SHA-256 equals
+the normal importer's input: c2a67b8848c77edff21c612333fc686d562f8f3e2f5bb2d7e2556a825fde1c62.
+The exact registry is settled. No explicit recovery or duplicate scan/import
+was submitted. The standalone launcher remained alive, so this run proves
+real push delivery and materialization, not a dead-listener scenario by itself.
+
+All 201 frozen sources have reports: 161 ok / 40 partial; 322 posts,
+15 LLM ok / 76 quota-deferred / 5 provider errors. Those deferred/error posts
+remain unresolved; PARTIAL does not mean no tours. Late sources 197–205 all
+completed without source errors: six posts on four walls failed the announcement
+prefilter and five walls had no posts within five days. Older future announcements
+are not excluded by that window. The registry now has 202 enabled sources;
+late source 206, club212760444, has last_scan_at NULL and needs the next pass.
+
+Created occurrence 789 is the free city tour in Slаvsk on November 25 at 12:00,
+source 50 / https://vk.com/wall-240021059_82. A fresh wall.getById read verified
+the signed owner, original text and registration https://vk.cc/d3Z4bO.
+The canonical row and source anchor exist, digest_eligible=1, and no visual
+issue has published it. Updated 775 is the existing Samland trip, not a new tour.
+
+After FULL 20 settled, one normal saved-source catch-up began for unchanged
+OSQ post 982 through run_guide_import_from_results and its existing OS lock.
+It does not replay all of accepted FULL 19. Ops 12419 remains running in
+optional provider enrichment retries; the importer already committed row 786
+with digest_eligible=0 and the original school-group exclusion explanation.
+No category was changed with SQL. Read its terminal receipt after completion.
+Raw-positive school rows 765/783 and old Noza programme 6285 remain separate work.
+
+Evidence in the canonical retained artifact directory:
+guide20-current-receipts-20261116.json,
+guide20-occurrences-live-before-osq-20261116.json,
+guide20-push-saved-and-imported-identity-20261116.json,
+guide20-slavsk-provider-read-20261116.log,
+osq982-standard-source-acceptance-20261116.log.
+PR 1048 passed all four CI and merged as bdba118d3e4872ccf62cb9e1d21bb407d125c964;
+no documentation-only runtime deployment was performed.

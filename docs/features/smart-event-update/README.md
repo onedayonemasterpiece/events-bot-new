@@ -389,6 +389,7 @@ by the state-machine audit.
 
 Дополнительный guardrail для fact-first:
 
+- Parsed intake, VK и фестивальная очередь не передают сгенерированный `short_description` как `raw_excerpt`: исходный текст уже находится в `source_text`. Сайтовый парсер передаёт в `raw_excerpt` исходное описание `TheatreEvent`, как прямой импорт билетных сайтов. Настоящие первичные выдержки сохраняют прежний evidence-контракт; эта граница не проверяет достоверность всех Telegram excerpts и не переписывает старые candidates.
 - чувствительные LLM-факты из linked-source merge/create (возрастные ограничения, лимиты группы/мест, длительность, концертно-музыкальные утверждения и т.п.) попадают в `event_source_fact` и публичный fact-first narrative только если подтверждаются `source_text` / `raw_excerpt` / OCR этого же кандидата; неподтверждённые факты отбрасываются как hallucination-prone.
 
 

@@ -46,3 +46,30 @@ Directory: `/home/dev/artifacts/events-bot-new/20261102T233947Z-intake-recovery-
 - `auditor10619-isolated-pipeline-control.py/.json`: earlier LLM-disabled contrast.
 
 Remote shadow evidence remains under `/data/incident_recovery/auditor10619-enabled-20261106`. The driver refuses an existing run directory and must not be rerun blindly. No production code change, deployment, public callback or source intake was performed.
+
+
+## 2026-11-17: retained same-address venue-label recurrence
+
+Candidate30403 provides the Geographic Dictation at the Museum of the World
+Ocean, Petra Velikogo1V, Kaliningrad. Existing owner11003 names its educational
+centre OKEANiYA at the same structured address and city. Retained decision23069
+contains an affirmative model source_update with no model blocking conflicts;
+the caller's lexical location_name conflict overrides it to FINAL_RETRY in23070.
+The source was not attached. The carrier terminal FAILED_TECHNICAL preserves its
+accepted sibling; the identity retry worker remains disabled by the owner policy.
+
+The narrow correction filters only this deterministic name blocker when both
+cities are present and equal and the existing complete-token address comparator
+matches. The original conflicting map is retained as identity-model context and
+as prose do-not-use input. Other caller/model blockers and the global fail-closed
+builder are unchanged. Equal addresses do not themselves assert event identity;
+the existing semantic decision must still allow the merge. Non-parser updates
+preserve the populated canonical venue/address. allowed_fields is logged and is
+not an application whitelist; it is not the basis of this protection.
+
+The caller-level regression uses a retained-shaped source update plus different
+house, missing address, different city/date/time and model-conflict controls.
+It checks source attachment and preservation of the owner logistics. Recall and
+the identity model are fixtures; this is not a new live inference or intake replay.
+Historical10619 has no structured owner address and retains its blocker. The old
+candidate30403 and existing VK posts are not replayed or rewritten by this change.

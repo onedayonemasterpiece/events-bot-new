@@ -289,12 +289,17 @@ async def _build_config_payload(
             """
         )
         rows = await cur.fetchall()
+    from source_avatars import telegram_portrait
     sources: list[dict[str, Any]] = []
     for row in rows:
         try:
-            flags = json.loads(row["flags_json"]) if row["flags_json"] else {}
-        except Exception:
+            flags = json.loads(row["flags_json"] or "{}")
+        except (TypeError, ValueError):
             flags = {}
+        if not isinstance(flags, dict):
+            flags = {}
+        state = flags.pop("avatar", None)
+        previous_avatar = {key: state[key] for key in ("peer_id", "photo_id")} if telegram_portrait(state) else None
         platform = str(row["platform"] or "telegram").strip().lower() or "telegram"
         username = str(row["username"] or "").strip()
         if platform == "vk":
@@ -310,7 +315,8 @@ async def _build_config_payload(
                 "source_kind": str(row["source_kind"] or "").strip() or None,
                 "trust_level": str(row["trust_level"] or "").strip() or None,
                 "priority_weight": float(row["priority_weight"] or 1.0),
-                "flags": flags if isinstance(flags, dict) else {},
+                "flags": flags,
+                **({"previous_avatar": previous_avatar} if previous_avatar else {}),
                 "base_region": str(row["base_region"] or "").strip() or None,
                 "last_scanned_message_id": int(row["last_scanned_message_id"]) if row["last_scanned_message_id"] is not None else None,
                 "display_name": str(row["display_name"] or "").strip() or None,
@@ -1036,9 +1042,7 @@ def _result_store_entries(root: Path, *, exclude: set[Path]) -> list[dict[str, A
     for path in root.iterdir():
         try:
             resolved = path.resolve()
-            if (resolved in exclude or not path.is_dir()
-                    or not path.name.startswith("guide-excursions-")
-                    or (path / ".delivery_pending").exists()):
+            if not path.is_dir() or path.is_symlink() or not path.name.startswith("guide-excursions-"):
                 continue
             stat = path.stat()
         except OSError:
@@ -1048,6 +1052,7 @@ def _result_store_entries(root: Path, *, exclude: set[Path]) -> list[dict[str, A
                 "path": path,
                 "mtime": float(stat.st_mtime),
                 "size": _path_size_bytes(path),
+                "protected": resolved in exclude or (path / ".delivery_pending").exists(),
             }
         )
     entries.sort(key=lambda item: float(item["mtime"]))
@@ -1070,7 +1075,9 @@ def _prune_results_store(*, exclude: set[Path] | None = None) -> None:
     if not root.exists():
         return
     exclude = {path.resolve() for path in (exclude or set())}
-    entries = _result_store_entries(root, exclude=exclude)
+    inventory = _result_store_entries(root, exclude=exclude)
+    protected = [entry for entry in inventory if entry["protected"]]
+    entries = [entry for entry in inventory if not entry["protected"]]
     if not entries:
         return
 
@@ -1087,13 +1094,13 @@ def _prune_results_store(*, exclude: set[Path] | None = None) -> None:
                 to_delete.add(entry["path"])
 
     kept_by_age = [entry for entry in entries if entry["path"] not in to_delete]
-    max_previous_runs = max(0, RESULTS_STORE_MAX_RUNS - len(exclude))
+    max_previous_runs = max(0, RESULTS_STORE_MAX_RUNS - len(protected))
     overflow = max(0, len(kept_by_age) - max_previous_runs)
     for entry in kept_by_age[:overflow]:
         to_delete.add(entry["path"])
 
     kept = [entry for entry in entries if entry["path"] not in to_delete]
-    total_bytes = sum(int(entry["size"]) for entry in kept)
+    total_bytes = sum(int(entry["size"]) for entry in [*protected, *kept])
     if max_total_bytes > 0:
         for entry in kept:
             if total_bytes <= max_total_bytes:

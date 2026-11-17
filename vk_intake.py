@@ -5000,7 +5000,6 @@ async def persist_event_and_pages(
         is_free=bool(draft.is_free),
         pushkin_card=bool(draft.pushkin_card),
         search_digest=draft.search_digest,
-        raw_excerpt=draft.description or "",
         posters=posters,
         organizer_names=_curated_vk_event_organizers(vk_source_chat_id),
         producer_ordinal=producer_ordinal,

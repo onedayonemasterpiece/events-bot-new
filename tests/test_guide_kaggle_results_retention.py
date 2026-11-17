@@ -75,3 +75,40 @@ def test_persist_downloaded_guide_results_keeps_only_recent_run_count(tmp_path, 
     assert not (store / "guide-excursions-2").exists()
     assert (store / "guide-excursions-3").exists()
     assert (store / "guide-excursions-new").exists()
+
+
+def test_new_and_unacknowledged_bundles_count_toward_byte_budget(tmp_path, monkeypatch):
+    store = tmp_path / "results"
+    old = _write_bundle(store, "guide-excursions-old", size=600_000, age_days=0)
+    pending = _write_bundle(store, "guide-excursions-push-pending", size=300_000, age_days=0)
+    (pending / ".delivery_pending").touch()
+    source = _write_bundle(tmp_path / "downloads", "guide-excursions-new", size=400_000, age_days=0)
+    monkeypatch.setattr(kaggle_service, "RESULTS_STORE_ROOT", store)
+    monkeypatch.setattr(kaggle_service, "RESULTS_STORE_MAX_MB", 1)
+    monkeypatch.setattr(kaggle_service, "RESULTS_STORE_MAX_RUNS", 10)
+    monkeypatch.setattr(kaggle_service, "RESULTS_STORE_MIN_FREE_MB", 0)
+    result = kaggle_service.persist_downloaded_guide_results(source / "guide_excursions_results.json", "new")
+    assert result.is_file() and (pending / ".delivery_pending").exists()
+    assert not old.exists()
+    assert kaggle_service._path_size_bytes(store) <= 1024 * 1024
+
+
+def test_acknowledged_push_import_triggers_retention_and_preserves_pending(tmp_path, monkeypatch):
+    from guide_excursions.result_delivery import finish_result_import
+
+    store = tmp_path / "results"
+    old = _write_bundle(store, "guide-excursions-recovered", size=400_000, age_days=1)
+    pending = _write_bundle(store, "guide-excursions-push-active", size=400_000, age_days=0)
+    accepted = _write_bundle(store, "guide-excursions-push-done", size=400_000, age_days=0)
+    for bundle in (pending, accepted):
+        (bundle / ".delivery_pending").touch()
+    monkeypatch.setattr(kaggle_service, "RESULTS_STORE_ROOT", store)
+    monkeypatch.setattr(kaggle_service, "RESULTS_STORE_MAX_MB", 1)
+    monkeypatch.setattr(kaggle_service, "RESULTS_STORE_MAX_RUNS", 2)
+    monkeypatch.setattr(kaggle_service, "RESULTS_STORE_MIN_FREE_MB", 0)
+    finish_result_import("done")
+    assert accepted.exists() and not (accepted / ".delivery_pending").exists()
+    assert (pending / ".delivery_pending").exists()
+    assert not old.exists()
+    finish_result_import("done")
+    assert accepted.exists() and pending.exists()

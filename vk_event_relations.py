@@ -62,16 +62,17 @@ async def presentation(db, event):
                 programme.update(known)
                 programmes.remove(known)
         programmes.append(programme)
-    related, repeats, seen_programmes, seen_urls = [], [], set(), {event.source_vk_post_url}
+    related, seen_programmes, seen_urls = [], set(), {event.source_vk_post_url}
     for i in similar_ids:
         row = rows.get(i)
         if not row or peer_ids.get(i) not in public_ids or row.source_vk_post_url in seen_urls:
             continue
         seen_urls.add(row.source_vk_post_url)
         programme = next(index for index, ids in enumerate(programmes) if row.id in ids)
-        (repeats if programme in seen_programmes else related).append(row)
+        if programme not in seen_programmes:
+            related.append(row)
         seen_programmes.add(programme)
-    related = (related + repeats)[:5]
+    related = related[:5]
     from tg_graphic_medallions import resolve_event_graphic_medallions
     def item(row):
         start, _, span_end = row.date.partition('..')
@@ -107,7 +108,9 @@ def append_list(message, data):
 def render_card(items, *, schedule=False, more_related=False):
     from guide_excursions.hook_cards import _strip_emoji
     from guide_excursions.visual_digest import PALETTES, _draw_date_tile, _wrap_by_width
-    image = Image.new('RGBA', (1080, 1350), '#F7F5EF')
+    height = min(230, (962 - 8 * (len(items) - 1)) // max(1, len(items)))
+    canvas_height = min(1350, 314 + len(items) * height + 8 * max(0, len(items) - 1) + 96)
+    image = Image.new('RGBA', (1080, canvas_height), '#F7F5EF')
     draw = ImageDraw.Draw(image)
     palette = PALETTES[0]
     draw.ellipse((-260, -300, 510, 360), fill='#E9EDE1')
@@ -128,7 +131,6 @@ def render_card(items, *, schedule=False, more_related=False):
     wordmark.thumbnail((230, 45))
     image.alpha_composite(wordmark, (82, 128))
     draw.text((48, 235), 'Другие даты' if schedule else 'Похожие события', font=font(64, True), fill=palette.text)
-    height = min(230, (962 - 8 * (len(items) - 1)) // max(1, len(items)))
     for i, row in enumerate(items):
         accent = palette.accents[i % len(palette.accents)]
         layer = Image.new('RGBA', (996, height))
@@ -176,7 +178,7 @@ def render_card(items, *, schedule=False, more_related=False):
                 y += 20
         image.alpha_composite(layer, (42, 314 + i * (height + 8)))
     if not schedule or more_related:
-        draw.text((58, 1290), 'Похожие события →' if schedule else 'Ссылки на события — в комментарии ↓',
+        draw.text((58, canvas_height - 60), 'Похожие события →' if schedule else 'Ссылки на события — в комментарии ↓',
                   font=font(30, True), fill=palette.text)
     out = BytesIO()
     image.convert('RGB').save(out, 'PNG')

@@ -197,3 +197,20 @@ Fresh production future-event audit on 2026-06-24 found several active cards whe
 ## Prevention
 
 This incident remains `mitigated`, not `closed`, until the replay fixtures pass through the same production import boundary and the prevention code is deployed from a SHA reachable from `origin/main`. Future manual repairs must not be treated as sufficient prevention evidence without replay + public-surface verification.
+
+## 2026-11-17: VK multi-child source-default recurrence
+
+Cached VK packet 36897 contains two drafts for the Geographic Dictation: one in
+Svetlogorsk with no venue and another at the Museum of the World Ocean in
+Kaliningrad. The source-wide museum hint was filled into the first child's empty
+venue before persistence (candidate 30402 / event 11153), mixing its city with the
+other venue. The normal queue now applies this fallback only to a single draft.
+Explicit child venues and producer ordinals remain unchanged. Multi-child carriers
+with missing venues no longer inherit a generic source venue, including carriers
+whose children might share a home venue; extraction must supply those child venues.
+
+Regression: `test_vk_auto_import_preserves_child_venues_and_links_events` covers
+missing venues in multiple drafts, the unchanged single-child default, explicit
+venues, cities, source receipts and ordinals. This guard does not fix omitted
+extraction venues or Telegram candidate 30204's source/date disagreement. Existing
+VK posts are not rewritten. Historical closure replay remains open.

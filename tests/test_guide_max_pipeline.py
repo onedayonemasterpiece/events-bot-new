@@ -152,6 +152,14 @@ async def test_native_daily_entrypoint_resumes_backend_edition_only_missing_max(
     assert len(transport.submitted) == 1
     payload = transport.submitted[0][0]
     assert payload['image_b64']
+    async with db.raw_conn() as conn:
+        rows = await conn.execute_fetchall(
+            "SELECT payload_json FROM guide_visual_delivery WHERE issue_id=289 AND provider='max'")
+        stored = json.loads(rows[0][0])
+        assert stored["snapshot_image_issue_id"] == 289 and "image_b64" not in stored
+        frozen = await conn.execute_fetchall(
+            "SELECT json_extract(payload_json, '$.image_b64') FROM guide_visual_snapshot WHERE issue_id=289")
+        assert frozen[0][0] == payload["image_b64"]
     assert any(n.get('url') == 'https://t.me/guide/123' for p in payload['content']['paragraphs'] for n in p)
     assert 'vk.cc' not in json.dumps(payload)
     links = [n for p in payload['content']['paragraphs'] for n in p if n.get('kind') == 'link']

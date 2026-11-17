@@ -162,7 +162,7 @@ async def test_shared_graph_keeps_original_gallery_and_semantic_only(tmp_path, m
         assert data['related'][0]['description'] == 'Готовое описание ежедневного анонса'
         cards = await relations.cards(data, 8)
         assert len(cards) == 2
-        assert Image.open(BytesIO(cards[1])).size == (1080, 1350)
+        assert Image.open(BytesIO(cards[1])).size == (1080, 640)
         async def photo(group, url, *args, **kwargs):
             return url
         async def card(group, payload, *args, **kwargs):
@@ -241,7 +241,8 @@ async def test_comment_is_created_once_never_edited_and_defers_postponed(tmp_pat
         await db.close()
 
 
-def test_related_card_has_no_missing_emoji_glyph_or_title_medallion_overlap(monkeypatch):
+@pytest.mark.parametrize('row_count,canvas_height', [(1, 640), (2, 878), (5, 1350)])
+def test_related_card_has_no_missing_emoji_glyph_or_title_medallion_overlap(monkeypatch, row_count, canvas_height):
     from PIL import ImageDraw
     seen = []
     original = ImageDraw.ImageDraw.text
@@ -250,8 +251,10 @@ def test_related_card_has_no_missing_emoji_glyph_or_title_medallion_overlap(monk
         return original(self, xy, text, *args, **kwargs)
     monkeypatch.setattr(ImageDraw.ImageDraw, 'text', record)
     body = relations.render_card([{'date': '20.11', 'date_iso': '2026-11-20', 'time': '19:00', 'title': '🎭 ' + 'Длинное название концерта ' * 12,
-        'event_type': 'кинопоказ', 'place': 'Кафедральный собор', 'medallions': ['site/public/assets/organizers/kant-island.png'], 'is_free': True}])
-    assert Image.open(BytesIO(body)).size == (1080, 1350)
+        'event_type': 'кинопоказ', 'place': 'Кафедральный собор', 'medallions': ['site/public/assets/organizers/kant-island.png'], 'is_free': True}] * row_count)
+    assert Image.open(BytesIO(body)).size == (1080, canvas_height)
+    footer = [(xy, text) for xy, text, _ in seen if text == 'Ссылки на события — в комментарии ↓']
+    assert footer == [((58, canvas_height - 60), 'Ссылки на события — в комментарии ↓')]
     assert all('🎭' not in text for _, text, _ in seen)
     assert any('Кинопоказ' in text for _, text, _ in seen)
     assert any(text == 'НОЯБРЯ' for _, text, _ in seen)
@@ -511,8 +514,9 @@ async def test_other_dates_points_to_related_only_when_next_card_is_uploaded(mon
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('other_programmes,expected', [(4, [2, 6, 7, 8, 9]), (1, [2, 6, 5, 3, 4]), (0, [2, 5, 3, 4])])
-async def test_related_selection_prefers_distinct_canonical_programmes_then_fills_dates(tmp_path, monkeypatch, other_programmes, expected):
+@pytest.mark.parametrize('same_title', [False, True])
+@pytest.mark.parametrize('other_programmes,expected', [(4, [2, 6, 7, 8, 9]), (1, [2, 6]), (0, [2])])
+async def test_related_selection_keeps_distinct_canonical_programmes(tmp_path, monkeypatch, other_programmes, expected, same_title):
     db = main.Database(str(tmp_path / 'programme-selection.sqlite'))
     await db.init()
     async def public(method, params, *args, **kwargs):
@@ -525,7 +529,8 @@ async def test_related_selection_prefers_distinct_canonical_programmes_then_fill
             for i in range(1, 6 + other_programmes):
                 # The same programme has variant titles and partial canonical peer lists.
                 links = {2: [3], 3: [2, 4], 4: [3, 5], 5: [4]}.get(i, [])
-                session.add(main.Event(id=i, title=f'Разное название {i}', description='', source_text='',
+                title = 'Одинаковое название' if same_title else f'Разное название {i}'
+                session.add(main.Event(id=i, title=title, description='', source_text='',
                     date=f'2099-01-{i:02}', time='19:00', location_name='Зал',
                     source_vk_post_url=f'https://vk.com/wall-1_{i}', linked_event_ids=links,
                     photo_urls=['original']))
@@ -537,6 +542,40 @@ async def test_related_selection_prefers_distinct_canonical_programmes_then_fill
         assert [row['id'] for row in data['related']] == expected
         assert data['dates'] == []
         assert all(row['title'] in relations.append_list('body', data) for row in data['related'])
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_11077_does_not_refill_linked_zhenitba_dates(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / '11077-selection.sqlite'))
+    await db.init()
+    monkeypatch.setattr(main, '_event_has_ended_before_today', lambda event: False)
+    monkeypatch.setattr(main, '_event_start_has_passed_for_publication', lambda event: False)
+    async def public(method, params, *args, **kwargs):
+        assert method == 'wall.getById'
+        return {'response': [{'owner_id': -231920894, 'id': int(pair.split('_')[1]), 'post_type': 'post'}
+                             for pair in params['posts'].split(',')]}
+    monkeypatch.setattr(main, '_vk_api', public)
+    try:
+        async with db.get_session() as session:
+            for eid, title, date, time, post, links in [
+                (11077, 'Слава Богу, ты ушёл!', '2026-11-19', '16:00', 14786, []),
+                (10780, 'Спектакль «Женитьба»', '2027-01-06', '18:00', 13957, [8873, 10358]),
+                (10477, 'Женитьба', '2026-11-29', '', 13392, []),
+                (10358, 'Спектакль «Женитьба»', '2026-11-29', '18:00', 13262, [8873, 10780]),
+            ]:
+                session.add(main.Event(id=eid, title=title, date=date, time=time,
+                    description='', source_text='', location_name='Театр', photo_urls=['original'],
+                    source_vk_post_url=f'https://vk.com/wall-231920894_{post}', linked_event_ids=links))
+            await session.commit()
+            event = await session.get(main.Event, 11077)
+        relations.graph_path(db).write_text(json.dumps({'related': {'11077': {
+            'pure_related': [10780, 10477, 10358]}}}))
+        data = await relations.presentation(db, event)
+        # Unlinked 10477 still needs upstream identity resolution; do not merge by title.
+        assert [row['id'] for row in data['related']] == [10780, 10477]
+        assert data['dates'] == []
     finally:
         await db.close()
 

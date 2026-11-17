@@ -850,3 +850,84 @@ async def test_merge_gate_allows_same_event_source_update(tmp_path, monkeypatch)
         assert logs[-2].decision == "allow_merge"
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "address,city,date,time,model_conflicts,accepted",
+    [
+        ("наб. Петра Великого 1В", "Калининград", "2099-11-22", "12:00", [], True),
+        ("наб. Петра Великого 1", "Калининград", "2099-11-22", "12:00", [], False),
+        (None, "Калининград", "2099-11-22", "12:00", [], False),
+        ("наб. Петра Великого 1В", "Светлогорск", "2099-11-22", "12:00", [], False),
+        ("наб. Петра Великого 1В", "Калининград", "2099-11-23", "12:00", [], False),
+        ("наб. Петра Великого 1В", "Калининград", "2099-11-22", "13:00", [], False),
+        ("наб. Петра Великого 1В", "Калининград", "2099-11-22", "12:00", ["different programme"], False),
+    ],
+)
+async def test_merge_gate_venue_label_requires_same_physical_address(
+    tmp_path, monkeypatch, address, city, date, time, model_conflicts, accepted
+) -> None:
+    """30403: a source label must not veto the same grounded physical venue."""
+    db = Database(str(tmp_path / "venue-label.sqlite"))
+    await db.init()
+    try:
+        async with db.get_session() as session:
+            session.add(Event(
+                id=11003, title="Географический диктант", date="2099-11-22", time="12:00",
+                location_name="Образовательный центр «ОКЕАНиЯ»",
+                location_address="Петра Великого 1В", city="Калининград",
+                description="Географический диктант в образовательном центре.",
+                source_text="22 ноября в 12:00 — Географический диктант в ОКЕАНиЯ.",
+                identity_status="canonical",
+            ))
+            await session.commit()
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", IdentityGateMode.OFF)
+        monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", IdentityGateMode.ENFORCE)
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+
+        async def recalled_owner(db_arg, _candidate):
+            async with db_arg.get_session() as session:
+                return await session.get(Event, 11003)
+
+        async def gate(*_args, **kwargs):
+            # The model and the prose writer still receive the label mismatch.
+            assert "location_name" in kwargs["conflicting_anchor_fields"]
+            return {
+                "action": "allow_merge", "relation": "source_update", "confidence": 1.0,
+                "reason_code": "same_event_update", "blocking_conflicts": model_conflicts,
+                "source_grounded_evidence": ["Географический диктант в ОКЕАНиЯ, Петра Великого 1В"],
+                "allowed_fields": ["source_text", "source_url", "description"],
+            }
+
+        monkeypatch.setattr(su, "_match_existing_event_by_source_anchor", recalled_owner)
+        monkeypatch.setattr(su, "_llm_merge_identity_gate", gate)
+        candidate = EventCandidate(
+            source_type="vk", source_url="https://vk.com/wall-35373633_29217",
+            source_text="Географический диктант. 22 ноября в 12:00. ОКЕАНиЯ, Петра Великого 1В.",
+            title="Географический диктант", date=date, time=time,
+            location_name="Музей Мирового океана", location_address=address, city=city,
+        )
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+        assert result.is_accepted is accepted, (result.reason, candidate.location_name, candidate.location_address, candidate.city)
+        async with db.get_session() as session:
+            owner = await session.get(Event, 11003)
+            assert (owner.location_name, owner.location_address, owner.city) == (
+                "Образовательный центр «ОКЕАНиЯ»", "Петра Великого 1В", "Калининград"
+            )
+            assert (owner.date, owner.time) == ("2099-11-22", "12:00")
+            sources = await session.scalar(
+                select(func.count()).select_from(EventSource).where(
+                    EventSource.source_url == candidate.source_url,
+                    EventSource.event_id == 11003,
+                )
+            )
+            assert sources == int(accepted)
+            decisions = (await session.execute(select(EventIdentityDecisionLog))).scalars().all()
+            # A date contradiction may reject the recalled owner before this gate.
+            if accepted or decisions:
+                assert decisions[-1].decision == ("FINAL_MATCH" if accepted else "FINAL_RETRY")
+            assert await session.scalar(select(func.count()).select_from(Event)) == 1
+    finally:
+        await db.close()

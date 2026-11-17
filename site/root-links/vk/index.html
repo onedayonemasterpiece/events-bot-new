@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Полюбить Калининград Афиша — ВКонтакте</title>
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080a0e;color:#f4f4f5;font:17px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  main{width:100%;max-width:360px;padding:24px 16px;text-align:center}
+  h1{font-size:22px;margin:0 0 8px}
+  p{margin:0 0 24px;color:#a1a1aa}
+  a{display:block;padding:15px;border-radius:12px;text-decoration:none;font-weight:600;margin-top:12px}
+  #app{background:#0077ff;color:#fff}
+  #web{color:#f4f4f5;border:1px solid #3f3f46}
+</style>
+</head>
+<body>
+<main>
+  <h1>Полюбить Калининград Афиша</h1>
+  <p>Самая большая афиша событий региона</p>
+  <a id="app" href="https://vk.com/klgdevents">Открыть в приложении ВКонтакте</a>
+  <a id="web" href="https://vk.com/klgdevents">Открыть на сайте vk.com</a>
+</main>
+<script>
+  // A browser asks before an app is launched without a tap and then follows the
+  // fallback, so the app opens only from a tap on the button.
+  // Android: intent addressed to the VK app, independent of the phone's link settings;
+  // without the app Chrome opens the site. iPhone: a tap on a vk.com link from another
+  // domain opens the app (Universal Link).
+  var web = 'https://vk.com/klgdevents';
+  var ua = navigator.userAgent;
+  if (/Android/i.test(ua)) {
+    document.getElementById('app').href = 'intent://vk.com/klgdevents#Intent;scheme=https;package=com.vkontakte.android;S.browser_fallback_url=' + encodeURIComponent(web) + ';end';
+  } else if (!/iPhone|iPad|iPod/i.test(ua) && !(/Macintosh/i.test(ua) && 'ontouchend' in document)) {
+    location.replace(web);
+  }
+</script>
+</body>
+</html>

@@ -34,8 +34,8 @@ from telegram_sources import canonicalize_tg_url, parse_tg_post_url
 from .dedup import deduplicate_occurrence_rows
 from .digest import RU_MONTH_GEN, format_date_time
 from .digest_writer import VK_NAME_MARK_RE, ask_vk_narrative
-from .parser import collapse_ws, extract_date_iso, normalize_title_key, occurrence_fare, price_for_publication, split_occurrence_blocks
-from .tic_catalog import load_tic_background
+from .parser import collapse_ws, extract_date_iso, names_for_source_role, normalize_title_key, occurrence_fare, price_for_publication, split_occurrence_blocks
+from .route_history import load_materialized_history, load_cached_background, needs_background
 
 logger = logging.getLogger(__name__)
 
@@ -89,8 +89,7 @@ VISUAL_DIGEST_TELEGRAM_ENABLED = (
     (os.getenv("ENABLE_GUIDE_VISUAL_DIGEST_TELEGRAM") or "1").strip().lower()
     in {"1", "true", "yes", "on"}
 )
-# Owner decision 2026-11-16: personal VK mentions are tested in the sandbox only;
-# ordinary editions keep plain names until he enables them.
+# The production compose enables confirmed personal mentions. Test posts substitute their recipient.
 VISUAL_DIGEST_VK_MENTIONS_ENABLED = (
     (os.getenv("GUIDE_VISUAL_DIGEST_VK_MENTIONS") or "").strip().lower()
     in {"1", "true", "yes", "on"}
@@ -764,7 +763,18 @@ def _apply_published_facts(row: dict[str, Any], posts: Sequence[Mapping[str, Any
     for key, supported in roles.items():
         names = [n for n in pack.get(key, row.get(key, [])) or [] if isinstance(n, str) and n.casefold() in supported]
         row[key] = pack[key] = names
-    if roles:
+    # Some historical rows have no retained structured extraction. The original post
+    # still distinguishes the booking contact and past projects from today's participants.
+    original_texts = [post.get("text") for post in posts if post.get("text")]
+    corrected = False
+    for key in ("guide_names", "organizer_names"):
+        names = pack.get(key, row.get(key)) or []
+        checked = names_for_source_role(names, original_texts, organizer=key == "organizer_names")
+        if checked != names:
+            row.setdefault("unconfirmed_source_roles", {})[key] = [name for name in names if name not in checked]
+            row[key] = pack[key] = checked
+            corrected = True
+    if roles or corrected:
         row["source_roles_checked"] = True
         # Frozen editions can already contain resolved portraits. Normal editions resolve them next.
         if isinstance(row.get("participant_medallions"), list):
@@ -981,16 +991,16 @@ def _crop_circle(img: Image.Image, size: int) -> Image.Image:
     return out
 
 
-def _medallion_row(person: Mapping[str, Any]) -> dict[str, Any]:
-    return {"guide_names": [person["name"]], "source_title": person["name"],
+def _medallion_row(person: Mapping[str, Any], *, registered: bool = False) -> dict[str, Any]:
+    return {"guide_names": [person["name"]], "source_title": person["name"], "avatar_roles_resolved": registered,
             "source_avatar_path": person.get("path") or ""}
 
 
-def _shown_medallions(people: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+def _shown_medallions(people: Sequence[Mapping[str, Any]], *, registered: bool = False) -> list[Mapping[str, Any]]:
     """People with a picture; when nobody has one, a single initials badge (the guide first)."""
     def pictured(person: Mapping[str, Any]) -> bool:
         row = _medallion_row(person)
-        bundled = _AVATAR_FILES.get(_avatar_key(row), "")
+        bundled = "" if registered else _AVATAR_FILES.get(_avatar_key(row), "")
         return Path(str(row["source_avatar_path"])).is_file() or bool(bundled and (_AVATAR_DIR / bundled).is_file())
 
     shown = [person for person in people if pictured(person)]
@@ -1005,7 +1015,7 @@ def _draw_avatar(draw_img: Image.Image, row: Mapping[str, Any], x: int, y: int, 
     # subtle shadow
     d.ellipse((x - 4, y + 4, x + size + 4, y + size + 12), fill=(0, 0, 0, 34))
     d.ellipse((x - 4, y - 4, x + size + 4, y + size + 4), fill=_rgba(pal.card, 255), outline=_rgba(accent, 255), width=5)
-    key = _avatar_key(row)
+    key = "" if row.get("avatar_roles_resolved") else _avatar_key(row)
     path = _AVATAR_DIR / _AVATAR_FILES.get(key, "")
     dynamic = Path(str(row.get("source_avatar_path") or ""))
     if dynamic.is_file():
@@ -1179,7 +1189,7 @@ def render_visual_digest_card(
         rd = ImageDraw.Draw(row_layer)
         _draw_date_tile(rd, row, row_h, accent, palette)
         tx = 238
-        participants = _shown_medallions(row.get("participant_medallions") or [])
+        participants = _shown_medallions(row.get("participant_medallions") or [], registered=bool(row.get("avatar_roles_resolved")))
         av_size = 140
         avatar_step = round(av_size * 0.8)
         av_x = 820 - max(0, len(participants) - 1) * avatar_step
@@ -1222,7 +1232,7 @@ def render_visual_digest_card(
         if participants:
             for idx, person in enumerate(participants):
                 px = av_x + idx * avatar_step
-                _draw_avatar(img, _medallion_row(person), px, av_y, av_size, palette, accent)
+                _draw_avatar(img, _medallion_row(person, registered=bool(row.get("avatar_roles_resolved"))), px, av_y, av_size, palette, accent)
         elif not row.get("source_roles_checked"):
             _draw_avatar(img, row, av_x, av_y, av_size, palette, accent)
         modes = _modes_for(row)
@@ -1505,6 +1515,18 @@ def _select_documented_departures(requested: Sequence[dict[str, Any]], peers: Se
             representative["covered_visual_states"] = {str(m["id"]): _visual_item_state(m) for m in members}
         representative["covered_visual_ids"] = sorted(m["id"] for m in members)
         representative["linked_posts"] = [post for member in members for post in member["linked_posts"]]
+        if len(members) > 1:
+            # A guide's past project may also explicitly co-organize this same departure
+            # in another linked announcement. Reconcile after resolving the dated peers.
+            for role in ("guide_names", "organizer_names"):
+                deferred = [n for m in members for n in (m.get("unconfirmed_source_roles") or {}).get(role, [])]
+                if deferred:
+                    blocks = (block for member in members
+                              for block in _card_source_blocks(member, member["canonical_title"]))
+                    names = names_for_source_role(deferred, blocks, organizer=role == "organizer_names",
+                                                  require_mention=True)
+                    representative[role] = representative["fact_pack"][role] = list(
+                        dict.fromkeys([*representative.get(role, []), *names]))
         if agreed_fare:
             representative["price_line"] = representative["price_text"] = agreed_fare
             representative["fact_pack"] = {**(representative.get("fact_pack") or {}), "price_text": agreed_fare}
@@ -1517,39 +1539,6 @@ def _select_documented_departures(requested: Sequence[dict[str, Any]], peers: Se
         seen.update(representative["covered_visual_ids"])
         selected.append(representative)
     return selected
-
-
-async def _load_earlier_route_posts(
-    conn: aiosqlite.Connection, ids: Sequence[int], linked: Mapping[int, Sequence[Mapping[str, Any]]],
-) -> dict[int, list[dict[str, Any]]]:
-    """Up to two earlier announcements of the same title led by the same guide, per occurrence."""
-    params = ",".join("?" for _ in ids)
-    # A timetable line often names a route that the same guide described in an earlier
-    # announcement. Those posts supply the theme only; dates and prices stay with the row.
-    cur = await conn.execute(f"""
-        SELECT cur.id AS occurrence_id, cur.guide_names_json AS guides, old.guide_names_json AS old_guides,
-               gmp.text, gmp.post_date, gmp.source_url AS url
-        FROM guide_occurrence cur
-        JOIN guide_occurrence old ON old.title_normalized = cur.title_normalized
-             AND old.id != cur.id AND old.date < cur.date
-        JOIN guide_occurrence_source gos ON gos.occurrence_id = old.id
-        JOIN guide_monitor_post gmp ON gmp.id = gos.post_id
-        WHERE cur.id IN ({params})
-        ORDER BY cur.id, gmp.post_date DESC, gmp.id DESC
-    """, tuple(ids))
-    earlier: dict[int, list[dict[str, Any]]] = {}
-    for post in await cur.fetchall():
-        names = {n.casefold() for n in _parse_json_array(post["guides"])}
-        if not names & {n.casefold() for n in _parse_json_array(post["old_guides"])}:
-            continue  # the same title led by somebody else is another excursion
-        text = (post["text"] or "").strip()
-        if not text:
-            continue
-        bucket = earlier.setdefault(post["occurrence_id"], [])
-        known = {(p.get("text") or "").strip() for p in (*bucket, *linked.get(post["occurrence_id"], []))}
-        if len(bucket) < 2 and text not in known:
-            bucket.append({"text": text, "post_date": post["post_date"], "url": post["url"]})
-    return earlier
 
 
 async def _load_visual_rows(conn: aiosqlite.Connection, records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -1569,7 +1558,7 @@ async def _load_visual_rows(conn: aiosqlite.Connection, records: Sequence[Mappin
     linked: dict[int, list[dict[str, Any]]] = {}
     for post in await cur.fetchall():
         linked.setdefault(post["occurrence_id"], []).append(dict(post))
-    earlier = await _load_earlier_route_posts(conn, ids, linked)
+    histories = await load_materialized_history(conn, records, linked)
     out = []
     for row in records:
         item = dict(row)
@@ -1614,7 +1603,9 @@ async def _load_visual_rows(conn: aiosqlite.Connection, records: Sequence[Mappin
                     item.pop(key, None)
                     item["fact_pack"].pop(key, None)
         item["linked_posts"] = posts
-        item["earlier_route_posts"] = earlier.get(item["id"], [])
+        history = histories[item["id"]]
+        item["earlier_route_posts"] = history["earlier"]
+        item["route_history"] = {key: history[key] for key in ("kind", "dated_departures", "description_sufficient")}
         primary = posts[0] if posts else {}
         item["dedup_source_text"] = collapse_ws(primary.get("text") or "")
         item["dedup_source_url"] = primary.get("url")
@@ -1623,7 +1614,14 @@ async def _load_visual_rows(conn: aiosqlite.Connection, records: Sequence[Mappin
         await _load_transport(conn, item)
         _apply_published_facts(item, posts)
         out.append(item)
-    route_background = await load_tic_background(conn, out)
+    earliest_check = datetime.now(timezone.utc) - timedelta(days=14)
+    sparse = [item for item in out if needs_background(histories[item["id"]])]
+    route_background = {}
+    for item in sparse:
+        website = histories[item["id"]].get("website")
+        if website and datetime.fromisoformat(website["retrieved_at"]) >= earliest_check:
+            route_background[item["id"]] = website
+    route_background.update(await load_cached_background(conn, sparse))
     for item in out:
         if item["id"] in route_background:
             item["route_background"] = route_background[item["id"]]
@@ -2883,22 +2881,24 @@ async def _publish_visual_digest_to_vk_once(
                 "delay_seconds": VISUAL_DIGEST_VK_STORY_DELAY_SECONDS,
             }
         else:
-            try:
-                from promo import _publish_vk_story_photo
+            from promo import VKStoryUploadError, _publish_vk_story_photo
 
+            try:
                 story_payload = await _publish_vk_story_photo(
                     db,
                     bot,
                     target_group_id=int(group),
                     image_bytes=render_visual_digest_story_image(card_bytes[0]),
                     source_url=url,
-                    link_text="К дайджесту",
+                    link_text="more",
                     include_source_link=True,
                 )
                 story_payload["published"] = True
             except Exception as exc:  # pragma: no cover - production integration
                 logger.warning("guide_visual_digest_story_failed issue_id=%s: %s", issue_id, exc, exc_info=True)
                 story_payload = {"published": False, "reason": str(exc) or type(exc).__name__}
+                if isinstance(exc, VKStoryUploadError):
+                    story_payload.update(pending=True, attempts=1, retry_after=int(time.time()) + 900)
 
     occurrence_ids = list(dict.fromkeys(i for row in rows for i in row.get("covered_visual_ids", [row["id"]])))
     async with db.raw_conn() as conn:
@@ -3171,16 +3171,16 @@ async def publish_due_visual_digest_vk_stories(
                 continue
             if issue_card is None:
                 issue_card = render_visual_digest_cards(issue_rows, issue_id=issue_id)[0]
-            try:
-                from promo import _publish_vk_story_photo
+            from promo import VKStoryUploadError, _publish_vk_story_photo
 
+            try:
                 result = await _publish_vk_story_photo(
                     db,
                     bot,
                     target_group_id=group_id,
                     image_bytes=render_visual_digest_story_image(issue_card),
                     source_url=post_url,
-                    link_text="К дайджесту",
+                    link_text="more",
                     include_source_link=True,
                 )
                 story.update(result)
@@ -3191,7 +3191,7 @@ async def publish_due_visual_digest_vk_stories(
                 published.append({"issue_id": issue_id, "target": str(target_key), "url": result.get("url")})
             except Exception as exc:  # pragma: no cover - production integration
                 logger.warning("guide_visual_digest_due_story_failed issue_id=%s target=%s: %s", issue_id, target_key, exc, exc_info=True)
-                story["pending"] = True
+                story["pending"] = isinstance(exc, VKStoryUploadError)
                 story["published"] = False
                 story["last_error"] = str(exc) or type(exc).__name__
                 story["attempts"] = int(story.get("attempts") or 0) + 1

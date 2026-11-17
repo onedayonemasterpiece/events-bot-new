@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
 import hashlib
 import html
 import importlib.util
@@ -190,7 +191,7 @@ def _bootstrap_repo_bundle() -> None:
             return
         time.sleep(5)
 from cryptography.fernet import Fernet  # noqa: E402
-from telethon import TelegramClient, functions  # noqa: E402
+from telethon import TelegramClient, functions, utils  # noqa: E402
 from telethon.sessions import StringSession  # noqa: E402
 
 DEFAULT_GUIDE_MONITORING_MODEL = "models/gemma-4-31b-it"
@@ -748,7 +749,49 @@ def _collapse_group(messages: list[Any], *, username: str) -> ScannedPost | None
     )
 
 
-async def scan_source_posts(client: TelegramClient, *, username: str, limit: int, days_back: int) -> tuple[dict[str, Any], list[ScannedPost]]:
+class _TelegramAvatarBuffer(io.BytesIO):
+    def write(self, chunk):
+        if self.tell() + len(chunk) > 2 * 1024 * 1024:
+            raise ValueError("Telegram source avatar exceeds 2 MiB")
+        return super().write(chunk)
+
+
+async def _telegram_source_avatar(client, entity, previous_avatar):
+    """Read the small profile photo of the exact resolved Telegram peer."""
+    try:
+        peer_id = utils.get_peer_id(entity)
+    except (TypeError, ValueError):
+        return None
+    observed_at = datetime.now(timezone.utc).isoformat()
+    result = {"peer_id": peer_id, "observed_at": observed_at}
+    photo_id = getattr(getattr(entity, "photo", None), "photo_id", None)
+    if not photo_id:
+        return result
+    result["photo_id"] = str(photo_id)
+    if (isinstance(previous_avatar, dict)
+            and str(previous_avatar.get("peer_id")) == str(peer_id)
+            and str(previous_avatar.get("photo_id")) == str(photo_id)):
+        return result
+    try:
+        with _TelegramAvatarBuffer() as target:
+            await client.download_profile_photo(entity, file=target, download_big=False)
+            target.seek(0)
+            from PIL import Image, ImageOps
+            with Image.open(target) as image:
+                if image.width * image.height > 16_000_000:
+                    return result
+                preview = ImageOps.exif_transpose(image)
+                preview.thumbnail((320, 320), Image.Resampling.LANCZOS)
+                with io.BytesIO() as encoded:
+                    preview.convert("RGB").save(encoded, format="JPEG", quality=88)
+                    if encoded.tell() <= 128 * 1024:
+                        result["image_base64"] = base64.b64encode(encoded.getvalue()).decode("ascii")
+    except Exception:
+        return result
+    return result
+
+
+async def scan_source_posts(client: TelegramClient, *, username: str, limit: int, days_back: int, previous_avatar: dict[str, Any] | None = None) -> tuple[dict[str, Any], list[ScannedPost]]:
     entity = await client.get_entity(f"https://t.me/{username}" if username.startswith("+") else username)
     source_title = str(getattr(entity, "title", None) or getattr(entity, "first_name", None) or "").strip() or None
     about_text = ""
@@ -770,6 +813,7 @@ async def scan_source_posts(client: TelegramClient, *, username: str, limit: int
                 if raw not in seen:
                     seen.add(raw)
                     about_links.append(raw)
+    avatar = await _telegram_source_avatar(client, entity, previous_avatar)
     messages = await client.get_messages(entity, limit=max(1, int(limit)))
     cutoff = datetime.now(timezone.utc) - timedelta(days=max(1, int(days_back)))
     singles: list[Any] = []
@@ -802,7 +846,7 @@ async def scan_source_posts(client: TelegramClient, *, username: str, limit: int
     if username.startswith("+"):
         for post in posts:
             post.source_url = f"https://t.me/c/{entity.id}/{post.message_id}"
-    return {"source_title": source_title, "about_text": about_text or None, "about_links": about_links}, posts
+    return {"source_title": source_title, "about_text": about_text or None, "about_links": about_links, "avatar": avatar}, posts
 
 
 def _vk_token() -> str:
@@ -2949,14 +2993,15 @@ async def process_source(client: TelegramClient | None, source_payload: dict[str
     else:
         if client is None:
             raise RuntimeError("Telegram client is unavailable")
+        previous_avatar = source_payload.get("previous_avatar")
         try:
             await ensure_client_connected(client)
-            meta, posts = await scan_source_posts(client, username=username, limit=limit, days_back=days_back)
+            meta, posts = await scan_source_posts(client, username=username, limit=limit, days_back=days_back, previous_avatar=previous_avatar)
         except Exception as exc:
             if "disconnected" not in str(exc).lower():
                 raise
             await ensure_client_connected(client, force_reconnect=True)
-            meta, posts = await scan_source_posts(client, username=username, limit=limit, days_back=days_back)
+            meta, posts = await scan_source_posts(client, username=username, limit=limit, days_back=days_back, previous_avatar=previous_avatar)
     out_posts: list[dict[str, Any]] = []
     errors: list[str] = []
     for post in posts:
@@ -3087,6 +3132,7 @@ async def process_source(client: TelegramClient | None, source_payload: dict[str
         "source_kind": source_kind,
         "about_text": meta.get("about_text"),
         "about_links": meta.get("about_links"),
+        **({"avatar": meta["avatar"]} if meta.get("avatar") else {}),
         "source_status": source_status,
         "posts_scanned": len(posts),
         "stats": stats,

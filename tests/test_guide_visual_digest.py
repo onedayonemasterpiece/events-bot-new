@@ -749,8 +749,10 @@ async def test_loader_adds_earlier_posts_of_the_same_route_and_guide_only(tmp_pa
             INSERT INTO guide_occurrence_source VALUES (1, 10, 'primary'), (2, 11, 'primary'),
                 (3, 12, 'primary'), (4, 12, 'primary'), (1, 13, 'primary'), (1, 14, 'primary');
         """)
-        earlier = await vd._load_earlier_route_posts(conn, [3], {3: [{"text": "Расписание ноября."}]})
-    assert [p["text"] for p in earlier[3]] == ["Маршрут идёт по проспекту.", "История района."]
+        current = await conn.execute_fetchall("SELECT * FROM guide_occurrence WHERE id=3")
+        from guide_excursions.route_history import load_route_history
+        histories = await load_route_history(conn, current, {3: [{"text": "Расписание ноября."}]})
+    assert [p["text"] for p in histories[3]["earlier"]] == ["Маршрут идёт по проспекту.", "История района."]
 
 
 def test_card_checks_each_route_stop_against_the_selected_outing():
@@ -910,3 +912,107 @@ def test_bundled_card_font_distinguishes_numero_from_missing_glyph():
     runs = list(vd._card_text_runs("Форт № 11", main_font))
     assert [(part, face.getname()) for part, face in runs] == [
         ("Форт ", main_font.getname()), ("№", font.getname()), (" 11", main_font.getname())]
+
+
+def test_registration_contact_and_biographical_project_do_not_become_participants():
+    from guide_excursions import parser
+    from source_avatars import guide_participants
+    booking = "Завод упаковки приглашает школьников.\nЗапись и подробная информации:\n+7 999 555-44-33 Татьяна\nСледом узнаем о производстве."
+    byline = "Проводником станет Эмма Басова. Эмма — гид-экскурсовод и координатор совершенно прекрасного проекта «Историк 39»! Эмма участвовала в создании 65 фильмов в рамках проекта «История. Люди. Память» об истории области."
+    for text, names, orgs, expected in [
+        (booking, ["Татьяна"], ["Профи-тур"], ([], ["Профи-тур"])),
+        (byline, ["Эмма Басова"], ["Хранители руин","История. Люди. Память","Историк 39"], (["Эмма Басова"], ["Хранители руин"])),
+    ]:
+        row = dict(id=769, canonical_title="Экскурсия на завод", date="2026-11-19",
+                   guide_names=names, organizer_names=orgs, booking_text="Запись по телефону +7 999 555-44-33",
+                   fact_pack={"guide_names":names,"organizer_names":orgs})
+        post = dict(text=text,post_date="2026-11-15",raw_facts_json=None)
+        row["linked_posts"] = [post]
+        vd._apply_published_facts(row, [post])
+        row["participant_medallions"] = guide_participants(row, [])
+        item = vd._vk_narrative_payload([row])[0]["excursions"][0]
+        assert (item["guides"], item["organizers"]) == expected
+        assert vd._source_name(row) == ", ".join([*expected[0], *expected[1]])
+    assert parser.names_for_source_role(["Татьяна"],[booking,"Экскурсию проведёт Татьяна."]) == ["Татьяна"]
+    assert parser.names_for_source_role(["Татьяна"],[booking,"Экскурсия с Татьяной."]) == ["Татьяна"]
+    assert parser.names_for_source_role(["История. Люди. Память"],[byline,"Поездку организует проект «История. Люди. Память»."],organizer=True) == ["История. Люди. Память"]
+
+
+def test_past_project_can_independently_coorganize_the_same_dated_departure():
+    base = dict(date="2026-11-28", time="09:00", city="Калининград", guide_names=["Эмма Басова"],
+                organizer_names=["Хранители руин"], canonical_title="Самбийское кольцо",
+                route_summary="Самбийское кольцо")
+    bio = {"url":"https://t.me/example/1","post_date":"2026-11-15","text":
+           "28 ноября — «Самбийское кольцо». Эмма участвовала в создании 65 фильмов в рамках проекта «История. Люди. Память»."}
+    detailed = dict(base,id=740,organizer_names=[*base["organizer_names"],"История. Люди. Память"],linked_posts=[bio])
+    vd._apply_published_facts(detailed,[bio])
+    assert detailed["organizer_names"] == base["organizer_names"]
+    for date, expected in [(28,["Хранители руин","История. Люди. Память"]), (29,["Хранители руин"])]:
+        poster = dict(url="https://t.me/example/2",post_date="2026-11-01",text=
+                      f"{date} ноября — «Самбийское кольцо» с гидом Эммой Басовой. Совместное путешествие «Хранителей руин» и проекта «История. Люди. Память».")
+        brief = dict(base,id=705,linked_posts=[poster])
+        edition, = vd._select_documented_departures([detailed],[brief,detailed])
+        assert edition["organizer_names"] == expected
+
+
+@pytest.mark.asyncio
+async def test_immediate_story_retries_upload_without_resending_wall_or_uncertain_save(tmp_path, monkeypatch):
+    import io
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    import main
+    from db import Database
+    from PIL import Image
+
+    db = Database(str(tmp_path / "story.sqlite"))
+    await db.init()
+    try:
+        async with db.raw_conn() as conn:
+            await conn.execute("INSERT INTO guide_digest_issue(id,family) VALUES(351,?)", (vd.VISUAL_DIGEST_FAMILY,))
+            await conn.commit()
+        card = io.BytesIO()
+        Image.new("RGB", (64, 64)).save(card, "JPEG")
+        monkeypatch.setattr(vd, "render_visual_digest_cards", lambda *a, **kw: [card.getvalue()])
+        monkeypatch.setattr(vd, "render_visual_digest_story_image", lambda image: image)
+        monkeypatch.setattr(vd, "load_visual_digest_issue", AsyncMock(return_value={"items": SAMPLE_ROWS}))
+        monkeypatch.setattr(vd, "build_visual_digest_vk_text", AsyncMock(return_value="Выпуск"))
+        monkeypatch.setattr(vd, "_resolve_live_vk_wall_post_id", AsyncMock(return_value=414))
+        monkeypatch.setattr(vd, "VISUAL_DIGEST_STORIES_ENABLED", True)
+
+        actors = [SimpleNamespace(kind="user", token=key) for key in ("first", "second")]
+        monkeypatch.setattr(main, "choose_vk_actor", lambda *args: actors)
+        upload_reply = AsyncMock(return_value={})
+        session = MagicMock()
+        session.post.return_value.__aenter__.return_value.json = upload_reply
+        monkeypatch.setattr(main, "get_http_session", lambda: session)
+        async def story_api(method, params, *_args, **_kwargs):
+            if method == "stories.getPhotoUploadServer":
+                assert params["link_url"] == "https://vk.com/wall-11_414" and params["link_text"] == "more"
+                return {"response": {"upload_url": "https://example.test/upload"}}
+            assert method == "stories.save"
+            raise TimeoutError("no save response")
+        api = AsyncMock(side_effect=story_api)
+        monkeypatch.setattr(main, "_vk_api", api)
+        wall = AsyncMock(return_value="https://vk.com/wall-11_414")
+        receipt = await vd.publish_visual_digest_to_vk(db, issue_id=351, group_id=11, publish_date=0,
+            vk_api_fn=api, post_to_vk_fn=wall, upload_vk_photo_bytes_fn=AsyncMock(return_value="photo-11_5"))
+        assert receipt["story"]["pending"] and receipt["story"]["reason"] == "VK story upload returned no upload_result"
+        assert all(call.args[0] != "stories.save" for call in api.await_args_list)
+
+        due = receipt["story"]["retry_after"]
+        upload_reply.side_effect = ValueError("HTTP 500 returned HTML")
+        await vd.publish_due_visual_digest_vk_stories(db, now_ts=due)
+        assert all(call.args[0] != "stories.save" for call in api.await_args_list)
+        upload_reply.side_effect = None
+        upload_reply.return_value = {"response": {"upload_result": "ready"}}
+        await vd.publish_due_visual_digest_vk_stories(db, now_ts=due + 900)
+        await vd.publish_due_visual_digest_vk_stories(db, now_ts=due + 1800)
+        assert [call.args[0] for call in api.await_args_list].count("stories.save") == 1
+        wall.assert_awaited_once()
+        async with db.raw_conn() as conn:
+            stored, = await (await conn.execute("SELECT published_targets_json FROM guide_digest_issue WHERE id=351")).fetchone()
+        story = next(iter(json.loads(stored).values()))["story"]
+        assert not story["pending"] and story["last_error"] == "no save response"
+    finally:
+        await db.close()

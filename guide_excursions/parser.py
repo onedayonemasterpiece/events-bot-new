@@ -259,6 +259,39 @@ def extract_audience_fit(text: str) -> list[str]:
     return out
 
 
+_BOOKING_CONTEXT = re.compile(
+    r"\b(?:запись|записаться|бронирование|контакт(?:ы|ное лицо)|по вопросам участия)\b"
+    r"(?:(?![,—]\s*(?:гид|организатор|экскурсию|прогулку|проведет|ведет)\b)[^\n.!?;])*(?:\n[ \t]*(?=[☎📞+@\d])[^\n.!?;,]*)?", re.I)
+# The named project belongs to the guide's prior work. Quoted names may contain periods.
+_PAST_WORK_PROJECT = re.compile(
+    r"(?:\b(?:снял[аи]?|создал[аи]?|работал[аи]? над|участвовал[аи]? в (?:создании|съемках))\s+"
+    r"[^\n.!?«»]{0,65}\b(?:фильм|книг|передач|выставк)\w*[^\n.!?«»]{0,60}|"
+    r"\b(?:гид|экскурсовод)\b[^\n.!?«»]{0,32}\bи координатор\w*\s+[^\n.!?«»]{0,36})\bпроект\w*\s*"
+    r"[«“\"][^»”\"\n]{2,150}[»”\"]", re.I)
+
+
+def names_for_source_role(names: list[str], texts: Iterable[str], *, organizer: bool = False, require_mention: bool = False) -> list[str]:
+    """Ignore an extracted participant whose only source mentions credit a different role."""
+    originals = [text.casefold().replace("ё", "е") for text in texts if text]
+    remaining = [_BOOKING_CONTEXT.sub(" ", text) for text in originals]
+    if organizer:
+        remaining = [_PAST_WORK_PROJECT.sub(" ", text) for text in remaining]
+    if originals == remaining and not require_mention:
+        return names
+    supported = []
+    for name in names:
+        if not isinstance(name, str) or not name.strip():
+            continue
+        # Keep punctuation in project names. Accept ordinary case variation in personal credits.
+        words = name.casefold().replace("ё", "е").split()
+        forms = [re.escape(w[:-1]) + r"(?:а|я|ы|и|е|у|ю|ой|ей|ою|ею)"
+                 if len(w) >= 4 and re.fullmatch("[а-я]+[ая]", w) else re.escape(w) for w in words]
+        pattern = re.compile(r"(?<!\w)" + r"\s+".join(forms) + r"(?!\w)")
+        if any(pattern.search(text) for text in remaining) or (not require_mention and not any(pattern.search(text) for text in originals)):
+            supported.append(name)
+    return supported
+
+
 def extract_guide_names(text: str, *, fallback_name: str | None = None) -> list[str]:
     out: list[str] = []
     patterns = [
@@ -272,7 +305,7 @@ def extract_guide_names(text: str, *, fallback_name: str | None = None) -> list[
                 out.append(name)
     if fallback_name and fallback_name not in out:
         out.insert(0, fallback_name)
-    return out[:4]
+    return names_for_source_role(out[:4], [text])
 
 
 def extract_organizer_names(text: str, *, source_title: str | None = None) -> list[str]:

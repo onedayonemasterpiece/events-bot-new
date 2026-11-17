@@ -7,7 +7,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from guide_excursions.max_delivery import prepare_delivery, drive_delivery, ensure_delivery_schema
+from guide_excursions.max_delivery import prepare_delivery, drive_delivery, ensure_delivery_schema, get_delivery
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +34,22 @@ async def run_digest_repost(db, bot, *, campaign, activity, target, now_utc):
     tz = ZoneInfo("Europe/Kaliningrad")
     today = now_utc.astimezone(tz).date()
     async with db.raw_conn() as conn:
-        cur = await conn.execute(
-            "SELECT id, published_targets_json FROM guide_digest_issue "
-            "WHERE family=? AND status IN ('published','partial') "
-            "AND date(published_at,'+2 hours')=? ORDER BY id DESC LIMIT 1",
-            (target.query_text, today.isoformat()),
-        )
+        await ensure_delivery_schema(conn)
+        cur = await conn.execute("""
+            SELECT i.id,i.published_targets_json FROM guide_digest_issue i
+            LEFT JOIN guide_visual_delivery vk ON vk.issue_id=i.id AND vk.provider='vk'
+                AND vk.target_id=? AND vk.state='published'
+            LEFT JOIN guide_visual_delivery copy ON copy.issue_id=i.id AND copy.provider='promo_vk_repost'
+                AND copy.target_id=?
+            WHERE i.family=? AND i.status IN ('published','partial')
+                AND (date(i.published_at,'+2 hours')=? OR date(vk.updated_at,'+2 hours')=?
+                     OR date(json_extract(copy.payload_json,'$.due_at'),'+2 hours')=?)
+                AND EXISTS (SELECT 1 FROM json_each(i.published_targets_json) t WHERE t.type='object'
+                    AND CAST(json_extract(t.value,'$.group_id') AS INTEGER)=?
+                    AND json_array_length(t.value,'$.post_urls')>0)
+            ORDER BY CASE WHEN copy.request_key IS NULL THEN 0 WHEN copy.state='published' THEN 2 ELSE 1 END,
+                json_extract(copy.payload_json,'$.due_at'),i.id DESC LIMIT 1""",
+            (str(source_group),target_key,target.query_text,*([today.isoformat()]*3),source_group))
         issue = await cur.fetchone()
     if not issue:
         return result("skipped", reason="source_unavailable")
@@ -48,6 +58,7 @@ async def run_digest_repost(db, bot, *, campaign, activity, target, now_utc):
     source_url = next((p["post_urls"][0] for p in targets.values()
                        if isinstance(p, dict) and int(p.get("group_id") or 0) == source_group
                        and p.get("post_urls")), None)
+    canonical_source_url = source_url
     ids = _vk_owner_post_from_url(source_url)
     if not ids:
         return result("skipped", reason="source_unavailable")
@@ -80,6 +91,20 @@ async def run_digest_repost(db, bot, *, campaign, activity, target, now_utc):
                  # Leave one five-minute promo tick inside the owner's 180m bound.
                  "due_at": random.SystemRandom().choice(choices).isoformat()},
     )
+    if row["state"] == "prepared" and row["payload"]["source_url"] != source_url:
+        # A corrected public source may replace a primary edition while its repost is
+        # still pending. Keep the sampled delay and the existing per-edition claim.
+        old = row["payload"]
+        delay = datetime.fromisoformat(old["due_at"]) - datetime.fromisoformat(old["source_at"])
+        updated = dict(old, source_url=source_url, source_at=source_at.isoformat(), due_at=(source_at + delay).isoformat())
+        async with db.raw_conn() as conn:
+            await conn.execute("""UPDATE guide_visual_delivery SET payload_json=?, updated_at=CURRENT_TIMESTAMP
+                WHERE request_key=? AND state='prepared' AND json_extract(payload_json,'$.source_url')=?
+                AND EXISTS (SELECT 1 FROM guide_digest_issue i,json_each(i.published_targets_json) t
+                    WHERE i.id=? AND t.type='object' AND json_extract(t.value,'$.post_urls[0]')=?)""",
+                (json.dumps(updated,ensure_ascii=False),row["request_key"],old["source_url"],issue_id,canonical_source_url))
+            await conn.commit()
+        row = await get_delivery(db, row["request_key"])
     if row["state"] == "published":
         return result("published", source_url=row["payload"]["source_url"],
                       target_url=row["receipt"]["post_urls"][0])
