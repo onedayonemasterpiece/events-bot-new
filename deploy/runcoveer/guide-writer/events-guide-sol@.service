@@ -1,0 +1,13 @@
+[Unit]
+Description=Write one Events excursion digest
+
+[Service]
+WorkingDirectory=%h/.local/share/events-guide-sol/current
+Environment=GUIDE_DIGEST_CODEX_BIN=%h/.local/bin/codex
+ExecStart=/usr/bin/python3 -m guide_excursions.sol_service
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+RuntimeMaxSec=185
+UMask=0077
+NoNewPrivileges=yes

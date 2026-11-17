@@ -14,6 +14,7 @@ import os
 import re
 import time
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -105,8 +106,11 @@ async def ensure_vk_avatar(owner: int) -> Path | None:
 
 
 def _identity_names(profile: dict[str, Any]) -> set[str]:
+    from guide_excursions.identity_policy import _candidate_anchor
     names = set()
-    for value in (profile.get("display_name"), profile.get("marketing_name")):
+    rollup = json.loads(profile.get("facts_rollup_json") or "{}")
+    guide_name = _candidate_anchor(rollup.get("guide_line")) if profile.get("profile_kind") in {"person", "guide"} else ""
+    for value in (profile.get("display_name"), profile.get("marketing_name"), guide_name):
         value = str(value or "").split(" — ")[0].strip()
         variants = [value, re.sub(r"\s*\([^)]*\)", "", value)]
         if match := re.fullmatch(r"\S+\s+\(([^)]+)\)(.*)", value):
@@ -115,17 +119,71 @@ def _identity_names(profile: dict[str, Any]) -> set[str]:
     return names
 
 
+def _scheduled_guide_tags(row: dict[str, Any]) -> dict[str, set[int]]:
+    """Personal VK tags explicitly credited as guides on the exact dated programme line."""
+    from guide_excursions.parser import QUOTE_TITLE_RE, extract_date_iso, extract_time_text, normalize_title_key
+    title = normalize_title_key(row.get("canonical_title")).replace("ё", "е")
+    day = row.get("date")
+    start = extract_time_text(str(row.get("time") or ""))
+    slots: dict[str, set[int]] = {}
+    if not title or not day or not start:
+        return slots
+    for post in row.get("linked_posts") or []:
+        if not vk_post_owners(post.get("url") or post.get("source_url")):
+            continue
+        try:
+            published = datetime.fromisoformat(str(post.get("post_date") or day))
+        except ValueError:
+            continue
+        day_tags: dict[str, set[int]] = {}
+        plain_credits = set()
+        for line in str(post.get("text") or "").splitlines():
+            clock = extract_time_text(line)
+            if not clock or extract_date_iso(line, post_date=published) != day:
+                continue
+            titles = list(QUOTE_TITLE_RE.finditer(line))
+            if len(titles) != 1:
+                continue
+            matches_slot = clock == start and normalize_title_key(titles[0][1]).replace("ё", "е") == title
+            credit = re.match(r"\s*[,;—–-]?\s*гид(?:ы)?\b\s*[:—–-]?\s*(\S.*)", line[titles[0].end():], re.I)
+            if not credit:
+                continue
+            names = credit[1].strip().rstrip(".!")
+            if matches_slot and re.fullmatch(r"[^\W\d_]+(?:[- ][^\W\d_]+)+", names):
+                plain_credits.add(names)
+            tag_list = re.match(r"\[id\d+\|[^\]]+\](?:(?:\s*,\s*|\s+и\s+)\[id\d+\|[^\]]+\])*", names, re.I)
+            for uid, label in re.findall(r"\[id([1-9]\d*)\|([^\]]+)\]", tag_list[0] if tag_list else ""):
+                name = " ".join(label.split())
+                if len(name.split()) >= 2:
+                    day_tags.setdefault(name.casefold().replace("ё", "е"), set()).add(int(uid))
+                    if matches_slot:
+                        slots.setdefault(name, set()).add(int(uid))
+        for name in plain_credits:
+            # The same announcement explicitly credits this person again, without repeating the VK link.
+            if ids := day_tags.get(name.casefold().replace("ё", "е")):
+                slots.setdefault(name, set()).update(ids)
+    return slots
+
+
 def guide_participants(row: dict[str, Any], profiles: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Bind already extracted roles to explicit public profile identities, never surnames."""
     from guide_excursions.visual_digest import _AVATAR_DIR, _AVATAR_FILES
     result: dict[str, dict[str, Any]] = {}
     facts = row.get("fact_pack") or {}
+    tags = _scheduled_guide_tags(row)
+    tagged_owners: dict[str, set[int]] = {}
+    for label, ids in tags.items():
+        tagged_owners.setdefault(label.casefold().replace("ё", "е"), set()).update(ids)
     for field, role in (("guide_names", "Гид"), ("organizer_names", "Организатор")):
         # The latest extracted facts supersede older role metadata left by upsert.
         names = facts.get(field, row.get(field, []))
+        if role == "Гид" and tags:
+            names = list(dict.fromkeys([*(names if isinstance(names, list) else []), *tags]))
         for name in names if isinstance(names, list) else []:
             key = " ".join(str(name).casefold().replace("ё", "е").split())
             matches = [p for p in profiles if key in _identity_names(p)]
+            aliases = set().union(*(_identity_names(p) for p in matches))
+            matches = [p for p in profiles if aliases & _identity_names(p)]
             owners = set()
             paths = set()
             for profile in matches:
@@ -140,29 +198,120 @@ def guide_participants(row: dict[str, Any], profiles: list[dict[str, Any]]) -> l
                             paths.add(str(_AVATAR_DIR / filename))
             owner = next(iter(owners)) if len(owners) == 1 else None
             path = next(iter(paths)) if len(paths) == 1 else None
+            conflicting_tags = False
+            if role == "Гид" and key in tagged_owners:
+                ids = tagged_owners[key]
+                known_people = {uid for uid in owners if uid > 0}
+                conflicting_tags = len(ids) != 1 or bool(known_people and ids.isdisjoint(known_people))
+                owner = None if conflicting_tags else next(iter(ids))
+                if owner not in owners:
+                    path = None
             identity = f"vk:{owner}" if owner else key
             if identity in result:
                 if role not in result[identity]["roles"]:
                     result[identity]["roles"].append(role)
                 continue
             result[identity] = {"name": name, "roles": [role], "owner": owner, "path": path}
+            if conflicting_tags:
+                result[identity]["conflicting_guide_tags"] = True
+            if len(owners) > 1 and not owner:
+                result[identity]["conflicting_profile_owners"] = True
     return list(result.values())
+
+
+def _organizer_in_title(name: str, title: str) -> bool:
+    """Match the full brand at a title boundary or inside a pair of quotes."""
+    def normalized(value: str) -> str:
+        return " ".join(value.casefold().replace("ё", "е").replace("‑", "-").split())
+
+    brand, title = normalized(name), normalized(title)
+    segments = re.split(r"\s*[|•·]\s*|\s+[–—-]\s+|[,:!]", title)
+    quoted = re.findall(r'[«“"]([^»”"]+)[»”"]', title)
+    return bool(brand and any(brand == part.strip() for part in [*segments, *quoted]))
+
+
+_VK_COMMUNITY_LINK = r"https?://(?:www\.)?vk\.(?:com|ru)/([a-z0-9_][a-z0-9_.]*[a-z0-9_]|[a-z0-9_])/?"
+_ORG_PROFILE_KINDS = {"operator", "organization", "project"}
+
+
+def _declared_vk_community(about: str) -> str | None:
+    # A source's redirect to a venue, a partner, or the booking contact is not its own page.
+    if len(re.findall(r"https?://(?:www\.)?vk\.(?:com|ru)/", about, re.I)) != 1:
+        return None
+    label = r"(?:мы\s+|наш(?:а|е)\s+(?:группа|сообщество)\s+)(?:в\s*)?(?:вконтакте|контакте|вк|vk)"
+    match = re.search(r"\b" + label + r"\s*[:—–-]?\s*" + _VK_COMMUNITY_LINK + r"(?=\s|$)", about, re.I)
+    return match[1].casefold() if match else None
+
+
+def _registered_organizer_groups(profiles, sources) -> dict[str, set[str]]:
+    groups: dict[str, set[str]] = {}
+    for profile in profiles:
+        if profile.get("profile_kind") not in _ORG_PROFILE_KINDS:
+            continue
+        handles = {m[1].casefold() for url in json.loads(profile.get("source_links_json") or "[]")
+                   if (m := re.fullmatch(_VK_COMMUNITY_LINK, url, re.I))}
+        names = _identity_names(profile)
+        for source in sources.get(profile["id"], []):
+            if any(_organizer_in_title(name, source["title"] or "") for name in names):
+                if handle := _declared_vk_community(source["about_text"] or ""):
+                    handles.add(handle)
+        for name in names:
+            groups.setdefault(name, set()).update(handles)
+    return groups
+
+
+async def _attach_organizer_communities(row, participants, registered, community_cache) -> None:
+    for organizer in participants:
+        if organizer["roles"] != ["Организатор"] or organizer.get("conflicting_profile_owners") or organizer["owner"]:
+            continue
+        name = organizer["name"]
+        handles = set(registered.get(" ".join(name.casefold().replace("ё", "е").split()), ()))
+        if row.get("source_platform") == "telegram" and _organizer_in_title(name, row.get("source_title") or ""):
+            if handle := _declared_vk_community(row.get("source_about_text") or ""):
+                handles.add(handle)
+        if len(handles) != 1:
+            continue
+        handle, = handles
+        if handle not in community_cache:
+            try:
+                from main import vk_resolve_group
+                community_cache[handle] = await vk_resolve_group(handle)
+            except Exception as exc:
+                logger.info("source_avatar declared_community_unavailable handle=%s error_type=%s", handle, type(exc).__name__)
+                community_cache[handle] = None
+        if not community_cache[handle]:
+            continue
+        uid, title, _, kind = community_cache[handle]
+        if kind == "group" and uid > 0 and _organizer_in_title(name, title):
+            if path := await ensure_vk_avatar(-uid):
+                organizer.update(owner=-uid, path=str(path))
 
 
 async def prepare_guide_avatars(rows: list[dict[str, Any]], db: Any = None) -> None:
     profiles = []
+    sources: dict[int, list] = {}
     if db is not None:
         async with db.raw_conn() as conn:
             conn.row_factory = aiosqlite.Row
             profiles = [dict(p) for p in await (await conn.execute(
-                "SELECT display_name,marketing_name,source_links_json,facts_rollup_json FROM guide_profile"
+                "SELECT id,display_name,marketing_name,profile_kind,source_links_json,facts_rollup_json FROM guide_profile"
             )).fetchall()]
+            for source in await (await conn.execute(
+                "SELECT primary_profile_id,title,about_text FROM guide_source "
+                "WHERE platform='telegram' AND about_text LIKE '%vk.%'"
+            )).fetchall():
+                sources.setdefault(source["primary_profile_id"], []).append(source)
+    registered = _registered_organizer_groups(profiles, sources)
+    community_cache = {}
     for row in rows:
         participants = guide_participants(row, profiles)
         for person in participants:
             if person["owner"] and (path := await ensure_vk_avatar(person["owner"])):
                 person["path"] = str(path)
         row["participant_medallions"] = participants
+        if row.get("source_roles_checked") and not participants:
+            continue
+        await _attach_organizer_communities(row, participants, registered, community_cache)
         if row.get("source_platform") != "vk":
             continue
         flags = json.loads(row.get("source_flags_json") or "{}")
@@ -181,12 +330,26 @@ async def prepare_guide_avatars(rows: list[dict[str, Any]], db: Any = None) -> N
         if path := await ensure_vk_avatar(owner):
             row["source_avatar_path"] = str(path)
             public_name = avatar_metadata(owner).get("name") or ""
+            source_names = _identity_names({"display_name": public_name})
+            source_participant = None
+            resolved = []
             for person in participants:
-                if not person.get("owner") and _identity_names({"display_name": person["name"]}) & _identity_names({"display_name": public_name}):
+                if not person.get("owner") and not person.get("conflicting_guide_tags") and not person.get("conflicting_profile_owners") and source_names & _identity_names({"display_name": person["name"]}):
                     person.update(owner=owner, path=str(path))
-            if not any(p.get("owner") == owner for p in participants):
-                participants.append({"name": public_name or row.get("source_title"),
-                    "roles": ["Источник"], "owner": owner, "path": str(path)})
+                if person["owner"] == owner:
+                    if source_participant is not None:
+                        for role in person["roles"]:
+                            if role not in source_participant["roles"]:
+                                source_participant["roles"].append(role)
+                        if public_name:
+                            source_participant["name"] = public_name
+                        continue
+                    source_participant = person
+                resolved.append(person)
+            if not resolved:
+                resolved.append({"name": public_name or row.get("source_title"),
+                    "roles": [], "owner": owner, "path": str(path)})
+            row["participant_medallions"] = resolved
 
 
 def source_medallions(urls: Any, *, index: dict[str, Any] | None = None) -> list[dict[str, Any]]:
