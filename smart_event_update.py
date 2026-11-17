@@ -4848,6 +4848,9 @@ async def _llm_g4_split_create_writer(
     }
 
 
+_WRITER_UNAVAILABLE_LEDGER_FALLBACK = "writer_unavailable_fact_ledger_fallback"
+
+
 async def _llm_g4_split_create_bundle(
     candidate: EventCandidate,
     *,
@@ -4898,7 +4901,7 @@ async def _llm_g4_split_create_bundle(
             bundle["description"] = fallback_desc
             bundle["search_digest"] = _clean_search_digest(_fallback_digest_from_description(fallback_desc))
             bundle["short_description"] = _fallback_short_description_from_text(fallback_desc)
-            bundle["_split_create_warnings"] = ["writer_unavailable_fact_ledger_fallback"]
+            bundle["_split_create_warnings"] = [_WRITER_UNAVAILABLE_LEDGER_FALLBACK]
     return bundle
 
 
@@ -7347,7 +7350,7 @@ async def _llm_review_create_bundle_grounding(
 def _remove_llm_rejected_bundle_fields(
     bundle: Mapping[str, Any], unsupported_fields: Sequence[str]
 ) -> dict[str, Any]:
-    """Drop only fields the grounded LLM review explicitly rejected.
+    """Drop rejected public fields and direct copies made from a rejected ledger.
 
     The semantic decision belongs to the reviewer.  This mechanical repair
     never invents replacement prose: downstream create logic falls back to the
@@ -7355,7 +7358,12 @@ def _remove_llm_rejected_bundle_fields(
     """
 
     repaired = dict(bundle)
-    for field in unsupported_fields:
+    rejected = set(unsupported_fields)
+    warnings = bundle.get("_split_create_warnings") or ()
+    if "facts" in rejected and _WRITER_UNAVAILABLE_LEDGER_FALLBACK in warnings:
+        # This fallback builds all three texts from the same rejected facts.
+        rejected.update(("description", "short_description", "search_digest"))
+    for field in rejected:
         if field in {"title", "description", "facts", "search_digest", "short_description"}:
             repaired.pop(field, None)
     return repaired
