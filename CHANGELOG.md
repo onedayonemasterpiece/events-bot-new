@@ -11,6 +11,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Keep media review for an ongoing exhibition eligible for a waiting initial VK announcement through its canonical end date, including date ranges.
 - Guide import preserves the extractor's negative digest eligibility decision instead of promoting it from filled logistics fields, including offers restricted to an organized group.
 - Redact signed VK upload tickets in existing API error and CAPTCHA logs while preserving upload requests and cached recovery parameters.
 - Explain rejected rich facts in the existing warning with quote presence/length and full-source lexical support metrics, without logging source quotes or changing fact admission.
