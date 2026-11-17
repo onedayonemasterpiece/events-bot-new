@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:merge-venue-label-20261117
+    image: runcoveer/events:gemma1045-integrated-20261117
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
