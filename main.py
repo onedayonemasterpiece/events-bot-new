@@ -5282,15 +5282,14 @@ async def get_superadmin_id(db: Database) -> int | None:
         return result.scalars().first()
 
 
-async def notify_superadmin(db: Database, bot: Bot, text: str):
-    """Send a message to the superadmin with retry on network errors."""
+async def notify_superadmin(db: Database, bot: Bot, text: str) -> bool:
+    """Return whether Telegram acknowledged the message, including a network retry."""
     admin_id = await get_superadmin_id(db)
     if not admin_id:
-        return
+        return False
     try:
         async with span("tg-send"):
-            await bot.send_message(admin_id, text)
-        return
+            return bool(await bot.send_message(admin_id, text))
     except (ClientOSError, ServerDisconnectedError, asyncio.TimeoutError) as e:
         logging.warning("notify_superadmin failed: %s; retry with fresh session", e)
         timeout = ClientTimeout(total=HTTP_TIMEOUT)
@@ -5298,11 +5297,12 @@ async def notify_superadmin(db: Database, bot: Bot, text: str):
             fresh_bot = SafeBot(bot.token, session=session)
             try:
                 async with span("tg-send"):
-                    await fresh_bot.send_message(admin_id, text)
+                    return bool(await fresh_bot.send_message(admin_id, text))
             except Exception as e2:
                 logging.error("failed to notify superadmin: %s", e2)
     except Exception as e:
         logging.error("failed to notify superadmin: %s", e)
+    return False
 
 
 _llm_incident_recent: dict[tuple[str, ...], tuple[float, int]] = {}
@@ -5393,6 +5393,16 @@ async def notify_llm_incident(kind: str, payload: dict[str, Any]) -> None:
     if suppressed:
         text += f"\nПовторов за предыдущие 10 минут: {suppressed}"
 
+    def log_delivery(recipient: str) -> None:
+        logging.info(
+            "llm_incident.delivered recipient=%s kind=%s consumer=%s code=%s logical_request_uid=%s",
+            recipient,
+            kind,
+            consumer,
+            error_code or "-",
+            payload.get("logical_request_uid") or request_uid or "-",
+        )
+
     if operator_chat_id:
         try:
             admin_id = await get_superadmin_id(current_db)
@@ -5401,7 +5411,9 @@ async def notify_llm_incident(kind: str, payload: dict[str, Any]) -> None:
         if not admin_id or int(operator_chat_id) != int(admin_id):
             try:
                 async with span("tg-send"):
-                    await current_bot.send_message(int(operator_chat_id), text)
+                    sent = await current_bot.send_message(int(operator_chat_id), text)
+                if sent:
+                    log_delivery("operator")
             except Exception:
                 logging.warning(
                     "notify_llm_incident: failed to notify operator chat %s kind=%s",
@@ -5411,7 +5423,8 @@ async def notify_llm_incident(kind: str, payload: dict[str, Any]) -> None:
                 )
 
     # Always notify superadmin as an operational alert.
-    await notify_superadmin(current_db, current_bot, text)
+    if await notify_superadmin(current_db, current_bot, text):
+        log_delivery("superadmin")
 
 def _vk_captcha_quiet_until() -> datetime | None:
     if not VK_CAPTCHA_QUIET:

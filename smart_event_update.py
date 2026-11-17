@@ -4152,6 +4152,8 @@ _FACT_FIRST_TICKET_WORD_RE = re.compile(
     r"(?i)\b(билет\w*|вход\w*|регистрац\w*|запис\w*|брон\w*|бесплатн\w*)\b"
 )
 _FACT_FIRST_PRICE_RE = re.compile(r"(?i)\b\d{1,6}\s*(?:₽|руб\.?|р\.)\b")
+# Exact price receipt emitted by _initial_added_facts and the merge ledger.
+_LEDGER_PRICE_LINE_RE = re.compile(r"Цена:\s*(?:(?:от|до)\s+)?\d+(?:[–-]\d+)?\s*₽\.?", re.IGNORECASE)
 _FACT_FIRST_AGE_RE = re.compile(r"\b\d{1,2}\+\b")
 _FACT_FIRST_PUSHKIN_RE = re.compile(r"(?i)\bпушкинск\w*\s+карт\w*\b")
 _FACT_FIRST_URL_RE = re.compile(r"(?i)\b(?:https?://|www\.)\S+")
@@ -4200,7 +4202,7 @@ def _fact_first_bucket(fact: str) -> str:
         return "infoblock"
     if _FACT_FIRST_URL_RE.search(f) and not _fact_first_urls_are_allowed(f):
         return "infoblock"
-    if _FACT_FIRST_TICKET_WORD_RE.search(f) or _FACT_FIRST_PRICE_RE.search(f):
+    if _LEDGER_PRICE_LINE_RE.fullmatch(f) or _FACT_FIRST_TICKET_WORD_RE.search(f) or _FACT_FIRST_PRICE_RE.search(f):
         return "infoblock"
     if _FACT_FIRST_AGE_RE.search(f) or _FACT_FIRST_PUSHKIN_RE.search(f):
         return "infoblock"
@@ -7303,9 +7305,9 @@ async def _llm_review_create_bundle_grounding(
         confidence = float(data.get("confidence") or 0.0)
     except Exception:
         confidence = 0.0
-    quotes = [str(item or "").strip() for item in (data.get("evidence_quotes") or []) if str(item or "").strip()]
+    quotes = [_norm_text_for_grounding(item) for item in (data.get("evidence_quotes") or [])]
     corpus_norm = _norm_text_for_grounding(corpus)
-    if not quotes or any(_norm_text_for_grounding(item) not in corpus_norm for item in quotes):
+    if not quotes or any(not quote or quote not in corpus_norm for quote in quotes):
         # Generated prose is optional.  A malformed reviewer citation must not
         # discard the source-grounded occurrence; remove generated public
         # fields and continue with the producer candidate instead.
@@ -7326,6 +7328,14 @@ async def _llm_review_create_bundle_grounding(
             # above.
             if not safe_unsupported:
                 safe_unsupported = populated_public_fields
+            elif (
+                bundle.get("_split_create")
+                and "facts" in safe_unsupported
+                and "description" not in safe_unsupported
+                and not confidence >= 0.9
+            ):
+                # A low-confidence partial verdict cannot vouch for standalone prose.
+                safe_unsupported.append("description")
             if safe_unsupported:
                 return False, "llm_ungrounded", safe_unsupported
         # An uncertain/low-confidence reviewer cannot approve generated prose,
@@ -11017,6 +11027,9 @@ async def _llm_extract_candidate_facts(
             "(главный архитектор, профессор, режиссёр-постановщик, кандидат наук, художественный руководитель, "
             "член Союза и т.п.) — сохрани их в ОДНОМ именованном факте вида "
             "`Лектор: Андрей Анисимов, главный архитектор Калининграда`. "
+            "Если несколько имён перечислены при одной общей роли, сохрани в fact роль и имена в падеже источника, "
+            "а в evidence_quote — исходный оборот с этой ролью и именами. Длинный состав дели по целым именам "
+            "(до 180 знаков на fact). "
             "Если источник перечисляет состав/участников/спикеров несколькими блоками вида ИМЯ отдельной строкой "
             "+ роль/регалии на следующей строке, верни ОТДЕЛЬНЫЙ именованный факт для КАЖДОГО блока; "
             "не сокращай состав до категорий вроде `краеведы и учёные`. Для лекций/паблик-токов/дискуссий "
@@ -14894,6 +14907,13 @@ async def _rewrite_description_full_from_sources(event: Event, candidate: EventC
     if len(base) < 120:
         return None
 
+    # Event.is_free defaults to False even when no source addressed admission.
+    decisions = getattr(event, "collection_decisions", None)
+    admission = decisions.get("admission_decision") if isinstance(decisions, Mapping) else None
+    is_free = True if getattr(event, "is_free", False) else None
+    if isinstance(admission, Mapping) and admission.get("value") in ("confirmed_paid", "confirmed_free"):
+        is_free = admission["value"] == "confirmed_free"
+
     payload = {
         "title": getattr(event, "title", None) or candidate.title,
         "date": getattr(event, "date", None) or candidate.date,
@@ -14904,7 +14924,7 @@ async def _rewrite_description_full_from_sources(event: Event, candidate: EventC
         "city": getattr(event, "city", None) or candidate.city,
         "ticket_link": getattr(event, "ticket_link", None) or candidate.ticket_link,
         "ticket_status": getattr(event, "ticket_status", None) or candidate.ticket_status,
-        "is_free": bool(getattr(event, "is_free", False)),
+        "is_free": is_free,
         "event_type": getattr(event, "event_type", None) or candidate.event_type,
         "festival": getattr(event, "festival", None) or candidate.festival,
         "source_text": _clip(base, SMART_UPDATE_REWRITE_SOURCE_MAX_CHARS),
@@ -14917,6 +14937,9 @@ async def _rewrite_description_full_from_sources(event: Event, candidate: EventC
         f"{SMART_UPDATE_YO_RULE} "
         f"{SMART_UPDATE_PRESERVE_LISTS_RULE} "
         f"{SMART_UPDATE_VISITOR_CONDITIONS_RULE} "
+        "Условия входа указывай только по прямым сведениям: is_free=null означает, что метаданных о платности нет. "
+        "Продажа товаров, ссылка или платная услуга сами по себе не подтверждают обязательный входной билет. "
+        "Если источник различает вход и оплату части программы, сохрани это различие. "
         f"{_description_emoji_prompt_rule()}"
         "Без хэштегов. Убери промо/акции и механику розыгрыша (если не часть сути). "
         "Не добавляй секции/заголовки про факты (например «Факты…», «Факты о событии», `Facts/Added Facts`): "
@@ -20398,6 +20421,7 @@ async def _smart_event_update_impl(
                 )
         except Exception:  # pragma: no cover - provider failures
             bundled = None
+        unsupported_bundle_fields: list[str] = []
         if (
             isinstance(bundled, dict)
             and str(candidate.source_type or "").strip().lower() in {"vk", "tg", "telegram"}
@@ -20611,12 +20635,15 @@ async def _smart_event_update_impl(
         elif (
             split_create_used
             and bundled_desc
-            and bundled_facts
+            and (bundled_facts or "facts" in unsupported_bundle_fields)
         ):
+            # Social review checks each public field against the source. Its
+            # rejection of the ledger can leave an independently supported body.
             description_value = bundled_desc
             fact_first_used = True
             logger.info(
-                "smart_update.create_description path=g4_split_create_v2_rich_facts source_type=%s source_url=%s",
+                "smart_update.create_description path=%s source_type=%s source_url=%s",
+                "g4_split_create_v2_rich_facts" if bundled_facts else "g4_split_create_v2_reviewed_description",
                 candidate.source_type,
                 candidate.source_url,
             )
@@ -21921,13 +21948,16 @@ async def _smart_event_update_impl(
                             continue
                         skipped_conflicts.append(text)
 
-                    duplicate_only_narrative = bool(
+                    current_narrative_context = bool(
                         SMART_UPDATE_FACT_FIRST and before_description.strip()
-                        and not (added_facts or conflict_facts or conflicting or ticket_changes_needed or needs_schedule_cleanup)
-                        and not any(merge_data.get(k) is not None and merge_data[k] != getattr(event_db, k, None)
-                                    for k in ("ticket_link", "ticket_price_min", "ticket_price_max", "ticket_status"))
+                        and not (conflict_facts or conflicting or needs_schedule_cleanup)
                         and event_db.age_restriction == before_age_restriction
                         and not set(updated_keys).intersection({"title", "date", "time", "end_date", "location_name", "location_address", "city"})
+                    )
+                    duplicate_only_narrative = bool(
+                        current_narrative_context and not added_facts and not ticket_changes_needed
+                        and not any(merge_data.get(k) is not None and merge_data[k] != getattr(event_db, k, None)
+                                    for k in ("ticket_link", "ticket_price_min", "ticket_price_max", "ticket_status"))
                     )
                     if (duplicate_only_narrative and not is_canonical_site and _title_has_meaningful_tokens(event_db.title)
                         and _titles_look_related(str(merge_data.get("title") or ""), event_db.title)
@@ -22045,6 +22075,14 @@ async def _smart_event_update_impl(
                     # Fact-first: override public narrative with a fresh build from canonical facts,
                     # ignoring the merged description text (which is derived from raw sources).
                     duplicate_only_narrative = duplicate_only_narrative and "title" not in updated_keys
+                    # Preserve a current programme if either writer only echoes the ledger price.
+                    # Keep the usual correction path when the old prose may contain superseded details.
+                    keep_programme_over_price = (
+                        current_narrative_context and "title" not in updated_keys and "event_type" not in updated_keys
+                        and not _has_price_evidence(before_description)
+                    )
+                    if keep_programme_over_price and _LEDGER_PRICE_LINE_RE.fullmatch((clean_description or "").strip()):
+                        clean_description = None
                     if duplicate_only_narrative:
                         clean_description = merge_digest_from_llm = None
                         has_new_text = False
@@ -22114,7 +22152,7 @@ async def _smart_event_update_impl(
                                 )
                             except Exception:  # pragma: no cover - provider failures
                                 ff_desc = None
-                            if ff_desc:
+                            if ff_desc and not (keep_programme_over_price and _LEDGER_PRICE_LINE_RE.fullmatch(ff_desc.strip())):
                                 # Minimal deterministic cleanup only (no "top-up" from sources).
                                 cleaned_ff = _dedupe_description(ff_desc) or ff_desc
                                 cleaned_ff = _normalize_plaintext_paragraphs(cleaned_ff) or cleaned_ff
