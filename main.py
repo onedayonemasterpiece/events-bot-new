@@ -20671,6 +20671,10 @@ async def _run_due_jobs_once_locked(
                     retry = not (
                         uncertain_cls is not None and isinstance(exc, uncertain_cls)
                     )
+                    if (obj.task == JobTask.vk_calendar_comment
+                            and isinstance(obj.payload, dict) and obj.payload.get("relations")
+                            and isinstance(exc, RuntimeError) and str(exc) == "vk_live_id_ambiguous"):
+                        retry = False
                     if obj.task == JobTask.static_site_build:
                         static_failure = classify_static_site_failure(exc)
                         retry = static_failure.retryable

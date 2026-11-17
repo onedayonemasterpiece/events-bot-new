@@ -83,3 +83,10 @@ Future independent retries and delayed comments retain their original due time,
 error and attempts; the global VK worker pause still prevents their execution
 until recovery. The triggering job already paused by the handler remains in
 its existing marker cohort. Recovery does not replay future non-CAPTCHA work.
+
+A frozen related comment whose normal live-ID recovery raises the exact
+`RuntimeError("vk_live_id_ambiguous")` ends as failed without automatic retry.
+The worker does not choose between matching posts. Missing-target reads,
+transport errors, document comments and other tasks retain their existing
+retry rules. This rejects that comment attempt, not the event; existing
+permitted enqueue semantics remain unchanged.
