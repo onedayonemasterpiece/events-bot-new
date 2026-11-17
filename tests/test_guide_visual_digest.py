@@ -749,8 +749,10 @@ async def test_loader_adds_earlier_posts_of_the_same_route_and_guide_only(tmp_pa
             INSERT INTO guide_occurrence_source VALUES (1, 10, 'primary'), (2, 11, 'primary'),
                 (3, 12, 'primary'), (4, 12, 'primary'), (1, 13, 'primary'), (1, 14, 'primary');
         """)
-        earlier = await vd._load_earlier_route_posts(conn, [3], {3: [{"text": "Расписание ноября."}]})
-    assert [p["text"] for p in earlier[3]] == ["Маршрут идёт по проспекту.", "История района."]
+        current = await conn.execute_fetchall("SELECT * FROM guide_occurrence WHERE id=3")
+        from guide_excursions.route_history import load_route_history
+        histories = await load_route_history(conn, current, {3: [{"text": "Расписание ноября."}]})
+    assert [p["text"] for p in histories[3]["earlier"]] == ["Маршрут идёт по проспекту.", "История района."]
 
 
 def test_card_checks_each_route_stop_against_the_selected_outing():

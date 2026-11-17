@@ -35,7 +35,7 @@ from .dedup import deduplicate_occurrence_rows
 from .digest import RU_MONTH_GEN, format_date_time
 from .digest_writer import VK_NAME_MARK_RE, ask_vk_narrative
 from .parser import collapse_ws, extract_date_iso, normalize_title_key, occurrence_fare, price_for_publication, split_occurrence_blocks
-from .tic_catalog import load_tic_background
+from .route_history import load_materialized_history, load_cached_background, needs_background
 
 logger = logging.getLogger(__name__)
 
@@ -1519,39 +1519,6 @@ def _select_documented_departures(requested: Sequence[dict[str, Any]], peers: Se
     return selected
 
 
-async def _load_earlier_route_posts(
-    conn: aiosqlite.Connection, ids: Sequence[int], linked: Mapping[int, Sequence[Mapping[str, Any]]],
-) -> dict[int, list[dict[str, Any]]]:
-    """Up to two earlier announcements of the same title led by the same guide, per occurrence."""
-    params = ",".join("?" for _ in ids)
-    # A timetable line often names a route that the same guide described in an earlier
-    # announcement. Those posts supply the theme only; dates and prices stay with the row.
-    cur = await conn.execute(f"""
-        SELECT cur.id AS occurrence_id, cur.guide_names_json AS guides, old.guide_names_json AS old_guides,
-               gmp.text, gmp.post_date, gmp.source_url AS url
-        FROM guide_occurrence cur
-        JOIN guide_occurrence old ON old.title_normalized = cur.title_normalized
-             AND old.id != cur.id AND old.date < cur.date
-        JOIN guide_occurrence_source gos ON gos.occurrence_id = old.id
-        JOIN guide_monitor_post gmp ON gmp.id = gos.post_id
-        WHERE cur.id IN ({params})
-        ORDER BY cur.id, gmp.post_date DESC, gmp.id DESC
-    """, tuple(ids))
-    earlier: dict[int, list[dict[str, Any]]] = {}
-    for post in await cur.fetchall():
-        names = {n.casefold() for n in _parse_json_array(post["guides"])}
-        if not names & {n.casefold() for n in _parse_json_array(post["old_guides"])}:
-            continue  # the same title led by somebody else is another excursion
-        text = (post["text"] or "").strip()
-        if not text:
-            continue
-        bucket = earlier.setdefault(post["occurrence_id"], [])
-        known = {(p.get("text") or "").strip() for p in (*bucket, *linked.get(post["occurrence_id"], []))}
-        if len(bucket) < 2 and text not in known:
-            bucket.append({"text": text, "post_date": post["post_date"], "url": post["url"]})
-    return earlier
-
-
 async def _load_visual_rows(conn: aiosqlite.Connection, records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     if not records:
         return []
@@ -1569,7 +1536,7 @@ async def _load_visual_rows(conn: aiosqlite.Connection, records: Sequence[Mappin
     linked: dict[int, list[dict[str, Any]]] = {}
     for post in await cur.fetchall():
         linked.setdefault(post["occurrence_id"], []).append(dict(post))
-    earlier = await _load_earlier_route_posts(conn, ids, linked)
+    histories = await load_materialized_history(conn, records, linked)
     out = []
     for row in records:
         item = dict(row)
@@ -1614,7 +1581,9 @@ async def _load_visual_rows(conn: aiosqlite.Connection, records: Sequence[Mappin
                     item.pop(key, None)
                     item["fact_pack"].pop(key, None)
         item["linked_posts"] = posts
-        item["earlier_route_posts"] = earlier.get(item["id"], [])
+        history = histories[item["id"]]
+        item["earlier_route_posts"] = history["earlier"]
+        item["route_history"] = {key: history[key] for key in ("kind", "dated_departures", "description_sufficient")}
         primary = posts[0] if posts else {}
         item["dedup_source_text"] = collapse_ws(primary.get("text") or "")
         item["dedup_source_url"] = primary.get("url")
@@ -1623,7 +1592,14 @@ async def _load_visual_rows(conn: aiosqlite.Connection, records: Sequence[Mappin
         await _load_transport(conn, item)
         _apply_published_facts(item, posts)
         out.append(item)
-    route_background = await load_tic_background(conn, out)
+    earliest_check = datetime.now(timezone.utc) - timedelta(days=14)
+    sparse = [item for item in out if needs_background(histories[item["id"]])]
+    route_background = {}
+    for item in sparse:
+        website = histories[item["id"]].get("website")
+        if website and datetime.fromisoformat(website["retrieved_at"]) >= earliest_check:
+            route_background[item["id"]] = website
+    route_background.update(await load_cached_background(conn, sparse))
     for item in out:
         if item["id"] in route_background:
             item["route_background"] = route_background[item["id"]]
