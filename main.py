@@ -5767,6 +5767,7 @@ async def vk_captcha_pause_outbox(
             .where(
                 JobOutbox.task.in_(VK_JOB_TASKS),
                 JobOutbox.terminal_reason.is_(None),
+                (JobOutbox.status == JobStatus.running) | (JobOutbox.next_run_at <= now),
                 JobOutbox.status.in_(
                     [JobStatus.pending, JobStatus.error, JobStatus.running]
                 ),

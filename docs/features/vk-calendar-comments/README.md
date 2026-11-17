@@ -74,3 +74,9 @@ the existing foreground comment priority. Marker scope, 30-second recovery pacin
 and CAPTCHA budgets are unchanged. Documents remain queued, but recovery backlog
 can delay them beyond their original publication window. Neither this order nor
 a harmless read proves that VK accepts a write or clears the provider challenge.
+
+The bulk pause includes due pending/error VK jobs and all running VK jobs.
+Future independent retries and delayed comments retain their original due time,
+error and attempts; the global VK worker pause still prevents their execution
+until recovery. The triggering job already paused by the handler remains in
+its existing marker cohort. Recovery does not replay future non-CAPTCHA work.
