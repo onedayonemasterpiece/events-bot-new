@@ -435,7 +435,12 @@ Production contract:
   [Slack](https://mira-projects.slack.com/archives/C0C9LS6L3J8/p1794825818667009)).
   В обычной команде и ежедневном задании `build_visual_digest_vk_text` передаёт
   весь выпуск в `digest_writer.ask_vk_narrative`. Первым пишет `gpt-6.1-sol`
-  с effort `medium` через клиент Codex в образе Events. При таймауте
+  с effort `medium`. С `GUIDE_DIGEST_SOL_SOCKET` рабочая задача передаёт публичные
+  данные выпуска автору на DevCoveer через закрытый Unix-сокет. Там тот же код
+  собирает инструкцию и запускает авторизованный клиент Codex. Служебные
+  данные входа хранятся на машине автора. Без сокета используется локальный
+  клиент Codex. Файлы user systemd находятся в `deploy/runcoveer/guide-writer/`.
+  При таймауте
   (`GUIDE_DIGEST_SOL_TIMEOUT_SEC`, по умолчанию 150 секунд), недоступной
   авторизации или отклонённом ответе запрос получает прежний клиент Gemini
   со своими лимитами и резервными моделями. Если связного текста получить

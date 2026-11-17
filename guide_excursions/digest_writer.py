@@ -1076,8 +1076,14 @@ async def ask_vk_narrative(
         attempts.append(attempt)
         try:
             if provider == "codex":
+                service_socket = os.getenv("GUIDE_DIGEST_SOL_SOCKET")
+                if service_socket:
+                    from .sol_service import request_narrative
+                    generation = request_narrative(service_socket, payload, issue_id=issue_id)
+                else:
+                    generation = generate_sol_narrative(prompt, _VK_NARRATIVE_SOL_SCHEMA)
                 raw = await asyncio.wait_for(
-                    generate_sol_narrative(prompt, _VK_NARRATIVE_SOL_SCHEMA),
+                    generation,
                     timeout=GUIDE_DIGEST_SOL_TIMEOUT_SECONDS,
                 )
                 trace.update(model=SOL_MODEL, raw_response=raw)

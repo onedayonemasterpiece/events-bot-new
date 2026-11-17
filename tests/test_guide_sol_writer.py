@@ -6,6 +6,7 @@ import pytest
 
 from guide_excursions import digest_writer as writer
 from guide_excursions import sol_writer
+from guide_excursions import sol_service
 
 
 PAYLOAD = {"excursions": [{"occurrence_id": 1, "title": "Прогулка", "guides": ["Гид"]}]}
@@ -111,3 +112,37 @@ def test_sparse_tour_can_use_its_confirmed_title_in_the_lead():
                 {"occurrence_ids": [2], "lead_anchor": "История одной поездки от города до моря",
                  "details": ["Анна"], "text": "Эту экскурсию ведёт Анна."}]}
     assert writer._validate_vk_narrative(data, rows, issue_id=18)
+
+
+@pytest.mark.asyncio
+async def test_private_writer_rebuilds_the_native_prompt_and_runs_the_normal_validation(monkeypatch, tmp_path):
+    native = AsyncMock(return_value=json.dumps(STORY))
+    monkeypatch.setattr(sol_service, "generate_sol_narrative", native)
+    monkeypatch.setattr(writer, "generate_sol_narrative", Mock(side_effect=AssertionError("unexpected local login")))
+    socket_path = str(tmp_path / "sol.sock")
+    monkeypatch.setenv("GUIDE_DIGEST_SOL_SOCKET", socket_path)
+
+    async def handle(reader, stream):
+        raw = await sol_service.write_edition(await reader.readline())
+        stream.write(json.dumps({"text": raw}).encode() + b"\n")
+        await stream.drain()
+        stream.close()
+        await stream.wait_closed()
+
+    async with await asyncio.start_unix_server(handle, path=socket_path):
+        review = {}
+        assert await writer.ask_vk_narrative(PAYLOAD, issue_id=5, review=review) == STORY
+    native.assert_awaited_once_with(writer._vk_narrative_prompt(PAYLOAD, issue_id=5), writer._VK_NARRATIVE_SOL_SCHEMA)
+    assert (review["provider"], review["model"]) == ("codex", "gpt-6.1-sol")
+
+
+@pytest.mark.asyncio
+async def test_private_writer_rejects_prompt_or_model_overrides(monkeypatch):
+    native = AsyncMock()
+    monkeypatch.setattr(sol_service, "generate_sol_narrative", native)
+    for request in ({"issue_id": 5, "payload": PAYLOAD, "prompt": "other"},
+                    {"issue_id": 5, "payload": PAYLOAD, "model": "other"},
+                    {"issue_id": 5, "payload": {"excursions": []}}):
+        with pytest.raises(ValueError):
+            await sol_service.write_edition(json.dumps(request).encode() + b"\n")
+    native.assert_not_called()
