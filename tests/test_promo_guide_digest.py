@@ -140,3 +140,55 @@ async def test_digest_campaign_schedule_cadence_pause_and_restart(tmp_path, monk
         assert len(calls) == (6 if afisha_cap is None else 5)
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+async def test_late_vk_receipt_and_corrected_canonical_source_share_the_normal_edition_claim(tmp_path, monkeypatch):
+    import promo
+    import promo_guide_digest as runner
+    import guide_excursions.visual_digest as visual
+    from unittest.mock import AsyncMock
+    from guide_excursions.max_delivery import prepare_delivery
+
+    db = Database(str(tmp_path / "late.sqlite"))
+    await db.init()
+    now = datetime(2026,11,17,8,tzinfo=timezone.utc)
+    campaign = PromoCampaign(id=14,title="Afisha",status="active")
+    activity = PromoActivity(id=48,campaign_id=14,surface="vk_repost",config_json={"source_group":100,"target_group":200})
+    target = PromoTarget(campaign_id=14,target_type="guide_digest",query_text="visual_schedule")
+    sent = AsyncMock(return_value="https://vk.com/wall-200_22")
+    monkeypatch.setattr(promo,"_publish_vk_repost",sent)
+    monkeypatch.setattr(visual,"_resolve_live_vk_wall_post_id",AsyncMock(side_effect=lambda *a,post_id,**kw:post_id))
+    actual = {411: now-timedelta(minutes=10), 413: now, 414: now+timedelta(hours=2)}
+    monkeypatch.setattr(promo,"_vk_post_datetime",AsyncMock(side_effect=lambda url: actual[int(url.rsplit("_",1)[-1])]))
+    monkeypatch.setattr(runner.random.SystemRandom,"choice",lambda self,slots:slots[0])
+    def canonical(post):return json.dumps({"vk":{"group_id":100,"post_urls":[f"https://vk.com/wall-100_{post}"]}})
+    async def tick(at):
+        return await runner.run_digest_repost(db,None,campaign=campaign,activity=activity,target=target,now_utc=at)
+    try:
+        async with db.raw_conn() as conn:
+            await conn.execute("CREATE TABLE IF NOT EXISTS guide_digest_issue(id INTEGER PRIMARY KEY,family,status,published_at,published_targets_json)")
+            await conn.executemany("INSERT INTO guide_digest_issue(id,family,status,published_at,published_targets_json) VALUES (?,'visual_schedule','published',?,?)",
+                                   [(350,"2026-11-16 08:00",canonical(411)),(351,now.isoformat(),canonical(413))])
+            await conn.commit()
+        assert (await tick(now)).source_url.endswith("_413")
+        vk = await prepare_delivery(db,issue_id=350,provider="vk",target_id="100",payload={})
+        async with db.raw_conn() as conn:
+            await conn.execute("UPDATE guide_visual_delivery SET state='published',updated_at=? WHERE request_key=?",(now.isoformat(),vk["request_key"]))
+            await conn.commit()
+        assert (await tick(now)).source_url.endswith("_411")
+        await tick(now+timedelta(minutes=20))
+        key = request_key(351,"promo_vk_repost","campaign:14:activity:48:group:200")
+        # Source changes while its own destination is still only prepared.
+        async with db.raw_conn() as conn:
+            await conn.execute("UPDATE guide_digest_issue SET published_targets_json=? WHERE id=351",(canonical(414),))
+            await conn.commit()
+        assert (await tick(now+timedelta(hours=2))).status == "scheduled"
+        updated = await get_delivery(db,key)
+        assert updated["payload"]["source_url"].endswith("_414")
+        assert datetime.fromisoformat(updated["payload"]["due_at"]) == now+timedelta(hours=2,minutes=30)
+        await tick(now+timedelta(hours=3))
+        await tick(now+timedelta(hours=3,minutes=5))
+        assert [a.kwargs["source_url"] for a in sent.await_args_list] == ["https://vk.com/wall-100_411","https://vk.com/wall-100_414"]
+    finally:
+        await db.close()

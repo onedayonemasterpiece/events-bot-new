@@ -89,8 +89,7 @@ VISUAL_DIGEST_TELEGRAM_ENABLED = (
     (os.getenv("ENABLE_GUIDE_VISUAL_DIGEST_TELEGRAM") or "1").strip().lower()
     in {"1", "true", "yes", "on"}
 )
-# Owner decision 2026-11-16: personal VK mentions are tested in the sandbox only;
-# ordinary editions keep plain names until he enables them.
+# The production compose enables confirmed personal mentions. Test posts substitute their recipient.
 VISUAL_DIGEST_VK_MENTIONS_ENABLED = (
     (os.getenv("GUIDE_VISUAL_DIGEST_VK_MENTIONS") or "").strip().lower()
     in {"1", "true", "yes", "on"}
