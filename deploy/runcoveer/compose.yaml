@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:guide-spacing-20261117
+    image: runcoveer/events:lite1057-integrated-20261117
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
