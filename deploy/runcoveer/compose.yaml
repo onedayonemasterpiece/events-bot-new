@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:lite1057-integrated-20261117
+    image: runcoveer/events:guide-eventness-20261118
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

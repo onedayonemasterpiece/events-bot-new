@@ -465,3 +465,36 @@ seed. Both runner source and notebook receive the same prompt delta. This
 adds no model stage, keyword classifier, queue or persisted status. Live
 before/after receipts and normal source acceptance remain separate from unit
 contract checks and deployment.
+
+
+### Eventness release acceptance, 18 November
+
+- PR1091 passed all four required CI and merged as
+  `3b9ebbe90ff767f660a3f2e64669e8cdeadf4c58`.
+- Events-only production release uses `runcoveer/events:guide-eventness-20261118`,
+  immutable image `sha256:9ee64bc3af5202d4e3d1f7388dc595a323e802de2472b324522d86e3199f3459`.
+  Running base `d17b5976a` is its ancestor. All 4615 tracked files passed,
+  isolated network-none boot and actual import-boundary checks passed.
+  Live readiness is true with no issues; environment, mounts, data and
+  Kotopogoda are preserved. Rollback image is `sha256:4ea48aa680c6041ee4234b086c76a79e9ed5cf2d64c5c3afef36f42df023fc0f`.
+- Fourteen prompt/schema/link contracts pass. The hostless booking regression
+  failed before and passed after the fix. Final actual-model screening rejects
+  the two suspect inputs and retains Green Stories, Ponart and the Jack route.
+  Existing-seed enrichment now returns 793 false/non_target and 815
+  false/missing_date; Ponart remains eligible. The normal import converter
+  independently preserves both exclusions in the exact candidate image.
+- The diagnostic preview uses the existing production renderer with three
+  reviewed excursions. It has not replaced the public card.
+- Canonical production rows793/815 still await the normal source catch-up.
+  It must follow the current exact FULL26 materializer12600, not compete with it.
+  The full run finished216 sources/366 posts/119 LLM successes/no deferred or
+  LLM errors. Its original waiter was interrupted by the release, but real PUSH
+  was saved at19:42:14UTC and the ordinary importer12600 started19:42:17.
+  This is result recovery, not terminal source/product acceptance yet.
+
+Retained local evidence is in the existing task directory
+`/home/dev/artifacts/events-bot-new/20261104T093210Z-guide-digest-vk-quality-20261104/`:
+`guide354-semantic-*`, `guide354-existing-seed-v3-*`,
+`guide354-reviewed-source-corrections-20261118.json`,
+`guide-eventness-build-20261118.log`, and `guide-eventness-cutover-20261118.log`.
+No further deployment is required for this report or Compose pin.
