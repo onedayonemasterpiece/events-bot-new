@@ -818,7 +818,7 @@ def test_partial_related_batches_survive_save_and_resume(tmp_path, monkeypatch, 
                         'slot_type': 'adjacent_discovery'} for i in range(2, 14)]}
     def audit(**kwargs):
         ids = [event['id'] for event in kwargs['candidates']]
-        calls.append(ids)
+        calls.append((kwargs['model'], ids))
         if cycle == 1 and ids[0] == 8:
             raise RuntimeError('provider minute bucket exhausted')
         if cycle == 1 and ids[0] == 2 and first_reply != 'complete':
@@ -837,16 +837,21 @@ def test_partial_related_batches_survive_save_and_resume(tmp_path, monkeypatch, 
     cycle = 2
     second = run()
     assert second['related']['1']['strict_verified']
-    initial = [list(range(2, 8)), list(range(8, 14))]
-    resumed = {'empty': [list(range(2, 8))], 'partial': [list(range(4, 8))], 'complete': []}
-    assert calls == initial + resumed[first_reply] + [list(range(8, 14))]
+    gemma = 'models/gemma-4-26b-a4b-it'
+    lite = 'models/gemini-3.5-flash-lite'
+    initial = [(gemma, list(range(2, 8)))]
+    if first_reply == 'partial':
+        initial.append((lite, list(range(4, 8))))
+    initial.append((gemma, list(range(8, 14))))
+    resumed = [(gemma, list(range(2, 8)))] if first_reply == 'empty' else []
+    assert calls == initial + resumed + [(gemma, list(range(8, 14)))]
     assert 0 not in second['related']['1']['pure_related']
     before_edit = len(calls)
     cycle = 3
     events[1]['title'] = 'Changed source programme'
     third = run()
     assert third['related']['1']['strict_verified']
-    assert calls[-1] == list(range(2, 8))
+    assert calls[-1] == (gemma, list(range(2, 8)))
     assert len(calls) == before_edit + 1, 'a changed peer invalidates only its batch'
 
 
@@ -892,6 +897,100 @@ def test_legacy_verified_packet_repairs_only_missing_verdicts(tmp_path, monkeypa
     assert not any('0' in p for p in json.loads(path.read_text())['gemma_audit_cache'].values())
     assert run(None)['strict_verified_related']
     assert calls == [[3]]
+
+
+def test_lite_recovers_only_missing_id_after_gemma_retries_and_reuses_cache(monkeypatch):
+    exporter = _load_exporter_module()
+    monkeypatch.setenv("GOOGLE_API_KEY4", "test-only")
+    monkeypatch.setenv("STATIC_SITE_GEMMA_RELATED_PASSES", "1")
+    monkeypatch.setenv("STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS", "2")
+    monkeypatch.setenv("STATIC_SITE_GEMMA_RELATED_RETRY_BACKOFF_SEC", "0")
+    calls = []
+    stages = []
+    monkeypatch.setattr(exporter, 'log_stage', lambda stage, **fields: stages.append((stage, fields)))
+
+    def audit(**kwargs):
+        ids = [event["id"] for event in kwargs["candidates"]]
+        calls.append((kwargs["model"], ids))
+        if kwargs["model"] == "models/gemini-3.5-flash-lite":
+            assert ids == [3]
+            return {3: {"llm_semantic_score": .82, "confidence": .9,
+                        "reject": False, "similarity_class": "highly_similar"}}
+        if len(calls) == 1:
+            return {2: {"llm_semantic_score": .75, "confidence": .9,
+                        "reject": False, "similarity_class": "thematically_close"}}
+        raise RuntimeError("Gemma HTTP 503")
+
+    monkeypatch.setattr(exporter, "call_gemma_related_audit", audit)
+    events = [{"id": i, "title": f"Real programme {i}"} for i in range(1, 4)]
+    cache = {}
+
+    def run():
+        chains = {"1": [
+            {"event_id": i, "vector_similarity": .82, "related_score": .82,
+             "slot_type": "adjacent_discovery"} for i in (2, 3)
+        ]}
+        return exporter.maybe_apply_gemma_audit(
+            events, chains, enabled=True, model="models/gemma-4-26b-a4b-it",
+            key_env="GOOGLE_API_KEY4", cache=cache, max_anchors=0, anchor_ids={1})
+
+    result, meta = run()
+    assert calls == [
+        ("models/gemma-4-26b-a4b-it", [2, 3]),
+        ("models/gemma-4-26b-a4b-it", [3]),
+        ("models/gemini-3.5-flash-lite", [3]),
+    ]
+    assert meta["verified_event_ids"] == [1]
+    assert [(fields['anchor_event_id'], fields['pass_index'], fields['model'],
+             fields['candidate_count'], fields['status'])
+            for stage, fields in stages if stage == 'gemma_audit_lite'] == [
+                (1, 1, 'models/gemini-3.5-flash-lite', 1, 'ok')]
+    assert not meta["errors"]
+    assert len([a for a in meta["attempts"] if a["model"].endswith("flash-lite")]) == 1
+    assert [x["event_id"] for x in result["1"] if x["slot_type"] == "pure_related"] == [3, 2]
+    assert "gemini35_lite_audit" in result["1"][0]["reason_codes"]
+    assert "gemma4_26b_audit" in result["1"][1]["reason_codes"]
+    assert any(v.get("_verified_model") == "models/gemini-3.5-flash-lite"
+               for packet in cache["gemma_audit_cache"].values() for v in packet.values())
+    _, warm = run()
+    assert warm["cache_hits"] == 1
+    assert len(calls) == 3
+
+
+def test_lite_never_replaces_scored_low_gemma_or_wholly_failed_pass(monkeypatch):
+    exporter = _load_exporter_module()
+    monkeypatch.setenv("GOOGLE_API_KEY4", "test-only")
+    monkeypatch.setenv("STATIC_SITE_GEMMA_RELATED_PASSES", "1")
+    monkeypatch.setenv("STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS", "1")
+    events = [{"id": 1, "title": "Anchor"}, {"id": 2, "title": "Peer"}]
+    calls = []
+
+    def audit(**kwargs):
+        calls.append(kwargs["model"])
+        assert kwargs["model"] == "models/gemma-4-26b-a4b-it", "no blanket Lite fallback"
+        if len(calls) == 2:
+            raise RuntimeError("Gemma unavailable for whole pass")
+        return {2: {"llm_semantic_score": .70, "confidence": .95,
+                    "reject": False, "similarity_class": "thematically_close"}}
+
+    monkeypatch.setattr(exporter, "call_gemma_related_audit", audit)
+
+    def run():
+        return exporter.maybe_apply_gemma_audit(
+            events, {"1": [{"event_id": 2, "vector_similarity": .9,
+                            "related_score": .9, "slot_type": "adjacent_discovery"}]},
+            enabled=True, model="models/gemma-4-26b-a4b-it",
+            key_env="GOOGLE_API_KEY4", cache={}, max_anchors=0, anchor_ids={1})
+
+    first, meta = run()
+    assert meta["verified_event_ids"] == [1]
+    assert first["1"][0]["llm_semantic_score"] == .7
+    assert first["1"][0]["slot_type"] == "adjacent_discovery"
+    second, failed = run()
+    assert failed["verified_event_ids"] == []
+    assert failed["errors"]
+    assert second["1"][0].get("llm_semantic_score") is None
+    assert calls == ["models/gemma-4-26b-a4b-it"] * 2
 
 
 @pytest.mark.parametrize('state', ['cold', 'full', 'passes', 'scoped', 'complete'])
@@ -946,7 +1045,10 @@ def test_partial_verdict_ids_do_not_complete_full_or_scoped_cache(state, tmp_pat
     result = run(scoped=state == 'scoped')
     assert result['related']['1']['strict_verified'] == (state == 'complete')
     assert result['related']['2']['strict_verified']  # Healthy empty anchors still finish.
-    expected_calls = [list(range(2, 12)), list(range(12, 22))] if state == 'cold' else [[2, 3, 4]]
+    if state == 'cold':
+        expected_calls = [list(range(2, 12)), [2, 3, 4], list(range(12, 22))]
+    else:
+        expected_calls = [[2, 3, 4]] * (1 if state == 'complete' else 2)
     assert calls == expected_calls
     assert 5 in result['related']['1']['pure_related']
     if state == 'complete':
