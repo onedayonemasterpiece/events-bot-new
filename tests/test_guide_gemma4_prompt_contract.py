@@ -50,7 +50,7 @@ def test_guide_block_and_enrich_prompts_do_not_downgrade_grounded_future_dates()
 
     assert "compact_post_for_block" in prompt_source
     assert "do not materialize volunteer cleanups" in prompt_source
-    assert "do not downgrade a seed with concrete future date/time/booking/meeting facts" in prompt_source
+    assert "Preserve grounded future date/time/booking/meeting facts of a genuine excursion" in prompt_source
     assert "set status=available, availability_mode=scheduled_public, digest_eligible=true" in prompt_source
     assert "tentative_or_free_date" in prompt_source
     assert "schedule_anchor_text" in prompt_source

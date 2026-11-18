@@ -6929,3 +6929,5 @@ This release ships the updates that were previously listed under “Unreleased.�
   Telegraph и сохраняет в экспортируемом JSON полный промпт запроса.
 
 - Guide digests: reject incomplete HTTP(S) booking addresses at import and visual selection, using the existing source-post fallback for legacy rows (digest 354).
+
+- Guide excursion extraction: separate guided visits from discussion/photo activities and avoid assigning festival dates to undated subactivities; allow existing enrichment to correct non-excursion seeds.

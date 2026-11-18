@@ -443,3 +443,25 @@ regression uses the actual 793 shape: before the fix `_primary_link` returns
 
 Release and public repair receipts are recorded separately; this source change
 alone does not mean a production rollout or a corrected canonical occurrence.
+
+### 18 November: eventness and parent-date regression in edition 354
+
+The owner challenged whether all five selected items were excursions. Exact
+originals support three: Green Stories (747), Ponart (810), and the Jack route
+(811). Art-mediation 793 describes participants discussing two works rather
+than a guided visit. Photo activity 815 is only a mention within a festival
+running November 20–22; its separate departure day is not stated.
+
+A fresh live replay of the existing models reproduced both defects before the
+patch: screening admitted 793 because it had booking and a gallery venue;
+forced normal extraction returned 815 on all three festival days. The existing
+enrichment instruction also told the model to retain eligibility whenever a
+seed had concrete booking/date facts, even when excursion identity was wrong.
+
+The fix changes those existing prompts: judge the actual guided activity,
+retain genuine guided museum/exhibition visits, keep parent-event dates
+separate from activity dates, and permit enrichment to reject a non-excursion
+seed. Both runner source and notebook receive the same prompt delta. This
+adds no model stage, keyword classifier, queue or persisted status. Live
+before/after receipts and normal source acceptance remain separate from unit
+contract checks and deployment.
