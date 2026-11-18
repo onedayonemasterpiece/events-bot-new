@@ -1017,3 +1017,13 @@ async def test_immediate_story_retries_upload_without_resending_wall_or_uncertai
         assert not story["pending"] and story["last_error"] == "no save response"
     finally:
         await db.close()
+
+
+def test_incomplete_booking_url_uses_existing_source_fallback():
+    row = {"booking_url": "https://", "booking_text": "Билеты: https://",
+           "source_post_url": "https://vk.com/wall-212760444_6462"}
+    assert vd._primary_link(row) == (row["source_post_url"], False)
+    from guide_excursions.service import _booking_url_for_digest
+    assert _booking_url_for_digest("https://") is None
+    assert _booking_url_for_digest("https://vk.cc/d3O4g1") == "https://vk.cc/d3O4g1"
+    assert _booking_url_for_digest("tel:+79673569479") == "tel:+79673569479"

@@ -2142,6 +2142,7 @@ async def screen_post(
         "Rules:\n"
         "- announce/status_update only if the post text or OCR contains a real guided public excursion/walk/tour/route signal grounded in the input\n"
         "- do not treat a dated event as an excursion just because it is posted by a guide source; the public product must be a guided walk/excursion/tour/route/storytelling visit\n"
+        "- Judge the actual activity, not metaphorical travel words: a discussion/art-mediation of artworks is not a guided excursion unless the source explicitly offers a guided visit; a photo walk needs evidence of a guided route/interpretation, not merely its name in a festival programme. Genuine guided museum/exhibition visits remain in scope.\n"
         "- volunteer cleanups, subbotniks, restoration work days, community service, lectures without a guided route, and generic meetups are mixed_or_non_target/ignore unless the post explicitly announces a guided excursion or walk as the primary public offer\n"
         "- if there is a concrete future walk/excursion with date/time/meeting point, prefer announce or status_update over reportage\n"
         "- if the body is mostly historical/reportage but ends with or inserts a concrete future excursion CTA — including relative date markers (this Sunday, tomorrow, next weekend) or a named guide — treat it as announce or status_update, not reportage; absence of exact time or meeting point is fine\n"
@@ -2279,6 +2280,8 @@ async def _extract_announce_post_tier1(
         "Return only JSON with key occurrences.\n"
         "Rules:\n"
         "- extract only real excursion occurrences or direct public updates about a specific occurrence\n"
+        "- A discussion/art-mediation or a photo activity is not an excursion merely because it happens in a museum or uses travel metaphors; require an explicitly guided visit/route/interpretation. Keep genuine guided exhibition visits. Screen is provisional: for a non-excursion return occurrences=[] even when screen.decision=announce.\n"
+        "- A festival/exhibition date range belongs to that parent event, not automatically to every listed activity. Omit an occurrence without its own stated departure day or explicit statement that it runs on each day; never assign the parent opening day.\n"
         "- ignore past occurrences for MVP\n"
         "- if the post contains several dated schedule lines, return one occurrence per dated line even when they share one booking/contact block\n"
         "- use post.schedule_blocks as the complete schedule index when text_excerpt is shortened; keep source_block_id equal to the block id when a block id is available\n"
@@ -2632,6 +2635,7 @@ async def _extract_occurrence_block(
         "Rules:\n"
         "- treat the block as one primary excursion candidate\n"
         "- materialize only if the block is primarily a guided public excursion/walk/tour/route or direct update about one\n"
+        "- Discussions/art-mediation and photo activities require explicit guided visit/route/interpretation evidence; a venue or travel metaphor is insufficient. Never borrow a parent festival/exhibition opening day for an activity without its own dated departure.\n"
         "- do not materialize volunteer cleanups, subbotniks, restoration work days, community service, lectures without a guided route, or generic meetups unless a guided excursion/walk/tour is the primary public offer\n"
         "- if title/date/route signal is present, materialize the occurrence even when some details are still pending\n"
         "- numeric emoji keycaps in dates are normal digits: 3️⃣ мая means 3 мая; 1️⃣3️⃣ мая means 13 мая; use occurrence_block.schedule_anchor_text only as a normalized reading aid\n"
@@ -2780,16 +2784,17 @@ async def _extract_occurrence_semantics(
         "profile_hint",
         "fact_pack",
     )
+    schema["properties"]["occurrence"]["required"] = ["digest_eligible", "digest_eligibility_reason"]
     prompt = (
         "You are route_weaver.enrich.v1 for guide excursions.\n"
-        "Enrich one already extracted occurrence with missing semantic facts from the same Telegram post.\n"
+        "Validate an extracted excursion hypothesis against the original post, then enrich supported facts. The seed is not evidence that this is a tour or that its date is correct.\n"
         "Return only JSON with key occurrence.\n"
         "Rules:\n"
-        "- do not rename or replace canonical_title/date/time/source_block_id from the seed\n"
+        "- First decide digest_eligible and its reason from post.focus_excerpt, independently of screen and seed. A dated parent festival is not a dated departure of every activity it lists. An activity with no own departure day is digest_eligible=false, digest_eligibility_reason=missing_date, even if the seed supplies a date. Keep seed identity fields only for matching the existing record.\n"
         "- fill only facts supported by the focus excerpt or OCR chunks from the same post\n"
         "- preserve the dominant term family from the source: прогулка stays прогулка, экскурсия stays экскурсия\n"
-        "- do not downgrade a seed with concrete future date/time/booking/meeting facts to status unknown or digest_eligible=false unless the focus excerpt explicitly says sold out/full/cancelled/past/private\n"
-        "- for a concrete future public schedule with no disqualifying status, keep or set status=available, availability_mode=scheduled_public, digest_eligible=true\n"
+        "- Preserve grounded future date/time/booking/meeting facts of a genuine excursion; correct a seed to digest_eligible=false, digest_eligibility_reason=non_target if it is only a discussion/art-mediation/photo activity without an explicitly guided visit/route/interpretation. For a date borrowed from the parent festival/exhibition with no stated activity day, set digest_eligible=false, digest_eligibility_reason=missing_date.\n"
+        "- for a concrete future public EXCURSION schedule with its own grounded departure day and no disqualifying status, keep or set status=available, availability_mode=scheduled_public, digest_eligible=true\n"
         "- volunteer cleanups, subbotniks, restoration work days, community service, lectures without a guided route, and generic meetups stay digest_eligible=false unless the guided excursion/walk/tour is the primary public offer\n"
         "- base_region_fit is your own semantic judgement versus source.base_region; do not weaken seed.base_region_fit unless the focus excerpt explicitly contradicts it\n"
         "- summary_one_liner and digest_blurb are optional; leave them empty if evidence is weak\n"

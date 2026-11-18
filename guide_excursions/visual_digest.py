@@ -34,7 +34,7 @@ from telegram_sources import canonicalize_tg_url, parse_tg_post_url
 from .dedup import deduplicate_occurrence_rows
 from .digest import RU_MONTH_GEN, format_date_time
 from .digest_writer import VK_NAME_MARK_RE, ask_vk_narrative
-from .parser import collapse_ws, extract_date_iso, names_for_source_role, normalize_title_key, occurrence_fare, price_for_publication, split_occurrence_blocks
+from .parser import complete_booking_url, collapse_ws, extract_date_iso, names_for_source_role, normalize_title_key, occurrence_fare, price_for_publication, split_occurrence_blocks
 from .route_history import load_materialized_history, load_cached_background, needs_background
 
 logger = logging.getLogger(__name__)
@@ -2069,7 +2069,7 @@ def _visual_booking_url(row: Mapping[str, Any]) -> str:
     public source until a fresh occurrence-specific booking link appears.
     """
 
-    booking_url = _plain(row.get("booking_url"))
+    booking_url = complete_booking_url(_plain(row.get("booking_url")))
     if not booking_url:
         return ""
     # Bare Telegram usernames cannot contain a dot. Keep post, invite and deep links.

@@ -423,3 +423,45 @@ guide20-slavsk-provider-read-20261116.log,
 osq982-standard-source-acceptance-20261116.log.
 PR 1048 passed all four CI and merged as bdba118d3e4872ccf62cb9e1d21bb407d125c964;
 no documentation-only runtime deployment was performed.
+
+### 18 November: ordinary digest 354, incomplete booking URL
+
+Provider readback of wall-238875824_420 found a literal `Запись: https://`
+for occurrence 793. The linked original wall-212760444_6462 contains the
+complete ticket URL `https://vk.cc/d3O4g1`; persisted extraction already lost
+the host/path. The importer and the visual booking selector accepted a scheme
+without a host as a destination. This is URL syntax validation, not a decision
+about event meaning. Existing source-post fallback is sufficient when the
+booking destination is incomplete.
+
+The same small URL normalizer now rejects hostless HTTP(S) destinations at
+normal import and when reading legacy rows for a visual digest. Valid HTTP(S),
+telephone and existing schemeless contact forms retain their behavior. No new
+LLM call, retry, flag, queue, timer or repair path is added. A distinguishing
+regression uses the actual 793 shape: before the fix `_primary_link` returns
+`https://`; after it returns the existing canonical source post.
+
+Release and public repair receipts are recorded separately; this source change
+alone does not mean a production rollout or a corrected canonical occurrence.
+
+### 18 November: eventness and parent-date regression in edition 354
+
+The owner challenged whether all five selected items were excursions. Exact
+originals support three: Green Stories (747), Ponart (810), and the Jack route
+(811). Art-mediation 793 describes participants discussing two works rather
+than a guided visit. Photo activity 815 is only a mention within a festival
+running November 20–22; its separate departure day is not stated.
+
+A fresh live replay of the existing models reproduced both defects before the
+patch: screening admitted 793 because it had booking and a gallery venue;
+forced normal extraction returned 815 on all three festival days. The existing
+enrichment instruction also told the model to retain eligibility whenever a
+seed had concrete booking/date facts, even when excursion identity was wrong.
+
+The fix changes those existing prompts: judge the actual guided activity,
+retain genuine guided museum/exhibition visits, keep parent-event dates
+separate from activity dates, and permit enrichment to reject a non-excursion
+seed. Both runner source and notebook receive the same prompt delta. This
+adds no model stage, keyword classifier, queue or persisted status. Live
+before/after receipts and normal source acceptance remain separate from unit
+contract checks and deployment.
