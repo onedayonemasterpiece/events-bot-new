@@ -58,6 +58,7 @@ from .parser import (
     GuideParsedOccurrence,
     build_source_fingerprint,
     collapse_ws,
+    complete_booking_url,
     normalize_title_key,
     names_for_source_role,
     occurrence_fare,
@@ -1010,7 +1011,7 @@ async def _resolve_scan_window(db: Database, mode: str) -> tuple[int, int]:
 
 
 def _booking_url_for_digest(value: str | None) -> str | None:
-    raw = collapse_ws(value)
+    raw = complete_booking_url(value)
     if not raw:
         return None
     if raw.startswith("tel:"):

@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Iterable
-from urllib.parse import quote as url_quote
+from urllib.parse import quote as url_quote, urlsplit
 
 from .identity_policy import allow_fallback_guide_name
 
@@ -204,6 +204,17 @@ def extract_seats_text(text: str) -> str | None:
         if match:
             return collapse_ws(match.group(1))
     return None
+
+
+def complete_booking_url(value: str | None) -> str | None:
+    raw = collapse_ws(value)
+    if raw.lower().startswith(("http:", "https:")):
+        try:
+            if not urlsplit(raw).hostname:
+                return None
+        except ValueError:
+            return None
+    return raw or None
 
 
 def extract_booking(text: str) -> tuple[str | None, str | None]:

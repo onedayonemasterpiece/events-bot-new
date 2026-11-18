@@ -423,3 +423,23 @@ guide20-slavsk-provider-read-20261116.log,
 osq982-standard-source-acceptance-20261116.log.
 PR 1048 passed all four CI and merged as bdba118d3e4872ccf62cb9e1d21bb407d125c964;
 no documentation-only runtime deployment was performed.
+
+### 18 November: ordinary digest 354, incomplete booking URL
+
+Provider readback of wall-238875824_420 found a literal `Запись: https://`
+for occurrence 793. The linked original wall-212760444_6462 contains the
+complete ticket URL `https://vk.cc/d3O4g1`; persisted extraction already lost
+the host/path. The importer and the visual booking selector accepted a scheme
+without a host as a destination. This is URL syntax validation, not a decision
+about event meaning. Existing source-post fallback is sufficient when the
+booking destination is incomplete.
+
+The same small URL normalizer now rejects hostless HTTP(S) destinations at
+normal import and when reading legacy rows for a visual digest. Valid HTTP(S),
+telephone and existing schemeless contact forms retain their behavior. No new
+LLM call, retry, flag, queue, timer or repair path is added. A distinguishing
+regression uses the actual 793 shape: before the fix `_primary_link` returns
+`https://`; after it returns the existing canonical source post.
+
+Release and public repair receipts are recorded separately; this source change
+alone does not mean a production rollout or a corrected canonical occurrence.
