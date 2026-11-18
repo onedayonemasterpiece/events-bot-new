@@ -498,3 +498,16 @@ Retained local evidence is in the existing task directory
 `guide354-reviewed-source-corrections-20261118.json`,
 `guide-eventness-build-20261118.log`, and `guide-eventness-cutover-20261118.log`.
 No further deployment is required for this report or Compose pin.
+
+
+### 18 November: product audit of full 26
+
+Normal PUSH-backed import 12600 accepted all 216 source reports, 366 posts, 13 created and 37 updated occurrences. Technical success did not establish excursion quality. Source 220 produced two distinct confirmed tours, 829 and 830; original posts explicitly advertise a guided walk with date/time. The earlier frozen runner also created another variant 827 of the already rejected art mediation, plus festival 828 and birthday celebration 835.
+
+Existing semantic enrichment rejects art mediation 827 and festival 828, but initially accepts birthday 835 because its programme includes a walk. The prompt now asks whether the primary offer is an organized interpreted visit and forbids inferring this from a walk, programme, source category or seed. This is one instruction in the existing enrichment pass, mirrored in the notebook: no new stage, keyword classifier, flag, retry or queue. Live baseline 835=true; candidate 835=false/non_target, with genuine tours 829/830 retained. Additional control results and release acceptance are recorded separately; this source change alone is not a deployment.
+
+Source repair uses stored original monitor posts when the accepted result bundle has already expired. It applies actual model decisions through run_guide_import_from_results and retains existing variant fingerprints and source anchors; canonical categories are not updated manually. The first obsolete-bundle attempt failed before creating an ops run.
+
+Candidate live controls 829, 830 and 810 remain eligible. The initial diagnostic for 747 incorrectly used the first 900 characters instead of its actual schedule block B6, so it returned missing_date both before and after. Repeating the probe with the stored raw seed and the ordinary B6 focus retained 747 as future_public_excursion; the diagnostic mistake is not a production date defect. Target correction ops12601 completed SUCCESS: two posts, three existing variants updated, zero created/errors; independent canonical readback shows 793/827 non_target and 815 missing_date with eligibility false and original anchors retained.
+
+Follow-up normal source correction12602 completed SUCCESS: two posts, two existing rows updated, zero created/errors. Independent canonical readback excludes 828 and 835 as non_target; original anchors remain intact. The full26 receipt and both correction receipts are retained as guide26-terminal-20261118.json and guide26-source-correction-acceptance-20261118.json. Public post420 has not been replaced.
