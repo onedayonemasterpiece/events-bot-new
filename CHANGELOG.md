@@ -58,6 +58,9 @@
 ### Fixed
 - Long VK excursion digest text separates each excursion heading, story and logistics with one blank line, keeping schedule and booking lines together.
 - Related events keep the verified Gemma decisions from partial batches and request the missing candidates before marking an event ready for VK publication.
+- The static related verifier may ask Gemini 3.5 Flash-Lite once for IDs still missing from a partially answered Gemma batch after normal retries; recorded low scores are not reopened, and model provenance stays in the existing cache.
+
+
 - VK recommendations no longer refill unused slots with other dates of an already selected canonical programme.
 - Групповое сравнение исходных изображений отличает общую обложку фестиваля от афиши другого входящего в него события.
 - Keep media review for an ongoing exhibition eligible for a waiting initial VK announcement through its canonical end date, including date ranges.
