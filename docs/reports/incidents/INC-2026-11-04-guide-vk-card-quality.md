@@ -511,3 +511,17 @@ Source repair uses stored original monitor posts when the accepted result bundle
 Candidate live controls 829, 830 and 810 remain eligible. The initial diagnostic for 747 incorrectly used the first 900 characters instead of its actual schedule block B6, so it returned missing_date both before and after. Repeating the probe with the stored raw seed and the ordinary B6 focus retained 747 as future_public_excursion; the diagnostic mistake is not a production date defect. Target correction ops12601 completed SUCCESS: two posts, three existing variants updated, zero created/errors; independent canonical readback shows 793/827 non_target and 815 missing_date with eligibility false and original anchors retained.
 
 Follow-up normal source correction12602 completed SUCCESS: two posts, two existing rows updated, zero created/errors. Independent canonical readback excludes 828 and 835 as non_target; original anchors remain intact. The full26 receipt and both correction receipts are retained as guide26-terminal-20261118.json and guide26-source-correction-acceptance-20261118.json. Public post420 has not been replaced.
+
+
+### 18 November: systemic-only release of PR 1093
+
+Owner clarification supersedes the earlier plan to replace edition 354 or run retrospective corrections. This release changes the normal semantic enrichment only; no historical data, public card or accepted imports were changed or repeated during delivery.
+
+- PR 1093 exact head `552e22d11eadfa88591add06e330861b5099bff6` passed all four required CI checks and merged as `dba325c3aa8f51775ac22f84c5c379146d87015c`.
+- The actual previous release `3b9ebbe90ff767f660a3f2e64669e8cdeadf4c58` is an ancestor. The exact source-layer build verified all 4615 tracked files, five changed files, no deletions and unchanged dependency inputs.
+- Delivered Events-only image `runcoveer/events:guide-celebration-20261118`, immutable `sha256:64c22434c84369114317b89229fef7d28e6e528cc87d2e6143d1db108390a865`. Rollback image is `sha256:9ee64bc3af5202d4e3d1f7388dc595a323e802de2472b324522d86e3199f3459`; prior Compose is retained in the exact release directory.
+- Network-isolated preflight booted with no production data mount. Its readiness is intentionally false because DEPLOY_PREFLIGHT disables normal workers. The normal conversion boundary retained actual model exclusions and their reasons; invalid booking fallback still passed.
+- Live cutover preserved the complete effective environment and normalized mounts, left Kotopogoda unchanged and read back the exact deployed SHA. Actual health returned ok=true, ready=true, issues=[]; guide light/full, visual digest, story retry and promo schedulers are active.
+- Actual next ordinary guide light is 19 November 09:05 Kaliningrad; the next visual issue is 10:30. Product acceptance on those runs has not happened yet. The coordinator must read the frozen registry, source reports, ordinary canonical outcomes, genuine and rejected source offers, then the new digest and provider receipts. A successful deploy is not this product acceptance.
+
+Evidence is retained in the managed task directory: `guide-celebration-build-20261118.log`, `guide-celebration-preflight-check-20261118.log`, `guide-celebration-cutover-20261118.log`. No additional model stage, state, flag, gate, retry, queue or repair mechanism was added. Production Python delta remains one prompt line, mirrored in the notebook. Repository Compose pin now matches the delivered image; this documentation/pin update requires no further runtime deployment.
