@@ -2790,6 +2790,7 @@ async def _extract_occurrence_semantics(
         "Validate an extracted excursion hypothesis against the original post, then enrich supported facts. The seed is not evidence that this is a tour or that its date is correct.\n"
         "Return only JSON with key occurrence.\n"
         "Rules:\n"
+        "- A route or walk is not by itself a guided excursion. Establish from the original offer that visitors will learn about places or objects through an organized interpreted visit; do not infer this from a celebration programme, leisure walk, the source category, or the seed. If the primary offer is a celebration rather than such a visit, set digest_eligible=false and digest_eligibility_reason=non_target.\n"
         "- First decide digest_eligible and its reason from post.focus_excerpt, independently of screen and seed. A dated parent festival is not a dated departure of every activity it lists. An activity with no own departure day is digest_eligible=false, digest_eligibility_reason=missing_date, even if the seed supplies a date. Keep seed identity fields only for matching the existing record.\n"
         "- fill only facts supported by the focus excerpt or OCR chunks from the same post\n"
         "- preserve the dominant term family from the source: прогулка stays прогулка, экскурсия stays экскурсия\n"

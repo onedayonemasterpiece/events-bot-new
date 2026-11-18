@@ -1,3 +1,7 @@
+## 2026-11-18
+
+- Guide extraction distinguishes an interpreted excursion from a festive walk or celebration programme, without inferring a guided tour from its route or source category.
+
 ## 2026-11-17
 
 - Smart Update: retain semantic source updates across venue labels at the same structured address and city; preserve canonical logistics and other identity conflicts.
