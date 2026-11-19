@@ -124,6 +124,13 @@ jobs:
           tests/test_event_identity.py
           tests/test_event_type_normalization.py
           tests/test_smart_update_event_type.py
+          tests/test_smart_update_duplicate_narrative.py
+          tests/test_smart_update_merge_coverage.py
+          tests/test_smart_update_price_only_description.py
+          tests/test_smart_update_reviewed_description.py
+          tests/test_smart_event_update_fact_grounding.py
+          tests/test_llm_incident_dedup.py
+          tests/test_telegraph_side_effects.py
           tests/test_smart_update_identity_gate.py
           tests/test_smart_update_identity_incident_replay.py
           tests/test_smart_update_identity_persistence.py
@@ -142,6 +149,7 @@ jobs:
           tests/test_smart_update_terminal_contract.py
           tests/test_smart_update_candidate_state_db.py
           tests/test_smart_update_candidate_state_keys.py
+          tests/test_smart_update_candidate_source_provenance.py
           tests/test_smart_update_automatic_identity_resolution.py
           tests/test_smart_update_caller_typed_contract.py
 
