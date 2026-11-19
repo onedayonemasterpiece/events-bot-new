@@ -4909,11 +4909,14 @@ def _fact_first_coverage_prompt(
     *,
     facts_text_clean: Sequence[str],
     description: str,
+    merge_context: dict[str, Any] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     payload = {
         "facts_text_clean": [str(x).strip() for x in (facts_text_clean or []) if str(x or "").strip()],
         "description_md": _clip((description or "").strip(), 6500),
     }
+    if merge_context:
+        payload.update(merge_context=merge_context, description_md=(description or "").strip())
     prompt = (
         "Ты проверяешь полноту и строгость описания относительно списка фактов.\n\n"
         "Найди:\n"
@@ -4924,8 +4927,15 @@ def _fact_first_coverage_prompt(
         "- Допустимы синонимы и формы, если смысл и ключевые детали сохранены.\n"
         "- Если факт содержит несколько элементов, считай его отражённым только если в тексте присутствуют ВСЕ элементы.\n"
         "- Служебные перефразы для структурных фактов НЕ считаются extra, если они явно отсылают к фактам.\n"
-        "- Для missing используй ТОЛЬКО строки фактов ВЕРБАТИМ (копируй из списка facts_text_clean; не перефразируй).\n"
+        "- Для missing копируй ВЕРБАТИМ строки facts_text_clean или потерянные детали из merge_context.previous_description.\n"
         "- Для extra используй ТОЛЬКО короткие ВЕРБАТИМ-фрагменты из description_md (копируй из текста; не выдумывай), до 12 слов.\n\n"
+        "Если есть merge_context, previous_description — уже принятое описание, независимое от неполного ledger. "
+        "Проверь сохранение всех его конкретных деталей: программы, тем, имён, ролей и элементов перечней, даже отсутствующих в facts_text_clean. "
+        "Новые утверждения подтверждай candidate_text/poster_texts; детали прежнего описания не считай extra только из-за отсутствия в ledger. "
+        "Явное исправление, замена или отмена из источника этого события при не меньшем доверии разрешает удалить опровергнутую деталь "
+        "из прежнего описания И старых facts_text_clean; её отсутствие не missing, а сохранение опровергнутой версии — extra. "
+        "Простое отсутствие старой детали в новом источнике не является отменой. Не требуй чужих событий, повторов, промо и реквизитов отдельного инфоблока. "
+        "Не принимай конфликтующие якоря из conflicting_do_not_use.\n\n"
         "Верни JSON по схеме.\n\n"
         f"Данные:\n{json.dumps(payload, ensure_ascii=False)}"
     )
@@ -4939,6 +4949,14 @@ def _fact_first_coverage_prompt(
         "additionalProperties": False,
     }
     return prompt, schema
+
+
+def _fact_first_coverage_is_valid(value: Any) -> bool:
+    return isinstance(value, dict) and set(value) == {"missing", "extra"} and all(
+        isinstance(value[key], list)
+        and all(isinstance(item, str) and item.strip() for item in value[key])
+        for key in ("missing", "extra")
+    )
 
 
 def _fact_first_revise_prompt(
@@ -5347,13 +5365,10 @@ async def _llm_fact_first_description_md(
         max_tokens=500,
         label=f"{label}:fact_first_cov",
     )
-    missing: list[str] = []
-    extra: list[str] = []
-    if isinstance(cov, dict):
-        missing = [str(x).strip() for x in (cov.get("missing") or []) if str(x or "").strip()]
-        extra = [str(x).strip() for x in (cov.get("extra") or []) if str(x or "").strip()]
-    missing = _dedupe_source_facts(missing)[:12]
-    extra = _dedupe_source_facts(extra)[:12]
+    if not _fact_first_coverage_is_valid(cov):
+        return None
+    missing = _dedupe_source_facts(cov["missing"])[:12]
+    extra = _dedupe_source_facts(cov["extra"])[:12]
 
     policy_issues = _collect_policy_issues(description)
     if not missing and not extra and not policy_issues:
@@ -14217,11 +14232,13 @@ async def _llm_merge_event(
         "Твоя задача: (1) выделить из candidate ТОЛЬКО новые факты, которых ещё нет в event_before.facts, "
         "(2) выделить факты из candidate, которые уже есть (это дубли), "
         "(3) выявить факты, которые ПРОТИВОРЕЧАТ уже известным фактам (conflict), "
-        "(4) собрать цельное, связное описание события на основе event_before.facts + новых фактов. "
+        "(4) обновить event_before.description новыми фактами, сохраняя конкретные детали прежней программы, даже если их нет в неполном event_before.facts. "
         "Конфликты фактов выявляй логически: если новый факт противоречит старому, это conflict. "
         "Какую версию оставить в описании — решай по уровню доверия источников: "
         "если `candidate.trust_priority` выше, можно заменить старую версию на новую, "
         "если ниже или равен — сохраняй старую версию. "
+        "Исключение: явное исправление, замена или отмена из источника этого события при равном доверии заменяет опровергнутую деталь. "
+        "Простой пропуск детали в новом источнике не является отменой и не позволяет её удалить. "
         "Поля event_before.event_type и candidate.event_type — прежние результаты классификации, не цитаты источников. "
         "В event_type_decision верни русский тип события и дословную evidence_quote из candidate.text или candidate.poster_texts, "
         "только если источник явно подтверждает формат именно выбранного события; иначе null. "
@@ -14253,7 +14270,7 @@ async def _llm_merge_event(
         "Не включай в описание нерелевантные новости о площадке/организации, которые не относятся к самому событию "
         "(например отчёты о работе филиала, планы на год, анонс посторонних интервью). "
         "Сохраняй ПОЛНОЕ содержание события: включай существенные факты из event_before.description, source_texts и candidate.text. "
-        "Не делай текст чрезмерно коротким: если источники длинные, итоговое описание тоже должно быть развернутым и подробным. "
+        "Полноту оценивай по конкретным деталям своего события, а не по длине исходника или описания. "
         "Убери рекламные/акционные детали (скидки/промокоды/акция) и механику розыгрыша, если они не являются сутью события. "
         "Если в тексте есть URL или телефоны, не искажай их (лучше перенеси в конец, чем потерять). "
         "Можно использовать минимальную разметку для читабельности: "
@@ -22092,22 +22109,43 @@ async def _smart_event_update_impl(
                                     candidate.source_url,
                                 )
 
-                    # Fact-first: override public narrative with a fresh build from canonical facts,
-                    # ignoring the merged description text (which is derived from raw sources).
+                    # Review a merge against the accepted narrative; only empty descriptions need a new writer.
                     duplicate_only_narrative = duplicate_only_narrative and "title" not in updated_keys
-                    # Preserve a current programme if either writer only echoes the ledger price.
-                    # Keep the usual correction path when the old prose may contain superseded details.
-                    keep_programme_over_price = (
-                        current_narrative_context and "title" not in updated_keys and "event_type" not in updated_keys
-                        and not _has_price_evidence(before_description)
-                    )
-                    if keep_programme_over_price and _LEDGER_PRICE_LINE_RE.fullmatch((clean_description or "").strip()):
-                        clean_description = None
                     if duplicate_only_narrative:
                         clean_description = merge_digest_from_llm = None
                         has_new_text = False
                         merge_fact_first_used = True
                         logger.info("smart_update.duplicate_narrative_preserved event_id=%s", event_db.id)
+                    elif SMART_UPDATE_FACT_FIRST and not SMART_UPDATE_LLM_DISABLED and before_description.strip():
+                        clean_description = _clip((clean_description or "").strip(), SMART_UPDATE_DESCRIPTION_MAX_CHARS)
+                        cov_prompt, cov_schema = _fact_first_coverage_prompt(
+                            facts_text_clean=_facts_text_clean_from_facts([*facts_before_list, *added_facts]),
+                            description=clean_description,
+                            merge_context={
+                                "event_title": event_db.title,
+                                "previous_description": before_description,
+                                "candidate_text": _clip(candidate.source_text, SMART_UPDATE_MERGE_CANDIDATE_TEXT_MAX_CHARS),
+                                "poster_texts": [_clip(p.ocr_text, 400) for p in candidate.posters if p.ocr_text][:3],
+                                "event_trust_priority": _trust_priority(event_trust_level),
+                                "candidate_trust_priority": _trust_priority(candidate.trust_level),
+                                "conflicting_do_not_use": conflicting,
+                            },
+                        )
+                        try:
+                            cov = await _ask_gemma_json(cov_prompt, cov_schema, max_tokens=500,
+                                label=f"merge:{int(event_db.id or 0)}:fact_first_cov") if clean_description else None
+                        except Exception:
+                            cov = None
+                        if _fact_first_coverage_is_valid(cov) and not cov["missing"] and not cov["extra"]:
+                            if clean_description != (event_db.description or "").strip():
+                                event_db.description = clean_description
+                                updated_fields = True
+                                updated_keys.append("description")
+                        else:
+                            has_new_text = False
+                            logger.info("smart_update.merge_description_preserved event_id=%s", event_db.id)
+                        merge_fact_first_used = True
+                        clean_description = merge_digest_from_llm = None
                     elif SMART_UPDATE_FACT_FIRST and not SMART_UPDATE_LLM_DISABLED:
                         legacy_facts_for_fact_first: list[str] = list(legacy_facts_seed or [])
                         if not legacy_facts_for_fact_first:
@@ -22172,7 +22210,7 @@ async def _smart_event_update_impl(
                                 )
                             except Exception:  # pragma: no cover - provider failures
                                 ff_desc = None
-                            if ff_desc and not (keep_programme_over_price and _LEDGER_PRICE_LINE_RE.fullmatch(ff_desc.strip())):
+                            if ff_desc:
                                 # Minimal deterministic cleanup only (no "top-up" from sources).
                                 cleaned_ff = _dedupe_description(ff_desc) or ff_desc
                                 cleaned_ff = _normalize_plaintext_paragraphs(cleaned_ff) or cleaned_ff
@@ -22596,7 +22634,7 @@ async def _smart_event_update_impl(
         )
         if ("description" in updated_keys) or has_new_text:
             short_needs_refresh = True
-        if short_needs_refresh and not duplicate_only_narrative:
+        if short_needs_refresh and not duplicate_only_narrative and (not merge_fact_first_used or "description" in updated_keys):
             normalized_short: str | None = None
             try:
                 normalized_short = await _llm_build_short_description(
@@ -22623,7 +22661,7 @@ async def _smart_event_update_impl(
         # search_digest is a short snippet used for search/cards and also shown on Telegraph
         # before long descriptions. It should be refreshed when description meaningfully changes.
         normalized_candidate_digest = _clean_search_digest(candidate.search_digest)
-        digest_should_refresh = ("description" in updated_keys) or has_new_text
+        digest_should_refresh = ("description" in updated_keys) or (has_new_text and not merge_fact_first_used)
         new_digest = None
         if digest_should_refresh:
             if merge_digest_from_llm and (not merge_fact_first_used):
@@ -22642,7 +22680,7 @@ async def _smart_event_update_impl(
             new_digest = normalized_candidate_digest
         if not new_digest:
             new_digest = _fallback_digest_from_description(event_db.description)
-        if not duplicate_only_narrative and new_digest and (new_digest.strip() != (event_db.search_digest or "").strip()):
+        if not duplicate_only_narrative and (not merge_fact_first_used or "description" in updated_keys) and new_digest and (new_digest.strip() != (event_db.search_digest or "").strip()):
             event_db.search_digest = new_digest
             updated_fields = True
             updated_keys.append("search_digest")
@@ -22725,7 +22763,7 @@ async def _smart_event_update_impl(
         # compared to rich available source text (usually site import), generate a
         # full rewritten description best-effort. This is important for Telegraph
         # pages: a short "search snippet" is not acceptable as the main text.
-        if "description" not in updated_keys and not duplicate_only_narrative:
+        if "description" not in updated_keys and not merge_fact_first_used:
             cur_desc = (event_db.description or "").strip()
             min_expected = _min_expected_description_len_from_sources(event_db, candidate)
             if min_expected and len(cur_desc) < min_expected:

@@ -72,6 +72,7 @@ async def test_duplicate_source_preserves_narrative_and_managed_vk(tmp_path, mon
         }))
         narrative = AsyncMock(return_value="Новая редакция: участники рисуют картину акрилом на картоне.")
         monkeypatch.setattr(su, "_llm_fact_first_description_md_bounded", narrative)
+        monkeypatch.setattr(su, "_ask_gemma_json", AsyncMock(return_value={"missing": [], "extra": []}))
         monkeypatch.setattr(su, "_llm_build_short_description", AsyncMock(return_value="Иной краткий текст о рисовании картины акрилом на картоне для гостей музея."))
         monkeypatch.setattr(su, "_llm_build_search_digest", AsyncMock(return_value="Иной поисковый текст."))
         if change.startswith("age_"):
@@ -144,9 +145,7 @@ async def test_duplicate_source_preserves_narrative_and_managed_vk(tmp_path, mon
             if change == "date":
                 assert saved.date != date
         await main.job_sync_vk_source_post(eid, db, None)
-        if change in {"duplicate", "age_provenance", "duplicate_gallery", "restored_gallery", "expanded_title"}:
-            sync.assert_not_awaited()  # The actual consumer never reaches uploads or wall.edit.
-        else:
-            sync.assert_awaited_once()
+        # PR978/751159d: every existing managed post skips automatic wall.edit.
+        sync.assert_not_awaited()
     finally:
         await db.close()

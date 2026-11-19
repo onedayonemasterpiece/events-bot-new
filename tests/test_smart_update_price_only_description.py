@@ -38,11 +38,16 @@ async def test_price_update_does_not_replace_the_programme(tmp_path, monkeypatch
     monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
     monkeypatch.setattr(su, "_llm_review_candidate_eventness", AsyncMock(return_value=("event", 1.0, "fixture")))
     monkeypatch.setattr(su, "_ensure_legacy_description_fact", AsyncMock(return_value=[]))
+    draft = original + " " + programme if case in {"valid_merge_draft", "programme_update"} else price
     monkeypatch.setattr(su, "_llm_merge_event", AsyncMock(return_value={
-        "title": title, "description": programme if case == "valid_merge_draft" else price, "ticket_price_min": 1500, "ticket_price_max": 1500,
+        "title": title, "description": draft, "ticket_price_min": 1500, "ticket_price_max": 1500,
         "added_facts": [programme] if case == "programme_update" else [],
     }))
-    expected = {"programme_update": programme, "valid_merge_draft": programme, "old_price": price}.get(case, original)
+    accepted = case in {"programme_update", "valid_merge_draft", "old_price"}
+    expected = draft if accepted else original
+    monkeypatch.setattr(su, "_ask_gemma_json", AsyncMock(return_value={
+        "missing": [] if accepted else [original], "extra": [],
+    }))
     writer = AsyncMock(return_value=programme if case == "programme_update" else price)
     monkeypatch.setattr(su, "_llm_fact_first_description_md_bounded", writer)
     for name in ("_llm_build_short_description", "_llm_build_search_digest", "_classify_topics"):
@@ -74,7 +79,6 @@ async def test_price_update_does_not_replace_the_programme(tmp_path, monkeypatch
             assert saved.description == expected
             if case != "old_price":
                 assert saved.short_description != price
-        if case != "old_price":
-            assert writer.await_count == (0 if case == "price_ledger" else 1)
+        writer.assert_not_awaited()  # The merge draft is reviewed, not overwritten by a price-only writer.
     finally:
         await db.close()
