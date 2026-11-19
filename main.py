@@ -21646,52 +21646,17 @@ async def update_telegraph_event_page(
         page_text = _normalize_known_venue_mentions(
             page_text, location_name=getattr(summary, "location_name", None)
         ) or page_text
-        # Safety net: Telegraph pages already show date/time/location/tickets in the summary infoblock.
-        # If the stored description contains duplicated logistics (a common LLM failure mode),
-        # strip it for rendering to keep pages readable without requiring a DB backfill.
+        # Render the accepted description without another semantic rewrite. The summary
+        # cannot represent all ticket categories, booking conditions or merged programme.
+        # Keep the existing non-semantic sanitation and review formatting below.
         try:
             from smart_event_update import (
-                EventCandidate as _EventCandidate,
                 _description_needs_channel_promo_strip as _needs_channel_promo_strip,
-                _description_needs_infoblock_logistics_strip as _needs_infoblock_strip,
-                _llm_remove_infoblock_logistics as _llm_strip_infoblock,
                 _normalize_blockquote_markers as _norm_bq,
                 _promote_review_bullets_to_blockquotes as _promote_reviews,
                 _sanitize_description_output as _sanitize_desc,
             )
 
-            _cand = _EventCandidate(
-                source_type="telegraph_render",
-                source_url=getattr(ev, "source_post_url", None),
-                source_text=(ev.source_text or ""),
-                title=getattr(ev, "title", None),
-                date=getattr(ev, "date", None),
-                time=getattr(ev, "time", None),
-                end_date=getattr(ev, "end_date", None),
-                festival=getattr(ev, "festival", None),
-                location_name=getattr(ev, "location_name", None),
-                location_address=getattr(ev, "location_address", None),
-                city=getattr(ev, "city", None),
-                ticket_link=getattr(ev, "ticket_link", None),
-                ticket_price_min=getattr(ev, "ticket_price_min", None),
-                ticket_price_max=getattr(ev, "ticket_price_max", None),
-                ticket_status=getattr(ev, "ticket_status", None),
-                event_type=getattr(ev, "event_type", None),
-                is_free=bool(getattr(ev, "is_free", False)),
-            )
-            if _needs_infoblock_strip(page_text, candidate=_cand):
-                # Text operations must be done by LLM. If cleanup fails, keep the original:
-                # duplicates are better than broken/cut text.
-                try:
-                    edited = await _llm_strip_infoblock(
-                        description=page_text,
-                        candidate=_cand,
-                        label="telegraph_render_remove_logistics",
-                    )
-                except Exception:
-                    edited = None
-                if edited:
-                    page_text = edited
             try:
                 from smart_event_update import _strip_channel_promo_from_description as _strip_channel_promo
 

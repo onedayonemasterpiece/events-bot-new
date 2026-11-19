@@ -1,5 +1,7 @@
 import importlib
+import json
 from datetime import date
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -16,6 +18,13 @@ class FakeTG:
 
 async def fake_call(func, *a, **k):
     return {}
+
+
+def _node_text(nodes):
+    return " ".join(
+        node if isinstance(node, str) else _node_text(node.get("children", []))
+        for node in nodes
+    )
 
 
 @pytest.mark.asyncio
@@ -383,3 +392,123 @@ async def test_telegraph_rehydrate_skips_shared_multi_event_source(tmp_path, mon
 
     assert added == 0
     assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_source_builder_preserves_11245_ticket_conditions():
+    # A factual projection reproduces the route; full source is private audit evidence.
+    case = json.loads(
+        (Path(__file__).parent / "fixtures/telegraph_11245_ticket_conditions.json").read_text()
+    )
+    summary = orig_main.SourcePageEventSummary(**case["canonical_corrected"])
+    rendered, _, _ = await orig_main.build_source_page_content(
+        "Конное шоу «Приключение Вани»", case["accepted_description"], case["source_url"],
+        event_summary=summary, catbox_urls=[],
+    )
+    from telegraph.utils import html_to_nodes
+
+    visible = _node_text(html_to_nodes(rendered))
+    for fragment in (
+        "Семьям от четырёх человек — 800 ₽ за каждого",
+        "До трёх лет вход бесплатный, катание не включено",
+        "«Балтийское долголетие» участники проходят бесплатно",
+        "сопровождающие платят 800 ₽",
+        "+7 (950) 673-02-13",
+    ):
+        assert fragment in visible
+    assert "от 800 до 1000 руб." in visible
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case_name", ["horse11245", "short_paid", "short_free", "merged_programme"])
+async def test_event_renderer_preserves_accepted_description_and_summary(
+    tmp_path, monkeypatch, case_name,
+):
+    # Unlike the global conftest mock, this is the real Event -> HTML -> nodes path.
+    m = importlib.reload(orig_main)
+    import smart_event_update as su
+
+    case = json.loads(
+        (Path(__file__).parent / "fixtures/telegraph_11245_ticket_conditions.json").read_text()
+    )
+    anchors = dict(case["canonical_corrected"])
+    description = case["accepted_description"]
+    source = description
+    expected = (
+        "Детям и взрослым — 1000 ₽",
+        "Семьям от четырёх человек — 800 ₽ за каждого",
+        "До трёх лет вход бесплатный, катание не включено",
+        "«Балтийское долголетие» участники проходят бесплатно",
+        "сопровождающие платят 800 ₽",
+        "Обязательна предварительная бронь", "150 мест", "+7 (950) 673-02-13",
+        "автобус № 111", "тренер по джигитовке",
+    )
+    is_free = case_name in {"short_free", "merged_programme"}
+    if case_name == "short_paid":
+        description = source = "Квартет исполнит произведения Баха."
+        expected = (description,)
+    elif case_name == "short_free":
+        description = source = "Встреча с художниками и обсуждение их новых работ."
+        expected = (description,)
+    elif case_name == "merged_programme":
+        description = (
+            "Программа включает оранжерею Ботанического сада, пробы воды и почвы, "
+            "лаборатории КГТУ и итоговую проверочную работу.\n\n"
+            "Вход свободный. Дополнительный практикум — 700 ₽, по предварительной записи."
+        )
+        # A later source need not repeat the complete already accepted programme.
+        source = "Дополнительный практикум — 700 ₽, по предварительной записи."
+        expected = ("оранжерею Ботанического сада", "пробы воды и почвы", "лаборатории КГТУ",
+                    "итоговую проверочную работу", "Дополнительный практикум — 700 ₽",
+                    "по предварительной записи")
+    if is_free:
+        anchors.update(ticket_price_min=None, ticket_price_max=None)
+
+    editor_calls = []
+
+    async def lossy_editor(**kwargs):
+        editor_calls.append(kwargs["label"])
+        # Fixed destructive editor output tests routing, not model compliance.
+        return "Общий анонс без условий участия."
+
+    monkeypatch.setattr(su, "_llm_remove_infoblock_logistics", lossy_editor)
+    monkeypatch.setattr(m, "get_telegraph_token", lambda: "test-token")
+    monkeypatch.setattr(m, "Telegraph", FakeTG)
+    monkeypatch.setenv("TELEGRAPH_VERIFY_EDITABLE_ON_NOCHANGE", "0")
+    published = []
+
+    async def capture_page(*args, **kwargs):
+        published.append(kwargs["content"])
+        return {"url": "https://telegra.ph/accepted-description", "path": "accepted-description"}
+
+    monkeypatch.setattr(m, "telegraph_create_page", capture_page)
+    monkeypatch.setattr(m, "telegraph_edit_page", capture_page)
+    db = m.Database(str(tmp_path / "accepted-render.sqlite"))
+    await db.init()
+    try:
+        async with db.get_session() as session:
+            ev = m.Event(
+                title="Конное шоу «Приключение Вани»" if case_name == "horse11245" else "Событие",
+                description=description, source_text=source,
+                source_post_url=case["source_url"] if case_name == "horse11245" else None,
+                is_free=is_free, ticket_link="https://example.org/register",
+                **anchors,
+            )
+            session.add(ev)
+            await session.commit()
+            event_id = ev.id
+        await m.update_telegraph_event_page(event_id, db, None)
+        visible = " ".join(_node_text(published[0]).split())
+        for fragment in expected:
+            assert fragment in visible
+        assert "Комсомольск" in visible
+        assert "15:00" in visible
+        assert ("Бесплатно, по регистрации" if is_free else "от 800 до 1000 руб.") in visible
+        assert not editor_calls
+        async with db.get_session() as session:
+            assert (await session.get(m.Event, event_id)).description == description
+        # Rebuilding the same accepted event is deterministic and does not republish.
+        await m.update_telegraph_event_page(event_id, db, None)
+        assert len(published) == 1
+    finally:
+        await db.close()

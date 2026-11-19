@@ -159,7 +159,9 @@ async def test_public_notice_gate_and_superseded_recovery(config, tmp_path):
 
     async def gate(value, proposed, mode):
         seen.append((value, proposed["lifecycle_status"]))
-        raise ToolExecutionError("PUBLIC_TEXT_FACT_CONFLICT")
+        if value == "Still active":
+            raise ToolExecutionError("PUBLIC_TEXT_FACT_CONFLICT")
+        return value
 
     events.text_gate = gate
     with pytest.raises(ToolExecutionError):
