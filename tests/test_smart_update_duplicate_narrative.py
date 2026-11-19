@@ -64,15 +64,17 @@ async def test_duplicate_source_preserves_narrative_and_managed_vk(tmp_path, mon
         if change == "cleanup":
             monkeypatch.setattr(su, "_description_has_foreign_schedule_noise", lambda *_a, **_kw: True)
         added = ["После занятия можно забрать картину домой."] if change in {"added_fact", "added_fact_title"} else []
+        unchanged = change in {"duplicate", "age_provenance", "duplicate_gallery", "restored_gallery", "expanded_title"}
         monkeypatch.setattr(su, "_llm_merge_event", AsyncMock(return_value={
-            "title": "Мастер-класс «Прибрежный покой»" if change in {"expanded_title", "added_fact_title"} else "Прибрежный покой", "description": "Альтернативная редакция прежнего текста.",
+            "title": "Мастер-класс «Прибрежный покой»" if change in {"expanded_title", "added_fact_title"} else "Прибрежный покой", "description": original if unchanged else "Альтернативная редакция прежнего текста.",
             "added_facts": added, "duplicate_facts": [fact], "conflict_facts": [],
             "skipped_conflicts": [], "ticket_price_min": 900 if change == "ticket" else 800,
             "ticket_price_max": 900 if change == "ticket" else 800,
         }))
         narrative = AsyncMock(return_value="Новая редакция: участники рисуют картину акрилом на картоне.")
         monkeypatch.setattr(su, "_llm_fact_first_description_md_bounded", narrative)
-        monkeypatch.setattr(su, "_ask_gemma_json", AsyncMock(return_value={"missing": [], "extra": []}))
+        coverage = AsyncMock(return_value={"missing": [], "extra": []})
+        monkeypatch.setattr(su, "_ask_gemma_json", coverage)
         monkeypatch.setattr(su, "_llm_build_short_description", AsyncMock(return_value="Иной краткий текст о рисовании картины акрилом на картоне для гостей музея."))
         monkeypatch.setattr(su, "_llm_build_search_digest", AsyncMock(return_value="Иной поисковый текст."))
         if change.startswith("age_"):
@@ -127,6 +129,7 @@ async def test_duplicate_source_preserves_narrative_and_managed_vk(tmp_path, mon
                 await real_schedule(db, saved, **schedule.await_args.kwargs)
                 assert all(call.args[2] != main.JobTask.vk_sync for call in enqueue.await_args_list)
             narrative.assert_not_awaited()
+            coverage.assert_not_awaited()
             if change == "age_provenance":
                 assert saved.age_restriction_source_url == candidate.source_url
                 assert saved.age_restriction == "12+"

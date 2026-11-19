@@ -14239,6 +14239,8 @@ async def _llm_merge_event(
         "если ниже или равен — сохраняй старую версию. "
         "Исключение: явное исправление, замена или отмена из источника этого события при равном доверии заменяет опровергнутую деталь. "
         "Простой пропуск детали в новом источнике не является отменой и не позволяет её удалить. "
+        "Если все подтверждённые детали уже верно отражены в event_before.description, верни это описание дословно, без стилистического рерайта. "
+        "Если факт уже в event_before.facts, но описание ещё не отражает его исправление или отмену, обнови описание независимо от duplicate_facts. "
         "Поля event_before.event_type и candidate.event_type — прежние результаты классификации, не цитаты источников. "
         "В event_type_decision верни русский тип события и дословную evidence_quote из candidate.text или candidate.poster_texts, "
         "только если источник явно подтверждает формат именно выбранного события; иначе null. "
@@ -14261,7 +14263,7 @@ async def _llm_merge_event(
         "и особенно не ставь пустую строку между инициалом и фамилией (например `Н. Любимова`). "
         f"{_description_emoji_prompt_rule()}"
         "Без хэштегов. "
-        "Описание должно быть журналистским рерайтом (не дословно), без выдуманных деталей. "
+        "Новые фрагменты из источника излагай журналистским рерайтом без выдуманных деталей; уже принятое описание без смысловых изменений не переписывай. "
         "Запрещено придумывать факты, которых нет в данных (в т.ч. нельзя писать 'премьера', 'впервые', 'аншлаг' и т.п., "
         "если это явно не сказано в источниках). "
         "Избегай нейросетевых клише и пустых оценок/прогнозов: "
@@ -22111,13 +22113,15 @@ async def _smart_event_update_impl(
 
                     # Review a merge against the accepted narrative; only empty descriptions need a new writer.
                     duplicate_only_narrative = duplicate_only_narrative and "title" not in updated_keys
-                    if duplicate_only_narrative:
+                    clean_description = _dedupe_description(clean_description) or clean_description
+                    clean_description = _dedupe_paragraphs_preserving_formatting(clean_description) or clean_description
+                    clean_description = _clip((clean_description or "").strip(), SMART_UPDATE_DESCRIPTION_MAX_CHARS)
+                    if duplicate_only_narrative and (not clean_description or clean_description == before_description.strip()):
                         clean_description = merge_digest_from_llm = None
                         has_new_text = False
                         merge_fact_first_used = True
                         logger.info("smart_update.duplicate_narrative_preserved event_id=%s", event_db.id)
                     elif SMART_UPDATE_FACT_FIRST and not SMART_UPDATE_LLM_DISABLED and before_description.strip():
-                        clean_description = _clip((clean_description or "").strip(), SMART_UPDATE_DESCRIPTION_MAX_CHARS)
                         cov_prompt, cov_schema = _fact_first_coverage_prompt(
                             facts_text_clean=_facts_text_clean_from_facts([*facts_before_list, *added_facts]),
                             description=clean_description,
@@ -22139,6 +22143,7 @@ async def _smart_event_update_impl(
                         if _fact_first_coverage_is_valid(cov) and not cov["missing"] and not cov["extra"]:
                             if clean_description != (event_db.description or "").strip():
                                 event_db.description = clean_description
+                                duplicate_only_narrative = False
                                 updated_fields = True
                                 updated_keys.append("description")
                         else:
@@ -22628,13 +22633,14 @@ async def _smart_event_update_impl(
             event_db.emoji = candidate.emoji
             updated_fields = True
             updated_keys.append("emoji")
+        description_changed = (event_db.description or "").strip() != before_description.strip()
         existing_short = _clean_short_description(getattr(event_db, "short_description", None))
         short_needs_refresh = not _is_short_description_acceptable(
             existing_short, min_words=12, max_words=16
         )
-        if ("description" in updated_keys) or has_new_text:
+        if description_changed or has_new_text:
             short_needs_refresh = True
-        if short_needs_refresh and not duplicate_only_narrative and (not merge_fact_first_used or "description" in updated_keys):
+        if short_needs_refresh and not duplicate_only_narrative and (not merge_fact_first_used or description_changed):
             normalized_short: str | None = None
             try:
                 normalized_short = await _llm_build_short_description(
@@ -22644,7 +22650,7 @@ async def _smart_event_update_impl(
                 )
             except Exception:
                 normalized_short = None
-            if not normalized_short:
+            if not normalized_short and not merge_fact_first_used:
                 candidate_short = _clean_short_description(candidate.raw_excerpt)
                 if _is_short_description_acceptable(
                     candidate_short, min_words=12, max_words=16
@@ -22661,7 +22667,7 @@ async def _smart_event_update_impl(
         # search_digest is a short snippet used for search/cards and also shown on Telegraph
         # before long descriptions. It should be refreshed when description meaningfully changes.
         normalized_candidate_digest = _clean_search_digest(candidate.search_digest)
-        digest_should_refresh = ("description" in updated_keys) or (has_new_text and not merge_fact_first_used)
+        digest_should_refresh = description_changed or (has_new_text and not merge_fact_first_used)
         new_digest = None
         if digest_should_refresh:
             if merge_digest_from_llm and (not merge_fact_first_used):
@@ -22675,12 +22681,12 @@ async def _smart_event_update_impl(
                     )
                 except Exception:
                     new_digest = None
-        if not new_digest:
-            # Fallback: accept candidate-provided digest (e.g. parsers), even if event already had one.
+        if not new_digest and not merge_fact_first_used:
+            # A reviewed merge derives summaries from the accepted description, not unreviewed candidate prose.
             new_digest = normalized_candidate_digest
         if not new_digest:
             new_digest = _fallback_digest_from_description(event_db.description)
-        if not duplicate_only_narrative and (not merge_fact_first_used or "description" in updated_keys) and new_digest and (new_digest.strip() != (event_db.search_digest or "").strip()):
+        if not duplicate_only_narrative and (not merge_fact_first_used or description_changed) and new_digest and (new_digest.strip() != (event_db.search_digest or "").strip()):
             event_db.search_digest = new_digest
             updated_fields = True
             updated_keys.append("search_digest")
