@@ -1890,6 +1890,8 @@ async def run_vk_auto_import(
                     source_url,
                     row_timeout_sec,
                 )
+                if trigger.startswith("scheduled"):
+                    return  # The terminal reason and URL are in the batch summary.
                 try:
                     await bot.send_message(
                         chat_id,
@@ -1920,6 +1922,8 @@ async def run_vk_auto_import(
                     getattr(post_obj, "id", None),
                     source_url,
                 )
+                if trigger.startswith("scheduled"):
+                    return
                 try:
                     await bot.send_message(
                         chat_id,
@@ -2152,8 +2156,13 @@ async def run_vk_auto_import(
         f"events updated: {len(set(report.updated_event_ids))}\n"
         f"took_sec: {took:.1f}"
     )
+    if report.errors:
+        summary += "\n\nОшибки:\n" + "\n".join(report.errors)
     try:
-        await bot.send_message(chat_id, summary, disable_web_page_preview=True)
+        from main import split_text
+
+        for part in split_text(summary):
+            await bot.send_message(chat_id, part, disable_web_page_preview=True)
     except Exception:
         logger.exception("vk_auto: failed to send summary")
 

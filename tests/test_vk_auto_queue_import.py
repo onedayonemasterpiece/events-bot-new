@@ -370,7 +370,22 @@ async def test_vk_auto_import_wait_mode_reports_heavy_gate_wait(tmp_path, monkey
 
 
 @pytest.mark.asyncio
-async def test_vk_auto_import_terminalizes_row_timeout_without_retry(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "trigger,failure,row_count,summary_fails",
+    [
+        ("scheduled", "timeout", 1, False),
+        ("manual", "timeout", 1, False),
+        ("scheduled_catchup", "timeout", 1, False),
+        ("scheduled", "exception", 1, False),
+        ("manual", "exception", 1, False),
+        ("scheduled_catchup", "exception", 1, False),
+        ("scheduled", "exception", 45, False),
+        ("scheduled", "exception", 1, True),
+    ],
+)
+async def test_vk_auto_import_row_failure_notifications_keep_terminal_outcome(
+    tmp_path, monkeypatch, caplog, trigger, failure, row_count, summary_fails
+):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -379,30 +394,71 @@ async def test_vk_auto_import_terminalizes_row_timeout_without_retry(tmp_path, m
             "INSERT INTO vk_source(group_id, screen_name, name, location, default_time, default_ticket_link) VALUES(?,?,?,?,?,?)",
             (1, "club1", "Test Community", "Научная библиотека", None, None),
         )
-        await conn.execute(
+        await conn.executemany(
             "INSERT INTO vk_inbox(id, group_id, post_id, date, text, matched_kw, has_date, event_ts_hint, status) VALUES(?,?,?,?,?,?,?,?,?)",
-            (1, 1, 100, 0, "stub", vk_intake.OCR_PENDING_SENTINEL, 0, None, "pending"),
+            [
+                (i + 1, 1, 100 + i, 0, "stub", vk_intake.OCR_PENDING_SENTINEL, 0, None, "pending")
+                for i in range(row_count)
+            ],
         )
         await conn.commit()
 
     monkeypatch.setenv("VK_AUTO_IMPORT_ROW_TIMEOUT_SEC", "0.01")
+    monkeypatch.setenv("VK_AUTO_IMPORT_SEND_PROGRESS", "1")
+    monkeypatch.setenv("VK_AUTO_IMPORT_HEAVY_MODE", "off")
 
     async def fake_process(*_args, **_kwargs):
-        await asyncio.sleep(0.05)
+        if failure == "timeout":
+            await asyncio.sleep(0.05)
+        else:
+            raise RuntimeError("simulated row failure " + "x" * 200)
+
+    async def no_prefetch(*_args, **_kwargs):
+        return None
 
     monkeypatch.setattr(vk_auto_queue, "_process_vk_inbox_row", fake_process)
+    monkeypatch.setattr(vk_auto_queue, "_prefetch_vk_inbox_row", no_prefetch)
 
-    bot = DummyBot()
-    report = await vk_auto_queue.run_vk_auto_import(db, bot, chat_id=1, limit=1, operator_id=123)
+    class ReportBot(DummyBot):
+        async def send_message(self, chat_id, text, **kwargs):
+            if summary_fails and "VK auto import завершён" in text:
+                raise RuntimeError("simulated Telegram delivery failure")
+            await super().send_message(chat_id, text, **kwargs)
 
-    assert report.inbox_failed == 1
-    assert report.inbox_failed_technical == 1
+    bot = ReportBot()
+    report = await vk_auto_queue.run_vk_auto_import(
+        db, bot, chat_id=1, limit=row_count, operator_id=123, trigger=trigger
+    )
+
+    reason = "ROW_TIMEOUT" if failure == "timeout" else "UNEXPECTED_ERROR"
+    assert report.inbox_failed == row_count
+    assert report.inbox_failed_technical == row_count
     assert report.inbox_deferred == 0
+    assert len(report.errors) == row_count
     assert any(
-        "failed_technical https://vk.com/wall-1_100: ROW_TIMEOUT" in err
+        f"failed_technical https://vk.com/wall-1_100: {reason}" in err
         for err in report.errors
     )
-    assert any("таймаут обработки поста" in text for _, text in bot.messages)
+    immediate_errors = [text for _, text in bot.messages if text.startswith("❌ VK auto import:")]
+    assert len(immediate_errors) == (1 if trigger == "manual" else 0)
+    if summary_fails:
+        assert bot.messages == []
+        assert "vk_auto: failed to send summary" in caplog.text
+    else:
+        messages = [text for _, text in bot.messages]
+        summary_start = next(i for i, text in enumerate(messages) if "VK auto import завершён" in text)
+        summary_parts = messages[summary_start:]
+        summary = "\n".join(summary_parts)
+        assert f"inbox failed: {row_count}" in summary
+        for i in range(row_count):
+            assert f"failed_technical https://vk.com/wall-1_{100 + i}: {reason}" in summary
+        assert all(len(part) <= 4096 for part in summary_parts)
+        if row_count == 1:
+            assert len(summary_parts) == 1
+        else:
+            assert 1 < len(summary_parts) < row_count
+        if trigger != "manual":
+            assert len(messages) == len(summary_parts)
 
     async with db.raw_conn() as conn:
         ops_cur = await conn.execute(
@@ -411,12 +467,9 @@ async def test_vk_auto_import_terminalizes_row_timeout_without_retry(tmp_path, m
         ops_row = await ops_cur.fetchone()
         assert ops_row is not None
         assert ops_row[0] == "failed"
-        cur = await conn.execute("SELECT status, last_typed_reason, next_attempt_at FROM vk_inbox WHERE id=1")
-        row = await cur.fetchone()
-        assert row is not None
-        assert row[0] == "failed_technical"
-        assert row[1] == "ROW_TIMEOUT"
-        assert row[2] is None
+        cur = await conn.execute("SELECT status, last_typed_reason, next_attempt_at FROM vk_inbox")
+        rows = await cur.fetchall()
+        assert rows == [("failed_technical", reason, None)] * row_count
 
 
 @pytest.mark.asyncio
@@ -1187,6 +1240,10 @@ async def test_vk_auto_import_fifteen_row_batch_is_fully_terminal_without_retry(
         report.inbox_imported + report.inbox_rejected + report.inbox_failed
     )
     async with db.raw_conn() as conn:
+        status = await (
+            await conn.execute("SELECT status FROM ops_run ORDER BY id DESC LIMIT 1")
+        ).fetchone()
+        assert status == ("partial",)
         rows = await (
             await conn.execute(
                 "SELECT status,next_attempt_at,COUNT(*) FROM vk_inbox "
