@@ -152,7 +152,7 @@ async def test_vk_batch_sends_one_final_report_with_links_and_failures(
 
     assert len(bot.messages) == 1
     summary = bot.messages[0][1]
-    assert summary.startswith("🏁 VK auto import завершён")
+    assert summary.splitlines()[0] == "🏁 VK auto import завершён: частично"
     assert "events created: 1" in summary
     assert "events updated: 1" in summary
     assert "inbox failed: 1" in summary

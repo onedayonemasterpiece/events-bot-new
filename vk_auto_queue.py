@@ -1737,8 +1737,23 @@ async def run_vk_auto_import(
         )
         report.errors.append(balance_error)
         logger.error("vk_auto: %s", balance_error)
+    terminal_status = (
+        "canceled"
+        if report.cancelled
+        else "failed"
+        if unresolved_rows > 0
+        else "partial"
+        if report.inbox_failed > 0 and report.inbox_processed > report.inbox_failed
+        else "failed"
+        if report.inbox_failed > 0
+        else "success"
+    )
+    terminal_label = {
+        "success": "успех", "partial": "частично",
+        "failed": "ошибка", "canceled": "отменён",
+    }[terminal_status]
     summary = (
-        "🏁 VK auto import завершён\n"
+        f"🏁 VK auto import завершён: {terminal_label}\n"
         f"batch: {batch_id}\n"
         f"limit: {'all' if unbounded else limit_int}\n"
         f"include_skipped: {1 if include_skipped else 0}\n"
@@ -1798,22 +1813,11 @@ async def run_vk_auto_import(
         from main import split_text
 
         for part in split_text(summary):
-            await bot.send_message(chat_id, part, disable_web_page_preview=True)
+            await bot.send_message(chat_id, part, parse_mode=None, disable_web_page_preview=True)
     except Exception:
         logger.exception("vk_auto: failed to send summary")
 
     _clear_vk_auto_import_cancel(chat_id=chat_id, operator_id=operator_id)
-    terminal_status = (
-        "canceled"
-        if report.cancelled
-        else "failed"
-        if unresolved_rows > 0
-        else "partial"
-        if report.inbox_failed > 0 and report.inbox_processed > report.inbox_failed
-        else "failed"
-        if report.inbox_failed > 0
-        else "success"
-    )
     await finish_ops_run(
         db,
         run_id=ops_run_id,
