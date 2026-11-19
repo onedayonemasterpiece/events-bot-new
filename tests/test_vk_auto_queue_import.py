@@ -19,7 +19,6 @@ import vk_intake
 import vk_auto_queue
 import poster_ocr
 from poster_media import PosterMedia
-from source_parsing.handlers import AddedEventInfo
 from smart_event_update import SmartUpdateResult, SmartUpdateTerminalOutcome
 from smart_update_state import ProductExclusionReason
 from source_parse_contract import (
@@ -61,6 +60,114 @@ class DummyBot:
         class Me:
             username = "eventsbotTestBot"
         return Me()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("trigger", ["manual", "scheduled_catchup"])
+async def test_vk_batch_sends_one_final_report_with_links_and_failures(
+    tmp_path, monkeypatch, trigger
+):
+    from models import Event
+    from types import SimpleNamespace
+
+    db = Database(str(tmp_path / "batch-summary.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id,screen_name,name,location) "
+            "VALUES(1,'club1','Source','Venue')"
+        )
+        await conn.execute(
+            'INSERT INTO "user"(user_id,is_superadmin,blocked) VALUES(123,1,0)'
+        )
+        await conn.executemany(
+            "INSERT INTO vk_inbox(id,group_id,post_id,date,text,has_date,status) "
+            "VALUES(?,1,?,0,?,0,'pending')",
+            [(i, 100 + i, f"case-{i}") for i in range(1, 4)],
+        )
+        await conn.commit()
+
+    async def fake_fetch(_group_id, post_id, **_kwargs):
+        return (
+            f"case-{post_id - 100}", [], datetime.now(timezone.utc), {},
+            vk_auto_queue.VkFetchStatus(True, "ok"),
+        )
+
+    async def fake_build(text, **_kwargs):
+        if text == "case-3":
+            raise RuntimeError("simulated provider unavailable")
+        return [vk_intake.EventDraft(
+            title=text, date="2026-12-31", time="18:30", venue="Venue"
+        )], None
+
+    async def fake_persist(draft, *_args, **_kwargs):
+        eid = 1000 + int(draft.title[-1])
+        async with db.get_session() as session:
+            session.add(Event(
+                id=eid, title=draft.title, description="Description",
+                source_text=draft.title, date=draft.date, time=draft.time,
+                location_name="Venue", telegraph_url=f"https://telegra.ph/stale-{eid}",
+            ))
+            await session.commit()
+        return vk_intake.PersistResult(
+            event_id=eid, telegraph_url=f"https://telegra.ph/stale-{eid}",
+            ics_supabase_url=None, ics_tg_url=None, event_date=draft.date,
+            event_end_date=None, event_time=draft.time, event_type=None, is_free=False,
+            smart_result=SmartUpdateResult(
+                outcome=(SmartUpdateTerminalOutcome.CREATED if eid == 1001
+                         else SmartUpdateTerminalOutcome.MERGED),
+                event_id=eid,
+            ),
+        )
+
+    async def fake_inline_jobs(_db, _bot, *, event_id, **_kwargs):
+        async with db.raw_conn() as conn:
+            await conn.execute(
+                "UPDATE event SET telegraph_url=? WHERE id=?",
+                (f"https://telegra.ph/final-{event_id}", event_id),
+            )
+            await conn.commit()
+
+    monkeypatch.setenv("VK_AUTO_IMPORT_SEND_PROGRESS", "1")
+    monkeypatch.setenv("VK_AUTO_IMPORT_HEAVY_MODE", "off")
+    monkeypatch.setenv("VK_AUTO_IMPORT_INLINE_JOBS", "1")
+    monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
+    monkeypatch.setattr(vk_intake, "build_event_drafts", fake_build)
+    monkeypatch.setattr(vk_intake, "persist_event_and_pages", fake_persist)
+    monkeypatch.setattr(main, "run_event_update_jobs", fake_inline_jobs)
+
+    bot = DummyBot()
+    if trigger == "manual":
+        # The operator command is an unbounded batch, distinct from accepting
+        # one selected source through _vkrev_import_flow.
+        message = SimpleNamespace(
+            from_user=SimpleNamespace(id=123), chat=SimpleNamespace(id=1),
+            text="/vk_auto_import",
+        )
+        await main.handle_vk_auto_import(message, db, bot)
+    else:
+        await vk_auto_queue.run_vk_auto_import(
+            db, bot, chat_id=1, operator_id=123, limit=3, trigger=trigger
+        )
+
+    assert len(bot.messages) == 1
+    summary = bot.messages[0][1]
+    assert summary.startswith("🏁 VK auto import завершён")
+    assert "events created: 1" in summary
+    assert "events updated: 1" in summary
+    assert "inbox failed: 1" in summary
+    for eid in (1001, 1002):
+        assert f"https://telegra.ph/final-{eid}" in summary
+        assert f"start=log_{eid}" in summary
+        assert f"https://telegra.ph/stale-{eid}" not in summary
+    for post_id in (101, 102, 103):
+        assert f"https://vk.com/wall-1_{post_id}" in summary
+    assert "failed_technical https://vk.com/wall-1_103: TECHNICAL_ERROR" in summary
+    async with db.raw_conn() as conn:
+        status = await (await conn.execute(
+            "SELECT status FROM ops_run ORDER BY id DESC LIMIT 1"
+        )).fetchone()
+    assert status == ("partial",)
 
 
 def test_schedule_cards_use_expanded_bounded_photo_cap(monkeypatch):
@@ -340,7 +447,7 @@ async def test_manual_vk_auto_import_does_not_wait_for_heavy_gate_by_default(tmp
 
 
 @pytest.mark.asyncio
-async def test_vk_auto_import_wait_mode_reports_heavy_gate_wait(tmp_path, monkeypatch):
+async def test_vk_auto_import_wait_mode_reports_only_final_outcome(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -360,13 +467,13 @@ async def test_vk_auto_import_wait_mode_reports_heavy_gate_wait(tmp_path, monkey
     monkeypatch.setenv("VK_AUTO_IMPORT_HEAVY_MODE", "wait")
     monkeypatch.setattr(vk_auto_queue.vk_review, "pick_next", fake_pick_next)
     monkeypatch.setattr(vk_auto_queue, "current_heavy_meta", lambda: BusyMeta())
-    monkeypatch.setattr(vk_auto_queue, "describe_heavy_meta", lambda _meta: "tg_monitoring (scheduled)")
     monkeypatch.setattr(vk_auto_queue, "heavy_operation", fake_heavy_operation)
 
     bot = DummyBot()
     await vk_auto_queue.run_vk_auto_import(db, bot, chat_id=1, limit=1, operator_id=123)
 
-    assert any("ждёт завершения другой тяжёлой операции" in text for _, text in bot.messages)
+    assert len(bot.messages) == 1
+    assert "VK auto import завершён" in bot.messages[0][1]
 
 
 @pytest.mark.asyncio
@@ -378,6 +485,7 @@ async def test_vk_auto_import_wait_mode_reports_heavy_gate_wait(tmp_path, monkey
         ("scheduled_catchup", "timeout", 1, False),
         ("scheduled", "exception", 1, False),
         ("manual", "exception", 1, False),
+        ("manual", "exception", 3, False),
         ("scheduled_catchup", "exception", 1, False),
         ("scheduled", "exception", 45, False),
         ("scheduled", "exception", 1, True),
@@ -440,7 +548,7 @@ async def test_vk_auto_import_row_failure_notifications_keep_terminal_outcome(
         for err in report.errors
     )
     immediate_errors = [text for _, text in bot.messages if text.startswith("❌ VK auto import:")]
-    assert len(immediate_errors) == (1 if trigger == "manual" else 0)
+    assert immediate_errors == []
     if summary_fails:
         assert bot.messages == []
         assert "vk_auto: failed to send summary" in caplog.text
@@ -453,12 +561,11 @@ async def test_vk_auto_import_row_failure_notifications_keep_terminal_outcome(
         for i in range(row_count):
             assert f"failed_technical https://vk.com/wall-1_{100 + i}: {reason}" in summary
         assert all(len(part) <= 4096 for part in summary_parts)
-        if row_count == 1:
+        if row_count <= 3:
             assert len(summary_parts) == 1
         else:
             assert 1 < len(summary_parts) < row_count
-        if trigger != "manual":
-            assert len(messages) == len(summary_parts)
+        assert len(messages) == len(summary_parts)
 
     async with db.raw_conn() as conn:
         ops_cur = await conn.execute(
@@ -1225,10 +1332,13 @@ async def test_vk_auto_import_fifteen_row_batch_is_fully_terminal_without_retry(
     report = await vk_auto_queue.run_vk_auto_import(
         db, bot, chat_id=1, limit=15, operator_id=123, trigger=trigger
     )
-    assert any("Разбираю VK пост" in text for _, text in bot.messages) == (trigger == "manual")
-    if trigger != "manual":
-        assert len(bot.messages) == 1
-        assert "VK auto import завершён" in bot.messages[0][1]
+    assert all("Разбираю VK пост" not in text for _, text in bot.messages)
+    assert "VK auto import завершён" in bot.messages[0][1]
+    assert len(bot.messages) < 15  # One logical report, split only for Telegram's limit.
+    summary = "\n".join(text for _, text in bot.messages)
+    for post_id in range(101, 116):
+        assert f"https://vk.com/wall-1_{post_id}" in summary
+    assert "confirmed_no_event" in summary
 
     assert report.inbox_processed == 15
     assert report.inbox_imported == 0
@@ -1876,14 +1986,11 @@ async def test_vk_auto_import_skips_redundant_telegraph_wait_when_inline_jobs_en
         captured_allowed.append(set(_kwargs.get("allowed_tasks") or ()))
         return None
 
-    async def fake_report(*_args, **_kwargs):
-        return True
 
     monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
     monkeypatch.setattr(vk_intake, "build_event_drafts", fake_build_event_drafts)
     monkeypatch.setattr(vk_intake, "persist_event_and_pages", fake_persist)
     monkeypatch.setattr(main, "run_event_update_jobs", fake_run_jobs)
-    monkeypatch.setattr(vk_auto_queue, "_send_unified_event_report", fake_report)
 
     bot = DummyBot()
     await vk_auto_queue.run_vk_auto_import(db, bot, chat_id=1, limit=1, operator_id=123)
@@ -1950,13 +2057,10 @@ async def test_vk_auto_import_logs_stage_timings_for_slow_rows_without_pipeline_
             ),
         )
 
-    async def fake_report(*_args, **_kwargs):
-        return True
 
     monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
     monkeypatch.setattr(vk_intake, "build_event_drafts", fake_build_event_drafts)
     monkeypatch.setattr(vk_intake, "persist_event_and_pages", fake_persist)
-    monkeypatch.setattr(vk_auto_queue, "_send_unified_event_report", fake_report)
 
     caplog.set_level(logging.INFO)
     bot = DummyBot()
@@ -1968,48 +2072,6 @@ async def test_vk_auto_import_logs_stage_timings_for_slow_rows_without_pipeline_
     )
 
 
-@pytest.mark.asyncio
-async def test_vk_auto_report_is_unified_and_contains_fact_stats(tmp_path, monkeypatch):
-    db = Database(str(tmp_path / "db.sqlite"))
-    await db.init()
-
-    async def fake_added_info(_db, _event_id, _source, **_kwargs):
-        return AddedEventInfo(
-            event_id=2417,
-            title="Фигаро",
-            source="vk",
-            telegraph_url="https://telegra.ph/Figaro-02-11",
-            ics_url="https://example.test/figaro.ics",
-            log_cmd="/log 2417",
-            date="2026-02-12",
-            time="19:00",
-            source_url="https://vk.com/wall-30777579_14572",
-            fact_stats={"added": 5, "duplicate": 3, "conflict": 1, "note": 2},
-        )
-
-    monkeypatch.setattr("source_parsing.handlers.build_added_event_info", fake_added_info)
-
-    bot = DummyBot()
-    await vk_auto_queue._send_unified_event_report(
-        db,
-        bot,
-        1,
-        created=[2417],
-        updated=[],
-        source_url="https://vk.com/wall-30777579_14572",
-    )
-
-    assert bot.messages, "VK auto report was not sent"
-    _chat_id, text = bot.messages[-1]
-    assert "Smart Update (детали событий)" in text
-    assert "✅ Созданные события: 1" in text
-    # Telegraph link is now embedded into the event title; the duplicated "Telegraph:" line
-    # should not be present when telegraph_url exists.
-    assert 'href="https://telegra.ph/Figaro-02-11"' in text
-    assert "Telegraph:" not in text
-    assert "Факты: ✅5 ↩️3 ⚠️1 ℹ️2" in text
-    assert "Иллюстрации:" in text
-    assert "start=log_2417" in text
 
 
 @pytest.mark.asyncio
@@ -2307,9 +2369,6 @@ async def test_vk_auto_queue_terminalizes_deleted_post_as_missing_evidence(tmp_p
         report=report,
         festival_names=None,
         festival_alias_pairs=None,
-        progress_message_id=None,
-        progress_current_no=1,
-        progress_total_txt="1",
     )
 
     assert report.inbox_rejected == 0
@@ -2393,9 +2452,6 @@ async def test_vk_auto_queue_rate_limit_terminalizes_after_inline_attempt(tmp_pa
         report=report,
         festival_names=None,
         festival_alias_pairs=None,
-        progress_message_id=None,
-        progress_current_no=1,
-        progress_total_txt="1",
     )
 
     assert report.inbox_deferred == 0

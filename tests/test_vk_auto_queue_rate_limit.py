@@ -74,9 +74,6 @@ async def test_vk_auto_queue_rate_limit_is_visible_terminal_for_current_batch(tm
         report=report,
         festival_names=None,
         festival_alias_pairs=None,
-        progress_message_id=None,
-        progress_current_no=1,
-        progress_total_txt="1",
     )
 
     assert report.inbox_deferred == 0
@@ -147,9 +144,6 @@ async def test_vk_auto_queue_rate_limit_does_not_rearm_existing_attempt_counter(
         report=report,
         festival_names=None,
         festival_alias_pairs=None,
-        progress_message_id=None,
-        progress_current_no=1,
-        progress_total_txt="1",
     )
 
     assert report.inbox_deferred == 0
