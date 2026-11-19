@@ -2875,7 +2875,7 @@ def _format_daily_recommend_today_line(event: Event) -> str:
     if link_href:
         title = f'<a href="{html.escape(link_href)}">{title}</a>'
     details: list[str] = []
-    if getattr(event, "time", None):
+    if getattr(event, "time", None) and not getattr(event, "time_is_default", False):
         details.append(str(event.time).strip())
     if getattr(event, "location_name", None):
         details.append(str(event.location_name).strip())
@@ -15410,7 +15410,6 @@ async def handle_vk_queue(message: types.Message, db: Database, bot: Bot) -> Non
 async def handle_vk_auto_import(message: types.Message, db: Database, bot: Bot) -> None:
     """Auto-import VK inbox queue via Smart Update (LLM)."""
     import shlex
-    import time
 
     async with db.get_session() as session:
         user = await session.get(User, message.from_user.id)
@@ -15422,7 +15421,6 @@ async def handle_vk_auto_import(message: types.Message, db: Database, bot: Bot) 
     # `/vk_auto_import` processes the whole active queue.
     # Scheduler runs still use VK_AUTO_IMPORT_LIMIT (default 25).
     limit: int = 0
-    limit_specified = False
     # `skipped` is operator-controlled deferral; don't requeue it implicitly.
     include_skipped = False
     text = message.text or ""
@@ -15434,11 +15432,9 @@ async def handle_vk_auto_import(message: types.Message, db: Database, bot: Bot) 
         low_tok = tok.strip().lower()
         if low_tok in {"all", "*", "max", "infinite", "inf"}:
             limit = 0
-            limit_specified = True
             continue
         if tok.isdigit():
             limit = int(tok)
-            limit_specified = True
             continue
         if tok.startswith("--limit="):
             raw = (tok.split("=", 1)[1] or "").strip()
@@ -15450,11 +15446,9 @@ async def handle_vk_auto_import(message: types.Message, db: Database, bot: Bot) 
                     limit = int(raw)
                 except ValueError:
                     pass
-            limit_specified = True
             continue
         if tok.strip().lower() in {"--all", "--limit-all", "--limit_all"}:
             limit = 0
-            limit_specified = True
             continue
         flag = tok.strip().lower()
         if flag in {"--include-skipped", "--include_skipped", "--requeue-skipped", "--requeue_skipped"}:
@@ -15464,51 +15458,6 @@ async def handle_vk_auto_import(message: types.Message, db: Database, bot: Bot) 
 
     from vk_auto_queue import run_vk_auto_import
 
-    limit_label = "all" if int(limit) <= 0 else str(int(limit))
-    eligible_hint = ""
-    try:
-        from vk_review import release_stale_locks
-
-        await release_stale_locks(db)
-        async with db.raw_conn() as conn:
-            cur = await conn.execute("SELECT status, COUNT(*) FROM vk_inbox GROUP BY status")
-            rows = await cur.fetchall()
-            counts = {str(r[0]): int(r[1]) for r in (rows or []) if r and r[0] is not None}
-            reject_window_h = float(os.getenv("VK_REVIEW_REJECT_H", "2") or "2")
-            reject_window_h = max(0.0, reject_window_h)
-            reject_cutoff = int(time.time()) + int(reject_window_h * 3600)
-            statuses = ("pending", "skipped") if include_skipped else ("pending",)
-            placeholders = ",".join("?" for _ in statuses)
-            cur = await conn.execute(
-                f"""
-                SELECT COUNT(1)
-                FROM vk_inbox
-                WHERE status IN ({placeholders})
-                  AND (event_ts_hint IS NULL OR event_ts_hint >= ?)
-                """,
-                (*statuses, int(reject_cutoff)),
-            )
-            row = await cur.fetchone()
-            eligible = int((row[0] if row else 0) or 0)
-        eligible_hint = (
-            f" (к разбору сейчас: {eligible}; pending={counts.get('pending', 0)}, "
-            f"locked={counts.get('locked', 0)}, skipped={counts.get('skipped', 0)})"
-        )
-    except Exception:
-        eligible_hint = ""
-    opts: list[str] = []
-    if int(limit) > 0:
-        opts.append(f"limit={int(limit)}")
-    elif limit_specified:
-        opts.append("limit=all")
-    if include_skipped:
-        opts.append("include_skipped=1")
-    opts_txt = f" ({', '.join(opts)})" if opts else ""
-    await bot.send_message(
-        message.chat.id,
-        f"Запускаю авторазбор VK очереди{opts_txt}…{eligible_hint}",
-        disable_web_page_preview=True,
-    )
     await run_vk_auto_import(
         db,
         bot,

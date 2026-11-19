@@ -529,9 +529,6 @@ async def test_typed_provider_receipt_terminalizes_and_persists_attempt_metadata
         report=report,
         festival_names=None,
         festival_alias_pairs=None,
-        progress_message_id=None,
-        progress_current_no=1,
-        progress_total_txt="1",
     )
 
     async with db.raw_conn() as conn:
@@ -655,9 +652,6 @@ async def test_any_fetch_failure_replays_complete_envelope_into_typed_parser(
         report=report,
         festival_names=None,
         festival_alias_pairs=None,
-        progress_message_id=None,
-        progress_current_no=1,
-        progress_total_txt="1",
     )
     assert "outer event" in captured["text"]
     assert "generic repost" in captured["text"]
@@ -720,9 +714,6 @@ async def test_any_fetch_failure_keeps_legacy_packet_incomplete_without_parser(
         report=report,
         festival_names=None,
         festival_alias_pairs=None,
-        progress_message_id=None,
-        progress_current_no=1,
-        progress_total_txt="1",
     )
     async with db.raw_conn() as conn:
         row = await (await conn.execute(
@@ -778,9 +769,6 @@ async def test_fetch_failure_without_packet_uses_typed_terminal_not_stale_text(
         report=report,
         festival_names=None,
         festival_alias_pairs=None,
-        progress_message_id=None,
-        progress_current_no=1,
-        progress_total_txt="1",
     )
     async with db.raw_conn() as conn:
         row = await (await conn.execute(
@@ -874,9 +862,6 @@ async def test_fresh_fetch_persists_recursive_revision_before_typed_parser(tmp_p
         report=report,
         festival_names=None,
         festival_alias_pairs=None,
-        progress_message_id=None,
-        progress_current_no=1,
-        progress_total_txt="1",
     )
     async with db.raw_conn() as conn:
         rows = await (await conn.execute(

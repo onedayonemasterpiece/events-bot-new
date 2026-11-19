@@ -193,7 +193,9 @@ WebP-байтов и не перезаписывают perceptual-dHash URL.
 
 ## Fact-first (внедрено)
 
-Smart Update по умолчанию строит публичный текст (`description`, `short_description`, `search_digest`) по схеме **sources → facts → text** (вариант C+D из dry‑run), то есть **строго из извлечённых фактов**, а не из “сырых” текстов источников.
+При создании карточки и при пустом прежнем описании Smart Update строит публичный текст (`description`, `short_description`, `search_digest`) по схеме **sources → facts → text**. Ответ проверки покрытия должен содержать оба массива `missing` и `extra`; пустой или некорректный ответ не означает принятие текста.
+
+При повторном импорте с непустым принятым описанием используется готовый текст существующего semantic merge. Та же проверка покрытия получает прежнее описание, факты и исходный текст/OCR кандидата. Конкретные детали программы сохраняются даже при неполном ledger; удалить их позволяет явное исправление, замена или отмена из источника этого события при не меньшем доверии. Простое отсутствие детали в новом анонсе не считается отменой. Отказ или недоступность проверки сохраняет прежние description, short_description и search_digest; подтверждённые факты и структурные изменения продолжают записываться. Второй writer по ledger и поздний rich rewrite не обходят это решение.
 
 ## Production staged contracts (INC-2026-07-13)
 
@@ -260,14 +262,13 @@ If only part of a late media set can still be uploaded, a text-only projection
 receives the successfully materialized subset; an already illustrated post
 keeps its existing attachments on the same partial failure. This prevents the
 old "preserve nothing" branch from completing a repair job without a photo.
-An actual Smart Update merge also re-arms the existing managed VK projection:
-the idempotent worker edits the resolved live/postponed post even when the prior
-`vk_sync` job is already `done`. A no-change replay keeps the older duplicate
-prevention contract and does not requeue a complete managed post. This keeps
-canonical date/time/location/text repairs consistent across VK without turning
-routine source rescans into repeated public edits. The managed VK content hash
-also includes the canonical ICS URL: adding or removing a calendar projection
-must re-render the calendar line even when the event body itself is unchanged.
+Since PR #978 (`751159d20c1e0de25c5602c6d4f2fbf9eb9609f0`), automatic VK
+publication creates initial announcements and skips an already managed
+live/postponed post. Existing posts are not automatically edited after a Smart
+Update merge; this prevents edit CAPTCHA from blocking new announcements.
+Canonical and Telegraph changes therefore do not imply a repaired VK post.
+The explicit manual edit flow remains available and requires separate public
+readback. See [VK publishing](../vk-publishing/README.md) for the current policy.
 
 Переключатель:
 - `SMART_UPDATE_FACT_FIRST=1` (default) — fact‑first включён.
@@ -793,10 +794,13 @@ LLM остаётся владельцем смысловых решений, н�
 Требование: ошибки LLM (rate-limit, provider errors, missing Supabase RPC routes) должны быть видны не только superadmin, но и оператору, который инициировал действие через Telegram UI.
 
 Реализация:
-- инциденты отправляются в **чат оператора** (контекст текущего update) и дополнительно в superadmin;
+- инциденты уровня CRITICAL отправляются в **чат оператора** (контекст текущего update) и дополнительно в superadmin; обычные WARNING сохраняются в журнале без Telegram-отправки;
 - для scheduled/background задач без UI-контекста остаётся только superadmin.
 - если Supabase RPC `google_ai_reserve` отсутствует, но включён fallback на прямой `GOOGLE_API_KEY`,
   инцидент маркируется как `warning` (а не `critical`), потому что обработка продолжается.
+- `llm_incident.delivered` фиксирует подтверждённый результат отправки и его адресата; число warning/error строк не является числом доставленных уведомлений. Эта диагностика сама по себе не уменьшает шум. Итоговые отчёты VK/TG и ответы об ошибках отдельных источников имеют собственные пути отправки.
+
+Публичные summary и подписи Telegraph, календарных событий и ежедневных рекомендаций скрывают `time`, если `time_is_default=true`, как и VK. Значение по умолчанию не публикуется как подтверждённое время начала.
 
 ## Прозрачность источников (требование)
 

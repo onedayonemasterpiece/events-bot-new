@@ -4152,6 +4152,8 @@ _FACT_FIRST_TICKET_WORD_RE = re.compile(
     r"(?i)\b(билет\w*|вход\w*|регистрац\w*|запис\w*|брон\w*|бесплатн\w*)\b"
 )
 _FACT_FIRST_PRICE_RE = re.compile(r"(?i)\b\d{1,6}\s*(?:₽|руб\.?|р\.)\b")
+# Exact price receipt emitted by _initial_added_facts and the merge ledger.
+_LEDGER_PRICE_LINE_RE = re.compile(r"Цена:\s*(?:(?:от|до)\s+)?\d+(?:[–-]\d+)?\s*₽\.?", re.IGNORECASE)
 _FACT_FIRST_AGE_RE = re.compile(r"\b\d{1,2}\+\b")
 _FACT_FIRST_PUSHKIN_RE = re.compile(r"(?i)\bпушкинск\w*\s+карт\w*\b")
 _FACT_FIRST_URL_RE = re.compile(r"(?i)\b(?:https?://|www\.)\S+")
@@ -4200,7 +4202,7 @@ def _fact_first_bucket(fact: str) -> str:
         return "infoblock"
     if _FACT_FIRST_URL_RE.search(f) and not _fact_first_urls_are_allowed(f):
         return "infoblock"
-    if _FACT_FIRST_TICKET_WORD_RE.search(f) or _FACT_FIRST_PRICE_RE.search(f):
+    if _LEDGER_PRICE_LINE_RE.fullmatch(f) or _FACT_FIRST_TICKET_WORD_RE.search(f) or _FACT_FIRST_PRICE_RE.search(f):
         return "infoblock"
     if _FACT_FIRST_AGE_RE.search(f) or _FACT_FIRST_PUSHKIN_RE.search(f):
         return "infoblock"
@@ -4846,6 +4848,9 @@ async def _llm_g4_split_create_writer(
     }
 
 
+_WRITER_UNAVAILABLE_LEDGER_FALLBACK = "writer_unavailable_fact_ledger_fallback"
+
+
 async def _llm_g4_split_create_bundle(
     candidate: EventCandidate,
     *,
@@ -4896,7 +4901,7 @@ async def _llm_g4_split_create_bundle(
             bundle["description"] = fallback_desc
             bundle["search_digest"] = _clean_search_digest(_fallback_digest_from_description(fallback_desc))
             bundle["short_description"] = _fallback_short_description_from_text(fallback_desc)
-            bundle["_split_create_warnings"] = ["writer_unavailable_fact_ledger_fallback"]
+            bundle["_split_create_warnings"] = [_WRITER_UNAVAILABLE_LEDGER_FALLBACK]
     return bundle
 
 
@@ -4904,11 +4909,14 @@ def _fact_first_coverage_prompt(
     *,
     facts_text_clean: Sequence[str],
     description: str,
+    merge_context: dict[str, Any] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     payload = {
         "facts_text_clean": [str(x).strip() for x in (facts_text_clean or []) if str(x or "").strip()],
         "description_md": _clip((description or "").strip(), 6500),
     }
+    if merge_context:
+        payload.update(merge_context=merge_context, description_md=(description or "").strip())
     prompt = (
         "Ты проверяешь полноту и строгость описания относительно списка фактов.\n\n"
         "Найди:\n"
@@ -4919,8 +4927,15 @@ def _fact_first_coverage_prompt(
         "- Допустимы синонимы и формы, если смысл и ключевые детали сохранены.\n"
         "- Если факт содержит несколько элементов, считай его отражённым только если в тексте присутствуют ВСЕ элементы.\n"
         "- Служебные перефразы для структурных фактов НЕ считаются extra, если они явно отсылают к фактам.\n"
-        "- Для missing используй ТОЛЬКО строки фактов ВЕРБАТИМ (копируй из списка facts_text_clean; не перефразируй).\n"
+        "- Для missing копируй ВЕРБАТИМ строки facts_text_clean или потерянные детали из merge_context.previous_description.\n"
         "- Для extra используй ТОЛЬКО короткие ВЕРБАТИМ-фрагменты из description_md (копируй из текста; не выдумывай), до 12 слов.\n\n"
+        "Если есть merge_context, previous_description — уже принятое описание, независимое от неполного ledger. "
+        "Проверь сохранение всех его конкретных деталей: программы, тем, имён, ролей и элементов перечней, даже отсутствующих в facts_text_clean. "
+        "Новые утверждения подтверждай candidate_text/poster_texts; детали прежнего описания не считай extra только из-за отсутствия в ledger. "
+        "Явное исправление, замена или отмена из источника этого события при не меньшем доверии разрешает удалить опровергнутую деталь "
+        "из прежнего описания И старых facts_text_clean; её отсутствие не missing, а сохранение опровергнутой версии — extra. "
+        "Простое отсутствие старой детали в новом источнике не является отменой. Не требуй чужих событий, повторов, промо и реквизитов отдельного инфоблока. "
+        "Не принимай конфликтующие якоря из conflicting_do_not_use.\n\n"
         "Верни JSON по схеме.\n\n"
         f"Данные:\n{json.dumps(payload, ensure_ascii=False)}"
     )
@@ -4934,6 +4949,14 @@ def _fact_first_coverage_prompt(
         "additionalProperties": False,
     }
     return prompt, schema
+
+
+def _fact_first_coverage_is_valid(value: Any) -> bool:
+    return isinstance(value, dict) and set(value) == {"missing", "extra"} and all(
+        isinstance(value[key], list)
+        and all(isinstance(item, str) and item.strip() for item in value[key])
+        for key in ("missing", "extra")
+    )
 
 
 def _fact_first_revise_prompt(
@@ -5342,13 +5365,10 @@ async def _llm_fact_first_description_md(
         max_tokens=500,
         label=f"{label}:fact_first_cov",
     )
-    missing: list[str] = []
-    extra: list[str] = []
-    if isinstance(cov, dict):
-        missing = [str(x).strip() for x in (cov.get("missing") or []) if str(x or "").strip()]
-        extra = [str(x).strip() for x in (cov.get("extra") or []) if str(x or "").strip()]
-    missing = _dedupe_source_facts(missing)[:12]
-    extra = _dedupe_source_facts(extra)[:12]
+    if not _fact_first_coverage_is_valid(cov):
+        return None
+    missing = _dedupe_source_facts(cov["missing"])[:12]
+    extra = _dedupe_source_facts(cov["extra"])[:12]
 
     policy_issues = _collect_policy_issues(description)
     if not missing and not extra and not policy_issues:
@@ -7303,9 +7323,9 @@ async def _llm_review_create_bundle_grounding(
         confidence = float(data.get("confidence") or 0.0)
     except Exception:
         confidence = 0.0
-    quotes = [str(item or "").strip() for item in (data.get("evidence_quotes") or []) if str(item or "").strip()]
+    quotes = [_norm_text_for_grounding(item) for item in (data.get("evidence_quotes") or [])]
     corpus_norm = _norm_text_for_grounding(corpus)
-    if not quotes or any(_norm_text_for_grounding(item) not in corpus_norm for item in quotes):
+    if not quotes or any(not quote or quote not in corpus_norm for quote in quotes):
         # Generated prose is optional.  A malformed reviewer citation must not
         # discard the source-grounded occurrence; remove generated public
         # fields and continue with the producer candidate instead.
@@ -7326,6 +7346,14 @@ async def _llm_review_create_bundle_grounding(
             # above.
             if not safe_unsupported:
                 safe_unsupported = populated_public_fields
+            elif (
+                bundle.get("_split_create")
+                and "facts" in safe_unsupported
+                and "description" not in safe_unsupported
+                and not confidence >= 0.9
+            ):
+                # A low-confidence partial verdict cannot vouch for standalone prose.
+                safe_unsupported.append("description")
             if safe_unsupported:
                 return False, "llm_ungrounded", safe_unsupported
         # An uncertain/low-confidence reviewer cannot approve generated prose,
@@ -7337,7 +7365,7 @@ async def _llm_review_create_bundle_grounding(
 def _remove_llm_rejected_bundle_fields(
     bundle: Mapping[str, Any], unsupported_fields: Sequence[str]
 ) -> dict[str, Any]:
-    """Drop only fields the grounded LLM review explicitly rejected.
+    """Drop rejected public fields and direct copies made from a rejected ledger.
 
     The semantic decision belongs to the reviewer.  This mechanical repair
     never invents replacement prose: downstream create logic falls back to the
@@ -7345,7 +7373,12 @@ def _remove_llm_rejected_bundle_fields(
     """
 
     repaired = dict(bundle)
-    for field in unsupported_fields:
+    rejected = set(unsupported_fields)
+    warnings = bundle.get("_split_create_warnings") or ()
+    if "facts" in rejected and _WRITER_UNAVAILABLE_LEDGER_FALLBACK in warnings:
+        # This fallback builds all three texts from the same rejected facts.
+        rejected.update(("description", "short_description", "search_digest"))
+    for field in rejected:
         if field in {"title", "description", "facts", "search_digest", "short_description"}:
             repaired.pop(field, None)
     return repaired
@@ -14196,11 +14229,15 @@ async def _llm_merge_event(
         "Твоя задача: (1) выделить из candidate ТОЛЬКО новые факты, которых ещё нет в event_before.facts, "
         "(2) выделить факты из candidate, которые уже есть (это дубли), "
         "(3) выявить факты, которые ПРОТИВОРЕЧАТ уже известным фактам (conflict), "
-        "(4) собрать цельное, связное описание события на основе event_before.facts + новых фактов. "
+        "(4) обновить event_before.description новыми фактами, сохраняя конкретные детали прежней программы, даже если их нет в неполном event_before.facts. "
         "Конфликты фактов выявляй логически: если новый факт противоречит старому, это conflict. "
         "Какую версию оставить в описании — решай по уровню доверия источников: "
         "если `candidate.trust_priority` выше, можно заменить старую версию на новую, "
         "если ниже или равен — сохраняй старую версию. "
+        "Исключение: явное исправление, замена или отмена из источника этого события при равном доверии заменяет опровергнутую деталь. "
+        "Простой пропуск детали в новом источнике не является отменой и не позволяет её удалить. "
+        "Если все подтверждённые детали уже верно отражены в event_before.description, верни это описание дословно, без стилистического рерайта. "
+        "Если факт уже в event_before.facts, но описание ещё не отражает его исправление или отмену, обнови описание независимо от duplicate_facts. "
         "Поля event_before.event_type и candidate.event_type — прежние результаты классификации, не цитаты источников. "
         "В event_type_decision верни русский тип события и дословную evidence_quote из candidate.text или candidate.poster_texts, "
         "только если источник явно подтверждает формат именно выбранного события; иначе null. "
@@ -14223,7 +14260,7 @@ async def _llm_merge_event(
         "и особенно не ставь пустую строку между инициалом и фамилией (например `Н. Любимова`). "
         f"{_description_emoji_prompt_rule()}"
         "Без хэштегов. "
-        "Описание должно быть журналистским рерайтом (не дословно), без выдуманных деталей. "
+        "Новые фрагменты из источника излагай журналистским рерайтом без выдуманных деталей; уже принятое описание без смысловых изменений не переписывай. "
         "Запрещено придумывать факты, которых нет в данных (в т.ч. нельзя писать 'премьера', 'впервые', 'аншлаг' и т.п., "
         "если это явно не сказано в источниках). "
         "Избегай нейросетевых клише и пустых оценок/прогнозов: "
@@ -14232,7 +14269,7 @@ async def _llm_merge_event(
         "Не включай в описание нерелевантные новости о площадке/организации, которые не относятся к самому событию "
         "(например отчёты о работе филиала, планы на год, анонс посторонних интервью). "
         "Сохраняй ПОЛНОЕ содержание события: включай существенные факты из event_before.description, source_texts и candidate.text. "
-        "Не делай текст чрезмерно коротким: если источники длинные, итоговое описание тоже должно быть развернутым и подробным. "
+        "Полноту оценивай по конкретным деталям своего события, а не по длине исходника или описания. "
         "Убери рекламные/акционные детали (скидки/промокоды/акция) и механику розыгрыша, если они не являются сутью события. "
         "Если в тексте есть URL или телефоны, не искажай их (лучше перенеси в конец, чем потерять). "
         "Можно использовать минимальную разметку для читабельности: "
@@ -14894,6 +14931,13 @@ async def _rewrite_description_full_from_sources(event: Event, candidate: EventC
     if len(base) < 120:
         return None
 
+    # Event.is_free defaults to False even when no source addressed admission.
+    decisions = getattr(event, "collection_decisions", None)
+    admission = decisions.get("admission_decision") if isinstance(decisions, Mapping) else None
+    is_free = True if getattr(event, "is_free", False) else None
+    if isinstance(admission, Mapping) and admission.get("value") in ("confirmed_paid", "confirmed_free"):
+        is_free = admission["value"] == "confirmed_free"
+
     payload = {
         "title": getattr(event, "title", None) or candidate.title,
         "date": getattr(event, "date", None) or candidate.date,
@@ -14904,7 +14948,7 @@ async def _rewrite_description_full_from_sources(event: Event, candidate: EventC
         "city": getattr(event, "city", None) or candidate.city,
         "ticket_link": getattr(event, "ticket_link", None) or candidate.ticket_link,
         "ticket_status": getattr(event, "ticket_status", None) or candidate.ticket_status,
-        "is_free": bool(getattr(event, "is_free", False)),
+        "is_free": is_free,
         "event_type": getattr(event, "event_type", None) or candidate.event_type,
         "festival": getattr(event, "festival", None) or candidate.festival,
         "source_text": _clip(base, SMART_UPDATE_REWRITE_SOURCE_MAX_CHARS),
@@ -14917,6 +14961,9 @@ async def _rewrite_description_full_from_sources(event: Event, candidate: EventC
         f"{SMART_UPDATE_YO_RULE} "
         f"{SMART_UPDATE_PRESERVE_LISTS_RULE} "
         f"{SMART_UPDATE_VISITOR_CONDITIONS_RULE} "
+        "Условия входа указывай только по прямым сведениям: is_free=null означает, что метаданных о платности нет. "
+        "Продажа товаров, ссылка или платная услуга сами по себе не подтверждают обязательный входной билет. "
+        "Если источник различает вход и оплату части программы, сохрани это различие. "
         f"{_description_emoji_prompt_rule()}"
         "Без хэштегов. Убери промо/акции и механику розыгрыша (если не часть сути). "
         "Не добавляй секции/заголовки про факты (например «Факты…», «Факты о событии», `Facts/Added Facts`): "
@@ -20398,6 +20445,7 @@ async def _smart_event_update_impl(
                 )
         except Exception:  # pragma: no cover - provider failures
             bundled = None
+        unsupported_bundle_fields: list[str] = []
         if (
             isinstance(bundled, dict)
             and str(candidate.source_type or "").strip().lower() in {"vk", "tg", "telegram"}
@@ -20611,12 +20659,15 @@ async def _smart_event_update_impl(
         elif (
             split_create_used
             and bundled_desc
-            and bundled_facts
+            and (bundled_facts or "facts" in unsupported_bundle_fields)
         ):
+            # Social review checks each public field against the source. Its
+            # rejection of the ledger can leave an independently supported body.
             description_value = bundled_desc
             fact_first_used = True
             logger.info(
-                "smart_update.create_description path=g4_split_create_v2_rich_facts source_type=%s source_url=%s",
+                "smart_update.create_description path=%s source_type=%s source_url=%s",
+                "g4_split_create_v2_rich_facts" if bundled_facts else "g4_split_create_v2_reviewed_description",
                 candidate.source_type,
                 candidate.source_url,
             )
@@ -21933,13 +21984,16 @@ async def _smart_event_update_impl(
                             continue
                         skipped_conflicts.append(text)
 
-                    duplicate_only_narrative = bool(
+                    current_narrative_context = bool(
                         SMART_UPDATE_FACT_FIRST and before_description.strip()
-                        and not (added_facts or conflict_facts or conflicting or ticket_changes_needed or needs_schedule_cleanup)
-                        and not any(merge_data.get(k) is not None and merge_data[k] != getattr(event_db, k, None)
-                                    for k in ("ticket_link", "ticket_price_min", "ticket_price_max", "ticket_status"))
+                        and not (conflict_facts or conflicting or needs_schedule_cleanup)
                         and event_db.age_restriction == before_age_restriction
                         and not set(updated_keys).intersection({"title", "date", "time", "end_date", "location_name", "location_address", "city"})
+                    )
+                    duplicate_only_narrative = bool(
+                        current_narrative_context and not added_facts and not ticket_changes_needed
+                        and not any(merge_data.get(k) is not None and merge_data[k] != getattr(event_db, k, None)
+                                    for k in ("ticket_link", "ticket_price_min", "ticket_price_max", "ticket_status"))
                     )
                     if (duplicate_only_narrative and not is_canonical_site and _title_has_meaningful_tokens(event_db.title)
                         and _titles_look_related(str(merge_data.get("title") or ""), event_db.title)
@@ -22054,14 +22108,46 @@ async def _smart_event_update_impl(
                                     candidate.source_url,
                                 )
 
-                    # Fact-first: override public narrative with a fresh build from canonical facts,
-                    # ignoring the merged description text (which is derived from raw sources).
+                    # Review a merge against the accepted narrative; only empty descriptions need a new writer.
                     duplicate_only_narrative = duplicate_only_narrative and "title" not in updated_keys
-                    if duplicate_only_narrative:
+                    clean_description = _dedupe_description(clean_description) or clean_description
+                    clean_description = _dedupe_paragraphs_preserving_formatting(clean_description) or clean_description
+                    clean_description = _clip((clean_description or "").strip(), SMART_UPDATE_DESCRIPTION_MAX_CHARS)
+                    if duplicate_only_narrative and (not clean_description or clean_description == before_description.strip()):
                         clean_description = merge_digest_from_llm = None
                         has_new_text = False
                         merge_fact_first_used = True
                         logger.info("smart_update.duplicate_narrative_preserved event_id=%s", event_db.id)
+                    elif SMART_UPDATE_FACT_FIRST and not SMART_UPDATE_LLM_DISABLED and before_description.strip():
+                        cov_prompt, cov_schema = _fact_first_coverage_prompt(
+                            facts_text_clean=_facts_text_clean_from_facts([*facts_before_list, *added_facts]),
+                            description=clean_description,
+                            merge_context={
+                                "event_title": event_db.title,
+                                "previous_description": before_description,
+                                "candidate_text": _clip(candidate.source_text, SMART_UPDATE_MERGE_CANDIDATE_TEXT_MAX_CHARS),
+                                "poster_texts": [_clip(p.ocr_text, 400) for p in candidate.posters if p.ocr_text][:3],
+                                "event_trust_priority": _trust_priority(event_trust_level),
+                                "candidate_trust_priority": _trust_priority(candidate.trust_level),
+                                "conflicting_do_not_use": conflicting,
+                            },
+                        )
+                        try:
+                            cov = await _ask_gemma_json(cov_prompt, cov_schema, max_tokens=500,
+                                label=f"merge:{int(event_db.id or 0)}:fact_first_cov") if clean_description else None
+                        except Exception:
+                            cov = None
+                        if _fact_first_coverage_is_valid(cov) and not cov["missing"] and not cov["extra"]:
+                            if clean_description != (event_db.description or "").strip():
+                                event_db.description = clean_description
+                                duplicate_only_narrative = False
+                                updated_fields = True
+                                updated_keys.append("description")
+                        else:
+                            has_new_text = False
+                            logger.info("smart_update.merge_description_preserved event_id=%s", event_db.id)
+                        merge_fact_first_used = True
+                        clean_description = merge_digest_from_llm = None
                     elif SMART_UPDATE_FACT_FIRST and not SMART_UPDATE_LLM_DISABLED:
                         legacy_facts_for_fact_first: list[str] = list(legacy_facts_seed or [])
                         if not legacy_facts_for_fact_first:
@@ -22544,13 +22630,14 @@ async def _smart_event_update_impl(
             event_db.emoji = candidate.emoji
             updated_fields = True
             updated_keys.append("emoji")
+        description_changed = (event_db.description or "").strip() != before_description.strip()
         existing_short = _clean_short_description(getattr(event_db, "short_description", None))
         short_needs_refresh = not _is_short_description_acceptable(
             existing_short, min_words=12, max_words=16
         )
-        if ("description" in updated_keys) or has_new_text:
+        if description_changed or has_new_text:
             short_needs_refresh = True
-        if short_needs_refresh and not duplicate_only_narrative:
+        if short_needs_refresh and not duplicate_only_narrative and (not merge_fact_first_used or description_changed):
             normalized_short: str | None = None
             try:
                 normalized_short = await _llm_build_short_description(
@@ -22560,7 +22647,7 @@ async def _smart_event_update_impl(
                 )
             except Exception:
                 normalized_short = None
-            if not normalized_short:
+            if not normalized_short and not merge_fact_first_used:
                 candidate_short = _clean_short_description(candidate.raw_excerpt)
                 if _is_short_description_acceptable(
                     candidate_short, min_words=12, max_words=16
@@ -22577,7 +22664,7 @@ async def _smart_event_update_impl(
         # search_digest is a short snippet used for search/cards and also shown on Telegraph
         # before long descriptions. It should be refreshed when description meaningfully changes.
         normalized_candidate_digest = _clean_search_digest(candidate.search_digest)
-        digest_should_refresh = ("description" in updated_keys) or has_new_text
+        digest_should_refresh = description_changed or (has_new_text and not merge_fact_first_used)
         new_digest = None
         if digest_should_refresh:
             if merge_digest_from_llm and (not merge_fact_first_used):
@@ -22591,12 +22678,12 @@ async def _smart_event_update_impl(
                     )
                 except Exception:
                     new_digest = None
-        if not new_digest:
-            # Fallback: accept candidate-provided digest (e.g. parsers), even if event already had one.
+        if not new_digest and not merge_fact_first_used:
+            # A reviewed merge derives summaries from the accepted description, not unreviewed candidate prose.
             new_digest = normalized_candidate_digest
         if not new_digest:
             new_digest = _fallback_digest_from_description(event_db.description)
-        if not duplicate_only_narrative and new_digest and (new_digest.strip() != (event_db.search_digest or "").strip()):
+        if not duplicate_only_narrative and (not merge_fact_first_used or description_changed) and new_digest and (new_digest.strip() != (event_db.search_digest or "").strip()):
             event_db.search_digest = new_digest
             updated_fields = True
             updated_keys.append("search_digest")
@@ -22679,7 +22766,7 @@ async def _smart_event_update_impl(
         # compared to rich available source text (usually site import), generate a
         # full rewritten description best-effort. This is important for Telegraph
         # pages: a short "search snippet" is not acceptable as the main text.
-        if "description" not in updated_keys and not duplicate_only_narrative:
+        if "description" not in updated_keys and not merge_fact_first_used:
             cur_desc = (event_db.description or "").strip()
             min_expected = _min_expected_description_len_from_sources(event_db, candidate)
             if min_expected and len(cur_desc) < min_expected:

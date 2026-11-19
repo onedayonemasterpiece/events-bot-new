@@ -404,6 +404,37 @@ async def test_g4_split_create_rich_facts_prompt_requires_named_speaker_with_tit
 
 
 @pytest.mark.asyncio
+async def test_rich_facts_accepts_literal_roster_but_rejects_foreign_names_and_numbers(monkeypatch):
+    # Source Telegram koihm/6349, event 11107. The provider response is fixed;
+    # this exercises production grounding/cleanup, not model prompt compliance.
+    roster = (
+        "с художниками Таисией Казанцевой, Еленой Зеленской, "
+        "Екатериной Осколковой и Алексеем Чебыкиным"
+    )
+    source = f"Разговор об индустриальном наследии региона пройдет {roster}."
+    async def extract(prompt, _schema, **_kwargs):
+        return {
+            "people_org_facts": [
+                {"fact": roster, "evidence_quote": roster},
+                {"fact": "С Марией Ивановой", "evidence_quote": "с Марией Ивановой"},
+                {"fact": f"12 участников: {roster}", "evidence_quote": roster},
+            ]
+        }
+
+    monkeypatch.setattr(su, "SMART_UPDATE_G4_SPLIT_CREATE", True)
+    monkeypatch.setattr(su, "_ask_gemma_json", extract)
+    candidate = su.EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/koihm/6349",
+        source_text=source,
+        title="Морской. Индустриальный. Наш",
+        date="2026-11-19",
+    )
+
+    assert await su._llm_extract_candidate_facts(candidate) == [roster]
+
+
+@pytest.mark.asyncio
 async def test_g4_split_create_writer_repairs_logistics_instead_of_dropping_speaker_roster(
     monkeypatch,
 ):

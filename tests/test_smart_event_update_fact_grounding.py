@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock
+
 import pytest
 from sqlalchemy import select
 
@@ -59,7 +61,7 @@ async def test_merge_filters_ungrounded_sensitive_facts_from_linked_source(tmp_p
         async def _fake_merge(*_args, **_kwargs):  # noqa: ANN001 - test helper
             return {
                 "title": "Весенний Экодвор",
-                "description": "Нерелевантное merge-описание.",
+                "description": "Принимается органика и вторсырье к переработке. Веломастерская будет проходить в формате ремонт-кафе.",
                 "search_digest": "Нерелевантный дайджест.",
                 "ticket_link": None,
                 "ticket_price_min": None,
@@ -89,6 +91,7 @@ async def test_merge_filters_ungrounded_sensitive_facts_from_linked_source(tmp_p
 
         monkeypatch.setattr(su, "_llm_merge_event", _fake_merge)
         monkeypatch.setattr(su, "_llm_fact_first_description_md", _fake_ff_desc)
+        monkeypatch.setattr(su, "_ask_gemma_json", AsyncMock(return_value={"missing": [], "extra": []}))
         monkeypatch.setattr(su, "_llm_build_search_digest", _fake_digest)
         monkeypatch.setattr(su, "_llm_build_short_description", _fake_short)
 

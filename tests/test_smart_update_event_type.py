@@ -1,4 +1,5 @@
 """Source-cited type choice uses the existing semantic merge and transaction."""
+import json
 import logging
 from unittest.mock import AsyncMock
 
@@ -87,8 +88,12 @@ async def test_source_cited_type_survives_normal_merge(tmp_path, monkeypatch, ca
                 posters = [su.PosterCandidate(ocr_text="") for _ in range(3)]
                 posters.append(su.PosterCandidate(ocr_text=("x" * 401 if decision == "ocr_tail" else "") + quote))
         merge_calls = []
+        coverage_calls = []
 
         async def ask(prompt, schema, **kwargs):
+            if kwargs.get("label", "").endswith(":fact_first_cov"):
+                coverage_calls.append(json.loads(prompt.split("Данные:\n", 1)[1]))
+                return {"missing": [], "extra": []}
             assert kwargs.get("label") == "merge", "Unexpected unstubbed semantic provider stage"
             merge_calls.append((prompt, schema))
             return merge_response
@@ -121,12 +126,12 @@ async def test_source_cited_type_survives_normal_merge(tmp_path, monkeypatch, ca
         assert len(merge_logs) == 1
         assert ("event_type" in merge_logs[0].args[5]) is accepted
         if accepted:
-            narrative.assert_awaited()
-            assert all(call.kwargs["event_type"] == chosen_type for call in narrative.await_args_list)
-            assert any(old_narrative_fact in call.kwargs["facts_text_clean"]
-                       for call in narrative.await_args_list)
+            narrative.assert_not_awaited()
+            assert len(coverage_calls) == 1
+            assert old_narrative_fact in coverage_calls[0]["facts_text_clean"]
+            assert coverage_calls[0]["merge_context"]["previous_description"] == original
             # Captures the real conflict seam: corrected type + historical narrative fact.
-            # Stubbed prose proves only persistence of its return, not semantic precedence.
+            # Stubbed verdict proves persistence of the merge draft, not semantic precedence.
             assert saved.description == rewritten
         else:
             narrative.assert_not_awaited()

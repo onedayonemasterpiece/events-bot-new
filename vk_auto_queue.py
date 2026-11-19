@@ -16,7 +16,7 @@ from typing import Any, Mapping, Sequence, Literal
 
 from admin_chat import resolve_superadmin_chat_id
 from db import Database
-from heavy_ops import current_heavy_meta, describe_heavy_meta, heavy_operation
+from heavy_ops import current_heavy_meta, heavy_operation
 from ops_run import finish_ops_run, start_ops_run
 
 import vk_intake
@@ -1142,332 +1142,6 @@ def _vk_auto_import_photo_limit_for_text(text: str | None) -> int:
     return 100
 
 
-def _render_progress_text(
-    icon: str,
-    *,
-    current_no: int,
-    total_txt: str,
-    source_url: str,
-    extra_lines: Sequence[str] | None = None,
-) -> str:
-    header = f"{icon} Разбираю VK пост {current_no}/{total_txt}: {source_url}"
-    lines = [header]
-    for line in (extra_lines or []):
-        line = (line or "").strip()
-        if line:
-            lines.append(line)
-    return "\n".join(lines).strip()
-
-
-async def _update_progress_message(
-    bot: Any,
-    *,
-    chat_id: int,
-    message_id: int | None,
-    text: str,
-) -> None:
-    """Best-effort: edit an existing progress message, fallback to sending a new message."""
-    payload = (text or "").strip()
-    if not payload:
-        return
-    if message_id and hasattr(bot, "edit_message_text"):
-        try:
-            await bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=int(message_id),
-                text=payload,
-                disable_web_page_preview=True,
-            )
-            return
-        except Exception:
-            logger.warning("vk_auto: progress_edit_failed", exc_info=True)
-    try:
-        await bot.send_message(chat_id, payload, disable_web_page_preview=True)
-    except Exception:
-        logger.warning("vk_auto: progress_send_failed", exc_info=True)
-
-
-async def _send_unified_event_report(
-    db: Database,
-    bot: Any,
-    chat_id: int,
-    *,
-    created: list[int],
-    updated: list[int],
-    source_url: str,
-    added_posters_by_event_id: Mapping[int, int] | None = None,
-    post_metrics: Mapping[str, Any] | None = None,
-    post_popularity: str | None = None,
-) -> bool:
-    from source_parsing.handlers import build_added_event_info, build_updated_event_info
-    import html
-
-    bot_username = await _resolve_bot_username(bot)
-    lines: list[str] = []
-
-    created = list(dict.fromkeys([int(eid) for eid in (created or []) if eid]))
-    updated = list(dict.fromkeys([int(eid) for eid in (updated or []) if eid]))
-    overlap = set(created) & set(updated)
-    if overlap:
-        # When one VK post yields multiple drafts that merge into the same event,
-        # the event can be both "created" and then immediately "updated" within
-        # the same run. Facts/logs reflect the LAST merge, so show such events in
-        # the updated bucket to keep the report consistent.
-        created = [eid for eid in created if eid not in overlap]
-
-    ctx = None
-    try:
-        from source_parsing.smart_update_report import build_smart_update_report_context
-
-        ctx = await build_smart_update_report_context(
-            db,
-            event_ids=(created + updated),
-            source_urls=[source_url],
-        )
-    except Exception:
-        ctx = None
-
-    tz = getattr(ctx, "tz", None)
-    sources_by_eid = getattr(ctx, "sources_by_event_id", None) or {}
-    video_counts = getattr(ctx, "video_count_by_event_id", None) or {}
-    ticket_queue_by_eid = getattr(ctx, "ticket_queue_by_event_id", None) or {}
-    fest_queue_by_src = getattr(ctx, "festival_queue_by_source_url", None) or {}
-
-    def _ics_line(url: str | None, *, has_time: bool) -> str:
-        value = (url or "").strip()
-        if value:
-            safe = html.escape(value, quote=True)
-            return f'ICS: <a href="{safe}">ics</a>'
-        return "ICS: ⏳" if has_time else "ICS: —"
-
-    def _vk_post_line(url: str | None) -> str | None:
-        value = (url or "").strip()
-        if not value:
-            return None
-        safe = html.escape(value, quote=True)
-        return f'VK: <a href="{safe}">пост</a>'
-
-    def _sources_lines(eid: int) -> list[str]:
-        rows = list(sources_by_eid.get(int(eid)) or [])
-        if not rows or not tz:
-            return []
-        from source_parsing.smart_update_report import format_dt_compact, short_url_label
-
-        out: list[str] = ["  Источники:"]
-        limit = 24
-        shown = rows[:limit]
-        for imported_at, url in shown:
-            stamp = format_dt_compact(imported_at, tz)
-            label = short_url_label(url) or url
-            if str(url).strip().startswith(("http://", "https://")):
-                safe_href = html.escape(str(url).strip(), quote=True)
-                safe_label = html.escape(label)
-                out.append(f"  {stamp} <a href=\"{safe_href}\">{safe_label}</a>")
-            else:
-                out.append(f"  {stamp} {html.escape(label)}")
-        if len(rows) > limit:
-            out.append(f"  … ещё {len(rows) - limit}")
-        return out
-
-    def _queue_lines(eid: int) -> list[str]:
-        out: list[str] = []
-        fest = fest_queue_by_src.get((source_url or "").strip())
-        if fest:
-            name = (getattr(fest, "festival_name", None) or getattr(fest, "festival_full", None) or "").strip()
-            ctx2 = (getattr(fest, "festival_context", None) or "").strip()
-            status = (getattr(fest, "status", None) or "").strip()
-            fid = getattr(fest, "id", None)
-            tail = name or ctx2
-            extra = f" {tail}" if tail else ""
-            id_part = f" (id={int(fid)})" if isinstance(fid, int) and fid > 0 else ""
-            st_part = f" {status}" if status else ""
-            out.append(f"  🎪 festival_queue:{st_part}{extra}{id_part}".strip())
-
-        tickets = list(ticket_queue_by_eid.get(int(eid)) or [])
-        if tickets:
-            first = tickets[0]
-            href = html.escape(str(getattr(first, 'url', '') or '').strip(), quote=True)
-            label = html.escape(str(getattr(first, 'site_kind', '') or 'tickets').strip() or "tickets")
-            extra = f" +{len(tickets)}" if len(tickets) > 1 else ""
-            if href:
-                out.append(f'  🎟 ticket_site_queue:{extra} <a href="{href}">{label}</a>')
-            else:
-                out.append(f"  🎟 ticket_site_queue:{extra}".strip())
-        return out
-
-    def _render_fact_stats(stats: Mapping[str, Any] | None) -> str:
-        data = stats or {}
-        if not data:
-            return "Факты: —"
-        added = int(data.get("added") or 0)
-        dup = int(data.get("duplicate") or 0)
-        conf = int(data.get("conflict") or 0)
-        note = int(data.get("note") or 0)
-        return f"Факты: ✅{added} ↩️{dup} ⚠️{conf} ℹ️{note}"
-
-    def _render_facts_and_photos(info: Any, *, eid: int) -> str:
-        stats_text = _render_fact_stats(getattr(info, "fact_stats", None))
-        added_posters = getattr(info, "added_posters", None)
-        try:
-            added_posters_int = int(added_posters) if added_posters is not None else None
-        except Exception:
-            added_posters_int = None
-        photo_count = getattr(info, "photo_count", None)
-        try:
-            photos = int(photo_count or 0)
-        except Exception:
-            photos = 0
-        try:
-            videos_total = int(video_counts.get(int(eid), 0) or 0)
-        except Exception:
-            videos_total = 0
-        if added_posters_int is None:
-            photos_label = f"Иллюстрации: {'⚠️0' if photos == 0 else photos}"
-        else:
-            photos_label = f"Иллюстрации: +{added_posters_int}, всего {'⚠️0' if photos == 0 else photos}"
-        videos_label = f" | Видео: {videos_total}" if videos_total > 0 else ""
-        return f"{stats_text} | {photos_label}{videos_label}"
-
-    def _render_meta(date_value: str | None, time_value: str | None) -> str:
-        meta: list[str] = []
-        if date_value:
-            meta.append(str(date_value))
-        if time_value:
-            meta.append(str(time_value))
-        return f" — {' '.join(meta)}" if meta else ""
-
-    def _render_source(source_url: str, info: Any) -> str:
-        ord_value = getattr(info, "source_ordinal", None)
-        total_value = getattr(info, "source_total", None)
-        if isinstance(ord_value, int) and ord_value > 0:
-            if isinstance(total_value, int) and total_value > 0:
-                return f"Источник #{ord_value}/{total_value}: {source_url}"
-            return f"Источник #{ord_value}: {source_url}"
-        return f"Источник: {source_url}"
-
-    if created or updated:
-        lines.append("<b>Smart Update (детали событий):</b>")
-        if post_metrics:
-            parts: list[str] = []
-            v = post_metrics.get("views") if isinstance(post_metrics, Mapping) else None
-            l = post_metrics.get("likes") if isinstance(post_metrics, Mapping) else None
-            if isinstance(v, int) and v >= 0:
-                parts.append(f"views={v}")
-            if isinstance(l, int) and l >= 0:
-                parts.append(f"likes={l}")
-            if parts:
-                lines.append(f"Метрики поста: {html.escape(' '.join(parts))}")
-    if created:
-        lines.append(f"✅ Созданные события: {len(created)}")
-        for eid in created[:12]:
-            info = await build_added_event_info(db, int(eid), "vk", source_url=source_url)
-            if not info:
-                continue
-            if added_posters_by_event_id is not None:
-                info.added_posters = int(added_posters_by_event_id.get(int(eid), 0) or 0)
-            title = html.escape(info.title or "Без названия")
-            if (post_popularity or "").strip():
-                title = f"{html.escape(str(post_popularity).strip())} {title}"
-            tg_url = html.escape(info.telegraph_url or "", quote=True)
-            meta = _render_meta(info.date, info.time)
-            if info.telegraph_url:
-                lines.append(f"• <a href=\"{tg_url}\">{title}</a> (id={info.event_id}){meta}")
-            else:
-                lines.append(f"• {title} (id={info.event_id}){meta}")
-            lines.append(f"  {html.escape(_render_source(source_url, info))}")
-            if not info.telegraph_url:
-                lines.append("  Telegraph: ⏳ в очереди")
-            lines.extend(_sources_lines(int(info.event_id)))
-            if info.log_cmd:
-                href = _log_deeplink(bot_username, int(info.event_id))
-                if href:
-                    lines.append(
-                        f"  Лог: <a href=\"{html.escape(href, quote=True)}\">{html.escape(info.log_cmd)}</a>"
-                    )
-                else:
-                    lines.append(f"  Лог: {html.escape(info.log_cmd)}")
-            lines.append(f"  {_ics_line(info.ics_url, has_time=bool((info.time or '').strip()))}")
-            vk_line = _vk_post_line(getattr(info, "vk_post_url", None))
-            if vk_line:
-                lines.append(f"  {vk_line}")
-            lines.append(f"  {_render_facts_and_photos(info, eid=int(info.event_id))}")
-            lines.extend(_queue_lines(int(info.event_id)))
-            lines.append("")
-        if len(created) > 12:
-            lines.append(f"... ещё {len(created) - 12}")
-    if updated:
-        lines.append(f"🔄 Обновлённые события: {len(updated)}")
-        for eid in updated[:12]:
-            info = await build_updated_event_info(
-                db, int(eid), "vk", "full_update", source_url=source_url
-            )
-            if not info:
-                continue
-            if added_posters_by_event_id is not None:
-                info.added_posters = int(added_posters_by_event_id.get(int(eid), 0) or 0)
-            title = html.escape(info.title or "Без названия")
-            if (post_popularity or "").strip():
-                title = f"{html.escape(str(post_popularity).strip())} {title}"
-            tg_url = html.escape(info.telegraph_url or "", quote=True)
-            meta = _render_meta(info.date, info.time)
-            if info.telegraph_url:
-                lines.append(f"• <a href=\"{tg_url}\">{title}</a> (id={info.event_id}){meta}")
-            else:
-                lines.append(f"• {title} (id={info.event_id}){meta}")
-            lines.append(f"  {html.escape(_render_source(source_url, info))}")
-            if not info.telegraph_url:
-                lines.append("  Telegraph: ⏳ в очереди")
-            lines.extend(_sources_lines(int(info.event_id)))
-            if info.log_cmd:
-                href = _log_deeplink(bot_username, int(info.event_id))
-                if href:
-                    lines.append(
-                        f"  Лог: <a href=\"{html.escape(href, quote=True)}\">{html.escape(info.log_cmd)}</a>"
-                    )
-                else:
-                    lines.append(f"  Лог: {html.escape(info.log_cmd)}")
-            lines.append(f"  {_ics_line(info.ics_url, has_time=bool((info.time or '').strip()))}")
-            vk_line = _vk_post_line(getattr(info, "vk_post_url", None))
-            if vk_line:
-                lines.append(f"  {vk_line}")
-            lines.append(f"  {_render_facts_and_photos(info, eid=int(info.event_id))}")
-            lines.extend(_queue_lines(int(info.event_id)))
-            lines.append("")
-        if len(updated) > 12:
-            lines.append(f"... ещё {len(updated) - 12}")
-
-    if not lines:
-        return True
-    text = "\n".join(lines).strip()
-    if not text:
-        return True
-    try:
-        await asyncio.wait_for(
-            bot.send_message(chat_id, text, parse_mode="HTML", disable_web_page_preview=True),
-            timeout=30,
-        )
-        logger.info(
-            "vk_auto: unified_report_sent chat_id=%s created=%s updated=%s source=%s",
-            chat_id,
-            len(created),
-            len(updated),
-            source_url,
-        )
-        return True
-    except asyncio.TimeoutError:
-        logger.warning(
-            "vk_auto: unified_report_timeout chat_id=%s created=%s updated=%s source=%s",
-            chat_id,
-            len(created),
-            len(updated),
-            source_url,
-        )
-        return False
-    except Exception:
-        logger.exception("vk_auto: failed to send unified report")
-        return False
-
-
 async def _prefetch_vk_inbox_row(
     db: Database,
     *,
@@ -1598,507 +1272,360 @@ async def run_vk_auto_import(
     """
     batch_id = f"auto:{int(time.time())}"
     report = VkAutoImportReport(batch_id=batch_id)
-    if not ops_run_id:
-        ops_run_id = await start_ops_run(
-            db,
-            kind="vk_auto_import",
-            trigger=trigger,
-            chat_id=chat_id,
-            operator_id=operator_id,
-            details={
-                "batch_id": batch_id,
-                "run_id": run_id,
-                "limit_requested": limit,
-                "include_skipped": int(bool(include_skipped)),
-            },
-        )
-    _clear_vk_auto_import_cancel(chat_id=chat_id, operator_id=operator_id)
     try:
         limit_int = int(limit)
     except Exception:
         limit_int = 25
     unbounded = limit_int <= 0
 
-    await vk_review.release_stale_locks(db)
-    await vk_review.release_due_deferred(db, batch_id=batch_id)
-
-    def _env_enabled(name: str, default: bool) -> bool:
-        raw = (os.getenv(name) or "").strip().lower()
-        if not raw:
-            return default
-        return raw in {"1", "true", "yes", "on"}
-
-    send_progress = _env_enabled("VK_AUTO_IMPORT_SEND_PROGRESS", True) and not trigger.startswith("scheduled")
-    try:
-        progress_every = int(os.getenv("VK_AUTO_IMPORT_PROGRESS_EVERY", "1") or "1")
-    except Exception:
-        progress_every = 1
-    progress_every = max(1, min(progress_every, 50))
-    try:
-        row_timeout_raw = (os.getenv("VK_AUTO_IMPORT_ROW_TIMEOUT_SEC") or "").strip()
-        row_timeout_sec = float(row_timeout_raw) if row_timeout_raw else 30.0 * 60.0
-    except Exception:
-        row_timeout_sec = 30.0 * 60.0
-    if row_timeout_sec <= 0:
-        row_timeout_sec = 0.0
-    else:
-        row_timeout_sec = min(float(row_timeout_sec), 6.0 * 60.0 * 60.0)
-
-    # Optional: include previously skipped rows in the run. This is useful for
-    # E2E over a prod DB snapshot where an operator may have skipped items
-    # earlier, but we still want to validate Smart Update correctness.
-    if include_skipped:
-        async with db.raw_conn() as conn:
-            cur = await conn.execute("SELECT COUNT(1) FROM vk_inbox WHERE status='pending'")
-            row = await cur.fetchone()
-            pending_count = int((row[0] if row else 0) or 0)
-        # Do not inflate queue for this run: requeue only enough skipped rows
-        # to fill the remaining batch up to `limit`.
-        if unbounded:
-            requeue_limit = 10**9
-        else:
-            requeue_limit = max(0, int(limit_int) - pending_count)
-        if requeue_limit <= 0:
-            requeue_limit = 0
-        async with db.raw_conn() as conn:
-            cur = await conn.execute(
-                """
-                SELECT id
-                FROM vk_inbox
-                WHERE status='skipped'
-                ORDER BY date ASC,
-                         CASE WHEN event_ts_hint IS NULL THEN 1 ELSE 0 END,
-                         event_ts_hint ASC,
-                         id ASC
-                LIMIT ?
-                """,
-                (requeue_limit,),
-            )
-            ids = [int(r[0]) for r in (await cur.fetchall() or [])]
-            if ids:
-                placeholders = ",".join("?" for _ in ids)
-                await conn.execute(
-                    f"""
-                    UPDATE vk_inbox
-                    SET status='pending',
-                        locked_by=NULL,
-                        locked_at=NULL,
-                        review_batch=NULL
-                    WHERE id IN ({placeholders})
-                    """,
-                    tuple(ids),
-                )
-                await conn.commit()
-                report.skipped_requeued = len(ids)
-                logger.info(
-                    "vk_auto: requeued_skipped=%s pending=%s limit=%s",
-                    len(ids),
-                    pending_count,
-                    limit,
-                )
-
-    # Preload festival hints once per run.
-    try:
-        festival_names, festival_alias_pairs = await _load_festival_hints(db)
-    except Exception as exc:
-        festival_names, festival_alias_pairs = [], []
-        report.errors.append(f"festival_hints_failed: {exc}")
-
-    total_estimate = None
-    try:
-        statuses = ("pending", "skipped") if include_skipped else ("pending",)
-        placeholders = ",".join(["?"] * len(statuses))
-        async with db.raw_conn() as conn:
-            cur = await conn.execute(
-                f"""
-                SELECT COUNT(1)
-                FROM vk_inbox
-                WHERE status IN ({placeholders})
-                """,
-                statuses,
-            )
-            row = await cur.fetchone()
-            total_estimate = int((row[0] if row else 0) or 0)
-            if not unbounded:
-                total_estimate = min(int(total_estimate), int(limit_int))
-    except Exception:
-        total_estimate = None
-
     start = time.time()
-    heavy_mode = _vk_auto_import_heavy_mode(trigger)
-    waiting_meta = current_heavy_meta() if heavy_mode != "off" else None
-    if waiting_meta is not None and heavy_mode == "wait":
-        waiting_text = (
-            "⏳ VK auto import ждёт завершения другой тяжёлой операции\n"
-            f"Сейчас занято: {describe_heavy_meta(waiting_meta)}\n"
-            "После освобождения очереди разбор продолжится автоматически."
-        )
-        try:
-            await bot.send_message(chat_id, waiting_text, disable_web_page_preview=True)
-        except Exception:
-            logger.warning("vk_auto: heavy_wait_notice_send_failed", exc_info=True)
-        logger.info(
-            "vk_auto: waiting_heavy kind=%s trigger=%s run_id=%s operator_id=%s",
-            waiting_meta.kind,
-            waiting_meta.trigger,
-            waiting_meta.run_id,
-            waiting_meta.operator_id,
-        )
-    gate = (
-        _NoopHeavyOperation()
-        if heavy_mode == "off"
-        else heavy_operation(
-            kind="vk_auto_import",
-            trigger=trigger,
-            mode="try" if heavy_mode == "try" else "wait",
-            run_id=run_id,
-            operator_id=operator_id,
-            chat_id=chat_id,
-        )
-    )
-
-    async with gate as acquired:
-        if not acquired:
-            try:
-                await bot.send_message(
-                    chat_id,
-                    "⏳ VK auto import сейчас занят другой тяжёлой операцией. Повтори запуск позже.",
-                    disable_web_page_preview=True,
-                )
-            except Exception:
-                logger.warning("vk_auto: heavy_busy_notice_send_failed", exc_info=True)
-            report.cancelled = True
-            report.errors.append("heavy_busy")
-            await finish_ops_run(
+    total_estimate = None
+    batch_error: BaseException | None = None
+    try:
+        if not ops_run_id:
+            ops_run_id = await start_ops_run(
                 db,
-                run_id=ops_run_id,
-                status="skipped",
-                metrics={
-                    "inbox_processed": 0,
-                    "inbox_imported": 0,
-                    "inbox_rejected": 0,
-                    "inbox_failed": 0,
-                    "inbox_deferred": 0,
-                    "events_created": 0,
-                    "events_updated": 0,
-                    "cancelled": 1,
-                    "skipped_requeued": int(report.skipped_requeued),
+                kind="vk_auto_import",
+                trigger=trigger,
+                chat_id=chat_id,
+                operator_id=operator_id,
+                details={
+                    "batch_id": batch_id,
+                    "run_id": run_id,
+                    "limit_requested": limit,
                     "include_skipped": int(bool(include_skipped)),
-                    "limit": int(limit_int),
-                    "duration_sec": round(float(time.time() - start), 3),
-                },
-                details={
-                    "batch_id": batch_id,
-                    "run_id": run_id,
-                    "skip_reason": "heavy_busy",
-                    "errors": list(report.errors or [])[:40],
                 },
             )
-            return report
-        # Infrastructure admission belongs to the batch, not to a source
-        # terminal. Check after waiting for the heavy gate, before any claim or
-        # prefetch, so an unsafe volume cannot burn through pending carriers.
+        _clear_vk_auto_import_cancel(chat_id=chat_id, operator_id=operator_id)
+        await vk_review.release_stale_locks(db)
+        await vk_review.release_due_deferred(db, batch_id=batch_id)
+
+        def _env_enabled(name: str, default: bool) -> bool:
+            raw = (os.getenv(name) or "").strip().lower()
+            if not raw:
+                return default
+            return raw in {"1", "true", "yes", "on"}
+
         try:
-            vk_intake._require_vk_crawl_storage_headroom(db)
-        except RuntimeError as exc:
-            report.errors.append(str(exc))
-            await finish_ops_run(
-                db,
-                run_id=ops_run_id,
-                status="error",
-                metrics={"inbox_processed": 0, "inbox_failed_technical": 0},
-                details={
-                    "batch_id": batch_id,
-                    "run_id": run_id,
-                    "skip_reason": "storage_admission",
-                    "errors": list(report.errors),
-                },
-            )
-            logger.warning("vk_auto: batch storage admission blocked: %s", exc)
-            try:
-                await bot.send_message(
-                    chat_id,
-                    "⏸ VK auto import: недостаточно доступного места; "
-                    "очередь не обработана и сохранена для следующего запуска.\n"
-                    f"{exc}",
-                    disable_web_page_preview=True,
-                )
-            except Exception:
-                logger.warning("vk_auto: storage_notice_send_failed", exc_info=True)
-            return report
-
-        current_no = 0
-        prefetch_enabled = _env_enabled("VK_AUTO_IMPORT_PREFETCH", False)
-
-        async def _await_prefetch(task: asyncio.Task | None) -> VkInboxPrefetch | None:
-            if task is None:
-                return None
-            try:
-                res = await task
-            except asyncio.CancelledError:
-                return None
-            except Exception:
-                return None
-            return res if isinstance(res, VkInboxPrefetch) else None
-
-        def _start_prefetch(post_obj: Any) -> asyncio.Task | None:
-            if not prefetch_enabled or not post_obj:
-                return None
-            next_url = _vk_wall_url(
-                post_obj.group_id,
-                post_obj.post_id,
-                getattr(post_obj, "owner_type", None) or "group",
-            )
-            return asyncio.create_task(
-                _prefetch_vk_inbox_row(
-                    db,
-                    bot=bot,
-                    post=post_obj,
-                    source_url=next_url,
-                    festival_names=festival_names,
-                    festival_alias_pairs=festival_alias_pairs,
-                )
-            )
-
-        async def _await_process_task(
-            *,
-            post_obj: Any,
-            source_url: str,
-            process_task: asyncio.Task,
-        ) -> None:
-            try:
-                if row_timeout_sec > 0:
-                    await asyncio.wait_for(process_task, timeout=row_timeout_sec)
-                else:
-                    await process_task
-            except asyncio.TimeoutError:
-                try:
-                    await _terminalize_vk_auto_failure(
-                        db,
-                        post=post_obj,
-                        report=report,
-                        typed_reason="ROW_TIMEOUT",
-                        source_url=source_url,
-                        error_detail=f"row timed out after {row_timeout_sec:.1f}s",
-                    )
-                except Exception:
-                    logger.exception("vk_auto: terminalization failed after timeout")
-                    raise
-                logger.warning(
-                    "vk_auto: inbox row timeout id=%s url=%s timeout_sec=%.1f",
-                    getattr(post_obj, "id", None),
-                    source_url,
-                    row_timeout_sec,
-                )
-                try:
-                    await bot.send_message(
-                        chat_id,
-                        (
-                            "❌ VK auto import: таймаут обработки поста\n"
-                            f"{source_url}\n"
-                            f"timeout_sec={row_timeout_sec:.1f}"
-                        ),
-                        disable_web_page_preview=True,
-                    )
-                except Exception:
-                    logger.warning("vk_auto: timeout_send_failed", exc_info=True)
-            except Exception as exc:
-                try:
-                    await _terminalize_vk_auto_failure(
-                        db,
-                        post=post_obj,
-                        report=report,
-                        typed_reason="UNEXPECTED_ERROR",
-                        source_url=source_url,
-                        error_detail=str(exc),
-                    )
-                except Exception:
-                    logger.exception("vk_auto: terminalization failed after exception")
-                    raise
-                logger.exception(
-                    "vk_auto: unexpected exception in inbox row processing id=%s url=%s",
-                    getattr(post_obj, "id", None),
-                    source_url,
-                )
-                try:
-                    await bot.send_message(
-                        chat_id,
-                        f"❌ VK auto import: техническая ошибка при обработке поста\n{source_url}\n{exc}",
-                        disable_web_page_preview=True,
-                    )
-                except Exception:
-                    pass
-
-        if unbounded:
-            post = await vk_review.pick_next(
-                db,
-                operator_id,
-                batch_id,
-                requeue_skipped=False,
-                prefer_oldest=True,
-                strict_chronological=True,
-            )
-            prefetch_task = _start_prefetch(post) if post else None
-            while post:
-                if _vk_auto_import_cancelled(chat_id=chat_id, operator_id=operator_id):
-                    report.cancelled = True
-                    try:
-                        await vk_review.mark_pending(db, int(post.id))
-                    except Exception:
-                        logger.warning("vk_auto: mark_pending failed on cancel", exc_info=True)
-                    if prefetch_task:
-                        prefetch_task.cancel()
-                    break
-
-                current_no += 1
-                report.inbox_processed += 1
-                source_url = _vk_wall_url(
-                    post.group_id, post.post_id, getattr(post, "owner_type", None) or "group"
-                )
-                report.inbox_ids.append(int(post.id))
-                report.source_urls.append(source_url)
-                total_txt = str(int(total_estimate)) if isinstance(total_estimate, int) else "?"
-                progress_mid: int | None = None
-                if send_progress and (current_no % progress_every == 0):
-                    try:
-                        msg = await bot.send_message(
-                            chat_id,
-                            f"⏳ Разбираю VK пост {current_no}/{total_txt}: {source_url}",
-                            disable_web_page_preview=True,
-                        )
-                        progress_mid = getattr(msg, "message_id", None) or getattr(msg, "id", None)
-                        if progress_mid is not None:
-                            progress_mid = int(progress_mid)
-                    except Exception:
-                        logger.warning("vk_auto: progress_send_failed", exc_info=True)
-
-                prefetched_row = await _await_prefetch(prefetch_task)
-                process_task = asyncio.create_task(
-                    _process_vk_inbox_row(
-                        db,
-                        bot,
-                        chat_id=chat_id,
-                        operator_id=operator_id,
-                        batch_id=batch_id,
-                        post=post,
-                        source_url=source_url,
-                        report=report,
-                        festival_names=festival_names,
-                        festival_alias_pairs=festival_alias_pairs,
-                        progress_message_id=progress_mid,
-                        progress_current_no=current_no,
-                        progress_total_txt=total_txt,
-                        prefetched=prefetched_row,
-                        ops_run_id=ops_run_id,
-                    )
-                )
-
-                await _await_process_task(
-                    post_obj=post,
-                    source_url=source_url,
-                    process_task=process_task,
-                )
-
-                next_post = None
-                next_prefetch_task = None
-                if prefetch_enabled:
-                    next_post = await vk_review.pick_next(
-                        db,
-                        operator_id,
-                        batch_id,
-                        requeue_skipped=False,
-                        prefer_oldest=True,
-                        strict_chronological=True,
-                        resume_locked=False,
-                    )
-                    next_prefetch_task = _start_prefetch(next_post) if next_post else None
-                else:
-                    next_post = await vk_review.pick_next(
-                        db,
-                        operator_id,
-                        batch_id,
-                        requeue_skipped=False,
-                        prefer_oldest=True,
-                        strict_chronological=True,
-                    )
-
-                post = next_post
-                prefetch_task = next_prefetch_task
+            row_timeout_raw = (os.getenv("VK_AUTO_IMPORT_ROW_TIMEOUT_SEC") or "").strip()
+            row_timeout_sec = float(row_timeout_raw) if row_timeout_raw else 30.0 * 60.0
+        except Exception:
+            row_timeout_sec = 30.0 * 60.0
+        if row_timeout_sec <= 0:
+            row_timeout_sec = 0.0
         else:
-            remaining = max(1, int(limit_int))
-            post = await vk_review.pick_next(
-                db,
-                operator_id,
-                batch_id,
-                requeue_skipped=False,
-                prefer_oldest=True,
-                strict_chronological=True,
-            )
-            prefetch_task = _start_prefetch(post) if post else None
-            while post and remaining > 0:
-                if _vk_auto_import_cancelled(chat_id=chat_id, operator_id=operator_id):
-                    report.cancelled = True
-                    try:
-                        await vk_review.mark_pending(db, int(post.id))
-                    except Exception:
-                        logger.warning("vk_auto: mark_pending failed on cancel", exc_info=True)
-                    if prefetch_task:
-                        prefetch_task.cancel()
-                    break
+            row_timeout_sec = min(float(row_timeout_sec), 6.0 * 60.0 * 60.0)
 
-                current_no += 1
-                remaining -= 1
-                report.inbox_processed += 1
-                source_url = _vk_wall_url(
-                    post.group_id, post.post_id, getattr(post, "owner_type", None) or "group"
+        # Optional: include previously skipped rows in the run. This is useful for
+        # E2E over a prod DB snapshot where an operator may have skipped items
+        # earlier, but we still want to validate Smart Update correctness.
+        if include_skipped:
+            async with db.raw_conn() as conn:
+                cur = await conn.execute("SELECT COUNT(1) FROM vk_inbox WHERE status='pending'")
+                row = await cur.fetchone()
+                pending_count = int((row[0] if row else 0) or 0)
+            # Do not inflate queue for this run: requeue only enough skipped rows
+            # to fill the remaining batch up to `limit`.
+            if unbounded:
+                requeue_limit = 10**9
+            else:
+                requeue_limit = max(0, int(limit_int) - pending_count)
+            if requeue_limit <= 0:
+                requeue_limit = 0
+            async with db.raw_conn() as conn:
+                cur = await conn.execute(
+                    """
+                    SELECT id
+                    FROM vk_inbox
+                    WHERE status='skipped'
+                    ORDER BY date ASC,
+                             CASE WHEN event_ts_hint IS NULL THEN 1 ELSE 0 END,
+                             event_ts_hint ASC,
+                             id ASC
+                    LIMIT ?
+                    """,
+                    (requeue_limit,),
                 )
-                report.inbox_ids.append(int(post.id))
-                report.source_urls.append(source_url)
-                total_txt = str(int(total_estimate)) if isinstance(total_estimate, int) else str(int(limit_int))
-                progress_mid = None
-                if send_progress and (current_no % progress_every == 0):
-                    try:
-                        msg = await bot.send_message(
-                            chat_id,
-                            f"⏳ Разбираю VK пост {current_no}/{total_txt}: {source_url}",
-                            disable_web_page_preview=True,
-                        )
-                        progress_mid = getattr(msg, "message_id", None) or getattr(msg, "id", None)
-                        if progress_mid is not None:
-                            progress_mid = int(progress_mid)
-                    except Exception:
-                        logger.warning("vk_auto: progress_send_failed", exc_info=True)
+                ids = [int(r[0]) for r in (await cur.fetchall() or [])]
+                if ids:
+                    placeholders = ",".join("?" for _ in ids)
+                    await conn.execute(
+                        f"""
+                        UPDATE vk_inbox
+                        SET status='pending',
+                            locked_by=NULL,
+                            locked_at=NULL,
+                            review_batch=NULL
+                        WHERE id IN ({placeholders})
+                        """,
+                        tuple(ids),
+                    )
+                    await conn.commit()
+                    report.skipped_requeued = len(ids)
+                    logger.info(
+                        "vk_auto: requeued_skipped=%s pending=%s limit=%s",
+                        len(ids),
+                        pending_count,
+                        limit,
+                    )
 
-                prefetched_row = await _await_prefetch(prefetch_task)
-                process_task = asyncio.create_task(
-                    _process_vk_inbox_row(
+        # Preload festival hints once per run.
+        try:
+            festival_names, festival_alias_pairs = await _load_festival_hints(db)
+        except Exception as exc:
+            festival_names, festival_alias_pairs = [], []
+            report.errors.append(f"festival_hints_failed: {exc}")
+
+        try:
+            statuses = ("pending", "skipped") if include_skipped else ("pending",)
+            placeholders = ",".join(["?"] * len(statuses))
+            async with db.raw_conn() as conn:
+                cur = await conn.execute(
+                    f"""
+                    SELECT COUNT(1)
+                    FROM vk_inbox
+                    WHERE status IN ({placeholders})
+                    """,
+                    statuses,
+                )
+                row = await cur.fetchone()
+                total_estimate = int((row[0] if row else 0) or 0)
+                if not unbounded:
+                    total_estimate = min(int(total_estimate), int(limit_int))
+        except Exception:
+            total_estimate = None
+
+        heavy_mode = _vk_auto_import_heavy_mode(trigger)
+        waiting_meta = current_heavy_meta() if heavy_mode != "off" else None
+        if waiting_meta is not None and heavy_mode == "wait":
+            logger.info(
+                "vk_auto: waiting_heavy kind=%s trigger=%s run_id=%s operator_id=%s",
+                waiting_meta.kind,
+                waiting_meta.trigger,
+                waiting_meta.run_id,
+                waiting_meta.operator_id,
+            )
+        gate = (
+            _NoopHeavyOperation()
+            if heavy_mode == "off"
+            else heavy_operation(
+                kind="vk_auto_import",
+                trigger=trigger,
+                mode="try" if heavy_mode == "try" else "wait",
+                run_id=run_id,
+                operator_id=operator_id,
+                chat_id=chat_id,
+            )
+        )
+
+        async with gate as acquired:
+            if not acquired:
+                try:
+                    await bot.send_message(
+                        chat_id,
+                        "⏳ VK auto import сейчас занят другой тяжёлой операцией. Повтори запуск позже.",
+                        disable_web_page_preview=True,
+                    )
+                except Exception:
+                    logger.warning("vk_auto: heavy_busy_notice_send_failed", exc_info=True)
+                report.cancelled = True
+                report.errors.append("heavy_busy")
+                await finish_ops_run(
+                    db,
+                    run_id=ops_run_id,
+                    status="skipped",
+                    metrics={
+                        "inbox_processed": 0,
+                        "inbox_imported": 0,
+                        "inbox_rejected": 0,
+                        "inbox_failed": 0,
+                        "inbox_deferred": 0,
+                        "events_created": 0,
+                        "events_updated": 0,
+                        "cancelled": 1,
+                        "skipped_requeued": int(report.skipped_requeued),
+                        "include_skipped": int(bool(include_skipped)),
+                        "limit": int(limit_int),
+                        "duration_sec": round(float(time.time() - start), 3),
+                    },
+                    details={
+                        "batch_id": batch_id,
+                        "run_id": run_id,
+                        "skip_reason": "heavy_busy",
+                        "errors": list(report.errors or [])[:40],
+                    },
+                )
+                return report
+            # Infrastructure admission belongs to the batch, not to a source
+            # terminal. Check after waiting for the heavy gate, before any claim or
+            # prefetch, so an unsafe volume cannot burn through pending carriers.
+            try:
+                vk_intake._require_vk_crawl_storage_headroom(db)
+            except RuntimeError as exc:
+                report.errors.append(str(exc))
+                await finish_ops_run(
+                    db,
+                    run_id=ops_run_id,
+                    status="error",
+                    metrics={"inbox_processed": 0, "inbox_failed_technical": 0},
+                    details={
+                        "batch_id": batch_id,
+                        "run_id": run_id,
+                        "skip_reason": "storage_admission",
+                        "errors": list(report.errors),
+                    },
+                )
+                logger.warning("vk_auto: batch storage admission blocked: %s", exc)
+                try:
+                    await bot.send_message(
+                        chat_id,
+                        "⏸ VK auto import: недостаточно доступного места; "
+                        "очередь не обработана и сохранена для следующего запуска.\n"
+                        f"{exc}",
+                        disable_web_page_preview=True,
+                    )
+                except Exception:
+                    logger.warning("vk_auto: storage_notice_send_failed", exc_info=True)
+                return report
+
+            prefetch_enabled = _env_enabled("VK_AUTO_IMPORT_PREFETCH", False)
+
+            async def _await_prefetch(task: asyncio.Task | None) -> VkInboxPrefetch | None:
+                if task is None:
+                    return None
+                try:
+                    res = await task
+                except asyncio.CancelledError:
+                    current_task = asyncio.current_task()
+                    if current_task is not None and current_task.cancelling():
+                        raise
+                    return None
+                except Exception:
+                    return None
+                return res if isinstance(res, VkInboxPrefetch) else None
+
+            def _start_prefetch(post_obj: Any) -> asyncio.Task | None:
+                if not prefetch_enabled or not post_obj:
+                    return None
+                next_url = _vk_wall_url(
+                    post_obj.group_id,
+                    post_obj.post_id,
+                    getattr(post_obj, "owner_type", None) or "group",
+                )
+                return asyncio.create_task(
+                    _prefetch_vk_inbox_row(
                         db,
-                        bot,
-                        chat_id=chat_id,
-                        operator_id=operator_id,
-                        batch_id=batch_id,
-                        post=post,
-                        source_url=source_url,
-                        report=report,
+                        bot=bot,
+                        post=post_obj,
+                        source_url=next_url,
                         festival_names=festival_names,
                         festival_alias_pairs=festival_alias_pairs,
-                        progress_message_id=progress_mid,
-                        progress_current_no=current_no,
-                        progress_total_txt=total_txt,
-                        prefetched=prefetched_row,
-                        ops_run_id=ops_run_id,
                     )
                 )
 
-                await _await_process_task(
-                    post_obj=post,
-                    source_url=source_url,
-                    process_task=process_task,
-                )
+            async def _await_process_task(
+                *,
+                post_obj: Any,
+                source_url: str,
+                process_task: asyncio.Task,
+            ) -> None:
+                try:
+                    if row_timeout_sec > 0:
+                        await asyncio.wait_for(process_task, timeout=row_timeout_sec)
+                    else:
+                        await process_task
+                except asyncio.TimeoutError:
+                    try:
+                        await _terminalize_vk_auto_failure(
+                            db,
+                            post=post_obj,
+                            report=report,
+                            typed_reason="ROW_TIMEOUT",
+                            source_url=source_url,
+                            error_detail=f"row timed out after {row_timeout_sec:.1f}s",
+                        )
+                    except Exception:
+                        logger.exception("vk_auto: terminalization failed after timeout")
+                        raise
+                    logger.warning(
+                        "vk_auto: inbox row timeout id=%s url=%s timeout_sec=%.1f",
+                        getattr(post_obj, "id", None),
+                        source_url,
+                        row_timeout_sec,
+                    )
+                except Exception as exc:
+                    try:
+                        await _terminalize_vk_auto_failure(
+                            db,
+                            post=post_obj,
+                            report=report,
+                            typed_reason="UNEXPECTED_ERROR",
+                            source_url=source_url,
+                            error_detail=str(exc),
+                        )
+                    except Exception:
+                        logger.exception("vk_auto: terminalization failed after exception")
+                        raise
+                    logger.exception(
+                        "vk_auto: unexpected exception in inbox row processing id=%s url=%s",
+                        getattr(post_obj, "id", None),
+                        source_url,
+                    )
 
-                next_post = None
-                next_prefetch_task = None
-                if remaining > 0:
+            if unbounded:
+                post = await vk_review.pick_next(
+                    db,
+                    operator_id,
+                    batch_id,
+                    requeue_skipped=False,
+                    prefer_oldest=True,
+                    strict_chronological=True,
+                )
+                prefetch_task = _start_prefetch(post) if post else None
+                while post:
+                    if _vk_auto_import_cancelled(chat_id=chat_id, operator_id=operator_id):
+                        report.cancelled = True
+                        try:
+                            await vk_review.mark_pending(db, int(post.id))
+                        except Exception:
+                            logger.warning("vk_auto: mark_pending failed on cancel", exc_info=True)
+                        if prefetch_task:
+                            prefetch_task.cancel()
+                        break
+
+                    report.inbox_processed += 1
+                    source_url = _vk_wall_url(
+                        post.group_id, post.post_id, getattr(post, "owner_type", None) or "group"
+                    )
+                    report.inbox_ids.append(int(post.id))
+                    report.source_urls.append(source_url)
+
+                    prefetched_row = await _await_prefetch(prefetch_task)
+                    process_task = asyncio.create_task(
+                        _process_vk_inbox_row(
+                            db,
+                            bot,
+                            chat_id=chat_id,
+                            operator_id=operator_id,
+                            batch_id=batch_id,
+                            post=post,
+                            source_url=source_url,
+                            report=report,
+                            festival_names=festival_names,
+                            festival_alias_pairs=festival_alias_pairs,
+                            prefetched=prefetched_row,
+                            ops_run_id=ops_run_id,
+                        )
+                    )
+
+                    await _await_process_task(
+                        post_obj=post,
+                        source_url=source_url,
+                        process_task=process_task,
+                    )
+
+                    next_post = None
+                    next_prefetch_task = None
                     if prefetch_enabled:
                         next_post = await vk_review.pick_next(
                             db,
@@ -2120,8 +1647,98 @@ async def run_vk_auto_import(
                             strict_chronological=True,
                         )
 
-                post = next_post
-                prefetch_task = next_prefetch_task
+                    post = next_post
+                    prefetch_task = next_prefetch_task
+            else:
+                remaining = max(1, int(limit_int))
+                post = await vk_review.pick_next(
+                    db,
+                    operator_id,
+                    batch_id,
+                    requeue_skipped=False,
+                    prefer_oldest=True,
+                    strict_chronological=True,
+                )
+                prefetch_task = _start_prefetch(post) if post else None
+                while post and remaining > 0:
+                    if _vk_auto_import_cancelled(chat_id=chat_id, operator_id=operator_id):
+                        report.cancelled = True
+                        try:
+                            await vk_review.mark_pending(db, int(post.id))
+                        except Exception:
+                            logger.warning("vk_auto: mark_pending failed on cancel", exc_info=True)
+                        if prefetch_task:
+                            prefetch_task.cancel()
+                        break
+
+                    remaining -= 1
+                    report.inbox_processed += 1
+                    source_url = _vk_wall_url(
+                        post.group_id, post.post_id, getattr(post, "owner_type", None) or "group"
+                    )
+                    report.inbox_ids.append(int(post.id))
+                    report.source_urls.append(source_url)
+
+                    prefetched_row = await _await_prefetch(prefetch_task)
+                    process_task = asyncio.create_task(
+                        _process_vk_inbox_row(
+                            db,
+                            bot,
+                            chat_id=chat_id,
+                            operator_id=operator_id,
+                            batch_id=batch_id,
+                            post=post,
+                            source_url=source_url,
+                            report=report,
+                            festival_names=festival_names,
+                            festival_alias_pairs=festival_alias_pairs,
+                            prefetched=prefetched_row,
+                            ops_run_id=ops_run_id,
+                        )
+                    )
+
+                    await _await_process_task(
+                        post_obj=post,
+                        source_url=source_url,
+                        process_task=process_task,
+                    )
+
+                    next_post = None
+                    next_prefetch_task = None
+                    if remaining > 0:
+                        if prefetch_enabled:
+                            next_post = await vk_review.pick_next(
+                                db,
+                                operator_id,
+                                batch_id,
+                                requeue_skipped=False,
+                                prefer_oldest=True,
+                                strict_chronological=True,
+                                resume_locked=False,
+                            )
+                            next_prefetch_task = _start_prefetch(next_post) if next_post else None
+                        else:
+                            next_post = await vk_review.pick_next(
+                                db,
+                                operator_id,
+                                batch_id,
+                                requeue_skipped=False,
+                                prefer_oldest=True,
+                                strict_chronological=True,
+                            )
+
+                    post = next_post
+                    prefetch_task = next_prefetch_task
+
+    except (Exception, asyncio.CancelledError) as exc:
+        batch_error = exc
+        report.cancelled = report.cancelled or isinstance(exc, asyncio.CancelledError)
+        report.errors.insert(0,
+            f"{'batch_cancelled' if report.cancelled else 'batch_failed'}: {type(exc).__name__}: "
+            f"{_shorten_reason(str(exc)) or 'interrupted'}"
+            + (f"; last_source_url={report.source_urls[-1]}" if report.source_urls else "")
+        )
+        logger.exception("vk_auto: batch interrupted batch_id=%s", batch_id)
 
     took = time.time() - start
     total_txt = str(int(total_estimate)) if isinstance(total_estimate, int) else "?"
@@ -2135,8 +1752,23 @@ async def run_vk_auto_import(
         )
         report.errors.append(balance_error)
         logger.error("vk_auto: %s", balance_error)
+    terminal_status = (
+        "canceled"
+        if report.cancelled
+        else "failed"
+        if unresolved_rows > 0
+        else "partial"
+        if (batch_error is not None or report.inbox_failed > 0) and report.inbox_processed > report.inbox_failed
+        else "failed"
+        if batch_error is not None or report.inbox_failed > 0
+        else "success"
+    )
+    terminal_label = {
+        "success": "успех", "partial": "частично",
+        "failed": "ошибка", "canceled": "отменён",
+    }[terminal_status]
     summary = (
-        "🏁 VK auto import завершён\n"
+        f"🏁 VK auto import завершён: {terminal_label}\n"
         f"batch: {batch_id}\n"
         f"limit: {'all' if unbounded else limit_int}\n"
         f"include_skipped: {1 if include_skipped else 0}\n"
@@ -2152,23 +1784,55 @@ async def run_vk_auto_import(
         f"events updated: {len(set(report.updated_event_ids))}\n"
         f"took_sec: {took:.1f}"
     )
+    if report.errors:
+        summary += "\n\nОшибки:\n" + "\n".join(report.errors)
+    # One logical report for the whole queue run; /log keeps event details
+    # available without replaying a separate notification for every source.
+    event_rows: dict[int, tuple] = {}
+    source_rows: dict[int, tuple] = {}
+    event_ids = sorted(set(report.created_event_ids + report.updated_event_ids))
+    bot_username = await _resolve_bot_username(bot) if event_ids else None
     try:
-        await bot.send_message(chat_id, summary, disable_web_page_preview=True)
+        async with db.raw_conn() as conn:
+            if event_ids:
+                cur = await conn.execute(
+                    "SELECT id,title,telegraph_url,tg_event_post_url FROM event WHERE id IN ("
+                    + ",".join("?" for _ in event_ids) + ")", event_ids,
+                )
+                event_rows = {int(row[0]): row[1:] for row in await cur.fetchall()}
+            if report.inbox_ids:
+                cur = await conn.execute(
+                    "SELECT id,status,last_typed_reason FROM vk_inbox WHERE id IN ("
+                    + ",".join("?" for _ in report.inbox_ids) + ")", report.inbox_ids,
+                )
+                source_rows = {int(row[0]): row[1:] for row in await cur.fetchall()}
+    except Exception:
+        logger.warning("vk_auto: summary_details_read_failed", exc_info=True)
+    for label, ids in (
+        ("Созданы", report.created_event_ids), ("Обновлены", report.updated_event_ids)
+    ):
+        if ids:
+            summary += f"\n\n{label}:"
+        for eid in dict.fromkeys(ids):
+            title, telegraph_url, tg_url = event_rows.get(eid, (f"ID {eid}", None, None))
+            summary += f"\n{eid}: {title}"
+            for url in dict.fromkeys(url for url in (telegraph_url, tg_url) if url):
+                summary += f"\n{url}"
+            summary += f"\n{_log_deeplink(bot_username, eid) or f'/log {eid}'}"
+    if report.source_urls:
+        summary += "\n\nИсточники:"
+        for inbox_id, url in zip(report.inbox_ids, report.source_urls):
+            status, reason = source_rows.get(inbox_id, ("unknown", None))
+            summary += f"\n{url} — {status}" + (f": {reason}" if reason else "")
+    try:
+        from main import split_text
+
+        for part in split_text(summary):
+            await bot.send_message(chat_id, part, parse_mode=None, disable_web_page_preview=True)
     except Exception:
         logger.exception("vk_auto: failed to send summary")
 
     _clear_vk_auto_import_cancel(chat_id=chat_id, operator_id=operator_id)
-    terminal_status = (
-        "canceled"
-        if report.cancelled
-        else "failed"
-        if unresolved_rows > 0
-        else "partial"
-        if report.inbox_failed > 0 and report.inbox_processed > report.inbox_failed
-        else "failed"
-        if report.inbox_failed > 0
-        else "success"
-    )
     await finish_ops_run(
         db,
         run_id=ops_run_id,
@@ -2221,6 +1885,8 @@ async def run_vk_auto_import(
             "duration_sec": round(float(took), 3),
         },
     )
+    if isinstance(batch_error, asyncio.CancelledError):
+        raise batch_error
     return report
 
 
@@ -2237,9 +1903,6 @@ async def _process_vk_inbox_row(
     report: VkAutoImportReport,
     festival_names: list[str] | None,
     festival_alias_pairs: Sequence[tuple[str, int]] | None,
-    progress_message_id: int | None,
-    progress_current_no: int,
-    progress_total_txt: str,
     prefetched: VkInboxPrefetch | None = None,
     ops_run_id: int | None = None,
 ) -> None:
@@ -2278,23 +1941,6 @@ async def _process_vk_inbox_row(
             )
         except Exception:
             pass
-
-    async def _emit_progress(icon: str, extra_lines: Sequence[str] | None = None) -> None:
-        if not progress_message_id:
-            return
-        text = _render_progress_text(
-            icon,
-            current_no=int(progress_current_no),
-            total_txt=str(progress_total_txt),
-            source_url=source_url,
-            extra_lines=extra_lines,
-        )
-        await _update_progress_message(
-            bot,
-            chat_id=chat_id,
-            message_id=progress_message_id,
-            text=text,
-        )
 
     # Fetch VK source defaults.
     source_name_val: str | None = None
@@ -2415,15 +2061,6 @@ async def _process_vk_inbox_row(
                 source_url=source_url,
                 error_detail="legacy packet lacks complete VK attachment/copy evidence",
             )
-            await _emit_progress(
-                "🧩",
-                [
-                    "Результат: сохранённый пакет неполон; технический terminal",
-                    "Автоматический повтор не запланирован",
-                    "Причина: legacy packet lacks complete VK attachment/copy evidence",
-                    f"took_sec: {(time.monotonic() - start_ts):.1f}",
-                ],
-            )
             return
         else:
             # An inbox text projection is not a captured revision. With no
@@ -2445,15 +2082,6 @@ async def _process_vk_inbox_row(
                 source_url=source_url,
                 error_detail=fetch_detail,
             )
-            await _emit_progress(
-                "🗑️",
-                [
-                    "Результат: evidence недоступен; технический terminal",
-                    "Автоматический повтор не запланирован",
-                    f"Причина: {fetch_detail}",
-                    f"took_sec: {(time.monotonic() - start_ts):.1f}",
-                ],
-            )
             return
         if not (allow_stale and (text or "").strip()):
             fetch_detail = (
@@ -2467,25 +2095,13 @@ async def _process_vk_inbox_row(
                 source_url=source_url,
                 error_detail=fetch_detail,
             )
-            await _emit_progress(
-                "❌",
-                [
-                    "Результат: не удалось загрузить пост из VK (wall.getById)",
-                    "Автоматический повтор не запланирован",
-                    f"Причина: kind={vk_fetch.kind} code={vk_fetch.error_code}",
-                    f"took_sec: {(time.monotonic() - start_ts):.1f}",
-                ],
-            )
             return
 
-    post_popularity: str | None = None
     if isinstance(metrics, dict) and metrics:
         try:
             from source_parsing.post_metrics import (
                 compute_age_day,
-                load_vk_popularity_baseline,
                 normalize_age_day,
-                popularity_marks,
                 upsert_vk_post_metric,
             )
 
@@ -2518,18 +2134,6 @@ async def _process_vk_inbox_row(
                     reposts=int(reposts) if isinstance(reposts, int) else None,
                     collected_ts=int(collected_ts),
                 )
-                baseline = await load_vk_popularity_baseline(
-                    db,
-                    group_id=int(post.group_id),
-                    age_day=int(age_day),
-                    now_ts=int(collected_ts),
-                )
-                marks = popularity_marks(
-                    views=views if isinstance(views, int) else None,
-                    likes=likes if isinstance(likes, int) else None,
-                    baseline=baseline,
-                )
-                post_popularity = marks.text or None
         except Exception:
             logger.warning(
                 "vk_auto: failed to persist/score post metrics gid=%s post_id=%s",
@@ -2760,15 +2364,6 @@ async def _process_vk_inbox_row(
                 source_url=source_url,
                 error_detail=str(exc),
             )
-            await _emit_progress(
-                "❌",
-                [
-                    "Результат: техническая ошибка source parse",
-                    "Автоматический повтор не запланирован",
-                    f"Причина: {typed_reason}",
-                    f"took_sec: {(time.monotonic() - start_ts):.1f}",
-                ],
-            )
             _log_row_timing(drafts_count=0, ok_value=False)
             return
 
@@ -2792,15 +2387,6 @@ async def _process_vk_inbox_row(
             typed_reason=reason,
             source_url=source_url,
             error_detail="source parse did not reach a complete typed decision",
-        )
-        await _emit_progress(
-            "❌",
-            [
-                "Результат: source parse завершён техническим terminal",
-                "Автоматический повтор не запланирован",
-                f"Причина: {reason}",
-                f"took_sec: {(time.monotonic() - start_ts):.1f}",
-            ],
         )
         return
 
@@ -2850,15 +2436,6 @@ async def _process_vk_inbox_row(
                 terminal_carrier_outcome="LIFECYCLE_NO_MATCH_NOOP",
                 typed_error_reason=f"LIFECYCLE_NO_MATCH_NOOP:{reason}",
             )
-            await _emit_progress(
-                "⏭️",
-                [
-                    "Результат: lifecycle-уведомление не относится к известному событию",
-                    "Итог: подтверждённый no-op без технической ошибки",
-                    f"Причина: {_shorten_reason(reason) or 'no matching event'}",
-                    f"took_sec: {(time.monotonic() - start_ts):.1f}",
-                ],
-            )
             return
         if decision.disposition is SourceDisposition.LIFECYCLE_ONLY and lifecycle_event_ids:
             report.inbox_imported += 1
@@ -2900,13 +2477,6 @@ async def _process_vk_inbox_row(
                 terminal_carrier_outcome="CONFIRMED_NO_EVENT",
                 typed_error_reason=f"CONFIRMED_NO_EVENT:{no_event_reason}",
             )
-            await _emit_progress(
-                "⏭️",
-                [
-                    "Результат: LLM подтвердил отсутствие события",
-                    f"took_sec: {(time.monotonic() - start_ts):.1f}",
-                ],
-            )
             return
         await _terminalize_vk_auto_failure(
             db,
@@ -2929,10 +2499,6 @@ async def _process_vk_inbox_row(
 
     imported_event_ids: list[int] = []
     imported_event_dates: list[str | None] = []
-    created_ids: list[int] = []
-    updated_ids: list[int] = []
-    added_posters_total = 0
-    added_posters_by_event_id: dict[int, int] = {}
     partial_error: str | None = None
     smart_retry_reasons: list[str] = []
     semantic_rejections: list[str] = []
@@ -3019,10 +2585,8 @@ async def _process_vk_inbox_row(
             child_outcomes.append(str(smart_result.outcome.value))
             imported_event_dates.append(res.event_date)
             if smart_result.outcome is SmartUpdateTerminalOutcome.CREATED:
-                created_ids.append(int(res.event_id))
                 report.created_event_ids.append(int(res.event_id))
             else:
-                updated_ids.append(int(res.event_id))
                 report.updated_event_ids.append(int(res.event_id))
             # Preserve completed children before awaiting the next child: row
             # cancellation must not discard their existing receipt links.
@@ -3036,9 +2600,6 @@ async def _process_vk_inbox_row(
                 "vk_auto.child_committed inbox_id=%s event_id=%s outcome=%s",
                 post.id, res.event_id, smart_result.outcome.value,
             )
-            added = int(getattr(res, "smart_added_posters", 0) or 0)
-            added_posters_total += added
-            added_posters_by_event_id[int(res.event_id)] = added
         except Exception as exc:
             ok = False
             exc_txt = str(exc)
@@ -3053,15 +2614,6 @@ async def _process_vk_inbox_row(
                     source_url=source_url,
                     child_outcomes=child_outcomes,
                     error_detail=exc_txt,
-                )
-                await _emit_progress(
-                    "❌",
-                    [
-                        "Результат: ошибка сохранения (persist)",
-                        "Автоматический повтор не запланирован",
-                        f"Причина: {_shorten_reason(exc_txt) or '—'}",
-                        f"took_sec: {(time.monotonic() - start_ts):.1f}",
-                    ],
                 )
                 _log_row_timing(drafts_count=len(drafts or []), ok_value=False)
                 return
@@ -3090,15 +2642,6 @@ async def _process_vk_inbox_row(
             source_url=source_url,
             child_outcomes=child_outcomes,
         )
-        await _emit_progress(
-            "❌",
-            [
-                "Результат: Smart Update завершился технической ошибкой",
-                "Автоматический повтор не запланирован",
-                f"Причина: {_shorten_reason(smart_technical_reason) or 'technical failure'}",
-                f"took_sec: {(time.monotonic() - start_ts):.1f}",
-            ],
-        )
         _log_row_timing(drafts_count=len(drafts or []), ok_value=False)
         return
     if smart_retry_reason and not imported_event_ids:
@@ -3111,15 +2654,6 @@ async def _process_vk_inbox_row(
             source_url=source_url,
             child_outcomes=child_outcomes,
         )
-        await _emit_progress(
-            "❌",
-            [
-                "Результат: Smart Update не завершил решение; технический terminal",
-                "Автоматический повтор не запланирован",
-                f"Причина: {_shorten_reason(smart_retry_reason) or 'transient'}",
-                f"took_sec: {(time.monotonic() - start_ts):.1f}",
-            ],
-        )
         _log_row_timing(drafts_count=len(drafts or []), ok_value=True)
         return
 
@@ -3130,15 +2664,6 @@ async def _process_vk_inbox_row(
             inbox_id=int(post.id),
             outcome="CONFIRMED_PRODUCT_EXCLUSION",
             typed_reason=semantic_rejections[0],
-        )
-        await _emit_progress(
-            "⏭️",
-            [
-                "Результат: Smart Update отклонил все события подборки",
-                f"Причина: {_shorten_reason(semantic_rejections[0]) or '—'}",
-                f"Отклонено карточек: {len(semantic_rejections)}",
-                f"took_sec: {(time.monotonic() - start_ts):.1f}",
-            ],
         )
         _log_row_timing(drafts_count=len(drafts or []), ok_value=False)
         return
@@ -3225,38 +2750,6 @@ async def _process_vk_inbox_row(
         )
         report.inbox_imported += 1
 
-    created_cnt = len(created_ids)
-    updated_cnt = len(updated_ids)
-    if created_cnt and not updated_cnt:
-        icon = "✅"
-    elif updated_cnt and not created_cnt:
-        icon = "🔄"
-    else:
-        icon = "✅🔄"
-
-    ids_preview = ", ".join(str(x) for x in (imported_event_ids[:5] or []))
-    extra_lines = [
-        f"Smart Update: ✅{created_cnt} 🔄{updated_cnt}",
-        f"event_ids: {ids_preview}{'…' if len(imported_event_ids) > 5 else ''}",
-        f"Иллюстрации: +{added_posters_total}",
-        "Отчёт Smart Update: ⏳",
-    ]
-    if semantic_rejections:
-        extra_lines.insert(0, f"⚠️ Отклонено независимых карточек: {len(semantic_rejections)}")
-    if smart_technical_reason:
-        extra_lines.insert(
-            0,
-            "❌ Частично: Smart Update technical terminal, автоматический повтор не запланирован: "
-            f"{_shorten_reason(smart_technical_reason) or 'technical failure'}",
-        )
-    elif terminal_failure_detail:
-        extra_lines.insert(
-            0,
-            "❌ Частично: технический terminal, автоматический повтор не запланирован: "
-            f"{_shorten_reason(terminal_failure_detail) or 'technical failure'}",
-        )
-    await _emit_progress(icon, extra_lines)
-
     if inline_jobs_enabled:
         timeout_sec = float(os.getenv("VK_AUTO_IMPORT_INLINE_JOBS_TIMEOUT_SEC", "90") or "90")
         t0 = time.monotonic()
@@ -3309,24 +2802,6 @@ async def _process_vk_inbox_row(
             )
         _tmark("inline_jobs", time.monotonic() - t0)
 
-    # Send the unified report after inline Telegraph/ICS jobs so the operator sees
-    # the final (potentially recreated) Telegraph URL, not the stale snapshot value.
-    t0 = time.monotonic()
-    report_sent = await _send_unified_event_report(
-        db,
-        bot,
-        chat_id,
-        created=created_ids,
-        updated=updated_ids,
-        source_url=source_url,
-        added_posters_by_event_id=added_posters_by_event_id,
-        post_metrics=metrics,
-        post_popularity=post_popularity,
-    )
-    _tmark("send_unified_report", time.monotonic() - t0)
-    extra_lines[-1] = f"Отчёт Smart Update: {'✅' if report_sent else '⚠️'}"
-    extra_lines.append(f"took_sec: {(time.monotonic() - start_ts):.1f}")
-    await _emit_progress(icon, extra_lines)
     _log_row_timing(drafts_count=len(drafts or []), ok_value=True)
 
 

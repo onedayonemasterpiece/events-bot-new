@@ -1,7 +1,60 @@
 from __future__ import annotations
 
+import json
+
+import pytest
+
 from models import Event
+import smart_event_update as su
 from smart_event_update import _apply_ticket_fields
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "legacy_free,decision,link,terms,expected",
+    [
+        (False, None, None, "", None),
+        (False, None, "https://tickets.example/fair", "", None),
+        (False, "unknown", None, "", None),
+        (False, None, None, "Вход платный.", None),
+        (False, "confirmed_paid", None, "Вход платный.", False),
+        (False, "confirmed_free", None, "Вход свободный.", True),
+        (True, None, None, "Вход свободный. Мастер-класс оплачивается отдельно.", True),
+    ],
+)
+async def test_full_rewrite_only_passes_confirmed_admission(
+    monkeypatch, legacy_free, decision, link, terms, expected
+):
+    # Telegram tastes_of_vistynets/1429, event 11105: sale of local produce.
+    source = (
+        "Ярмарка «Вкусов Виштынецкой возвышенности». В программе: "
+        "луковой пирог от Натальи Добровольской, пос. Дмитриевка; "
+        "манник с иргой, тыквенные вафли, лисичкины пряники и чайные сердечки от Елены Уфимцевой."
+    )
+    source = f"{source} {terms}".strip()
+    event = Event(
+        title="Ярмарка", date="2026-11-21", source_text=source, is_free=legacy_free,
+        ticket_link=link,
+        collection_decisions={"admission_decision": {"value": decision}} if decision else None,
+    )
+    candidate = su.EventCandidate(
+        source_type="telegram", source_url="https://t.me/tastes_of_vistynets/1429", source_text=source
+    )
+    prompts = []
+
+    async def capture(prompt, **_kwargs):
+        prompts.append(prompt)
+        return None
+
+    monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+    monkeypatch.setattr(su, "_ask_gemma_text", capture)
+    await su._rewrite_description_full_from_sources(event, candidate)
+
+    (prompt,) = prompts
+    data = json.loads(prompt.split("Данные:\n", 1)[1])
+    assert data["is_free"] is expected
+    assert data["source_text"] == source
+    assert "не подтверждают обязательный входной билет" in prompt
 
 
 def test_apply_ticket_fields_refines_broad_landing_page_link() -> None:

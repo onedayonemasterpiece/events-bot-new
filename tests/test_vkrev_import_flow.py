@@ -567,6 +567,8 @@ async def test_vkrev_import_flow_handles_multiple_events(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_vkrev_import_flow_notifies_on_persist_failure(tmp_path, monkeypatch):
+    from smart_event_update import SmartUpdateResult, SmartUpdateTerminalOutcome
+
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -616,6 +618,9 @@ async def test_vkrev_import_flow_notifies_on_persist_failure(tmp_path, monkeypat
                 event_time="10:00",
                 event_type=None,
                 is_free=False,
+                smart_result=SmartUpdateResult(
+                    outcome=SmartUpdateTerminalOutcome.CREATED, event_id=101
+                ),
             )
         raise RuntimeError("persist failed")
 

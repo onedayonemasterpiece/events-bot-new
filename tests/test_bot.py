@@ -9808,7 +9808,7 @@ async def test_notify_superadmin_retry(monkeypatch, caplog):
 
     bot = FakeBot("token")
     with caplog.at_level(logging.WARNING):
-        await main.notify_superadmin(object(), bot, "hi")
+        assert await main.notify_superadmin(object(), bot, "hi")
 
     assert len(FakeBot.instances) == 2
     assert any("retry with fresh session" in r.message for r in caplog.records)

@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:guide-celebration-20261118
+    image: runcoveer/events:smart-update-quality-20261119
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
