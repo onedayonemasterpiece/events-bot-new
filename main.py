@@ -8991,7 +8991,7 @@ def format_event_caption(ev: Event, *, style: str = "ics") -> tuple[str, str | N
         day = ev.date
 
     parts: list[str] = [html.escape(day)]
-    if ev.time:
+    if ev.time and not getattr(ev, "time_is_default", False):
         parts.append(html.escape(ev.time))
 
     loc_parts: list[str] = []
@@ -21398,7 +21398,7 @@ async def update_telegraph_event_page(
             date=getattr(ev, "date", None),
             end_date=getattr(ev, "end_date", None),
             end_date_is_inferred=bool(getattr(ev, "end_date_is_inferred", False)),
-            time=getattr(ev, "time", None),
+            time=None if ev.time_is_default else ev.time,
             event_type=getattr(ev, "event_type", None),
             lifecycle_status=str(lifecycle_status) if lifecycle_status is not None else None,
             location_name=(ev.location_name or None),
@@ -21435,6 +21435,7 @@ async def update_telegraph_event_page(
                                 Event.id,
                                 Event.date,
                                 Event.time,
+                                Event.time_is_default,
                                 Event.telegraph_url,
                                 Event.telegraph_path,
                                 Event.lifecycle_status,
@@ -21481,12 +21482,12 @@ async def update_telegraph_event_page(
                         {
                             "id": int(event_id),
                             "date": getattr(ev, "date", None),
-                            "time": getattr(ev, "time", None),
+                            "time": None if ev.time_is_default else ev.time,
                             "url": _event_url(getattr(ev, "telegraph_url", None), getattr(ev, "telegraph_path", None)),
                             "status": str(lifecycle_status) if lifecycle_status is not None else None,
                         }
                     )
-                    for rid, rdate, rtime, rurl, rpath, rstatus in rows:
+                    for rid, rdate, rtime, rtime_default, rurl, rpath, rstatus in rows:
                         try:
                             rid_int = int(rid)
                         except Exception:
@@ -21497,7 +21498,7 @@ async def update_telegraph_event_page(
                             {
                                 "id": rid_int,
                                 "date": str(rdate) if rdate is not None else None,
-                                "time": str(rtime) if rtime is not None else None,
+                                "time": str(rtime) if rtime is not None and not rtime_default else None,
                                 "url": _event_url(str(rurl) if rurl is not None else None, str(rpath) if rpath is not None else None),
                                 "status": str(rstatus) if rstatus is not None else None,
                             }

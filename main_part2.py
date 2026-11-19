@@ -2875,7 +2875,7 @@ def _format_daily_recommend_today_line(event: Event) -> str:
     if link_href:
         title = f'<a href="{html.escape(link_href)}">{title}</a>'
     details: list[str] = []
-    if getattr(event, "time", None):
+    if getattr(event, "time", None) and not getattr(event, "time_is_default", False):
         details.append(str(event.time).strip())
     if getattr(event, "location_name", None):
         details.append(str(event.location_name).strip())

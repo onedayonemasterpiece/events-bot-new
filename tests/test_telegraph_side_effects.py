@@ -53,7 +53,8 @@ async def test_ensure_event_telegraph_link_pure(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_update_event_page_edits_without_create(tmp_path, monkeypatch):
+@pytest.mark.parametrize("time_is_default", [False, True])
+async def test_update_event_page_edits_without_create(tmp_path, monkeypatch, time_is_default):
     m = importlib.reload(orig_main)
     db = m.Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -67,11 +68,30 @@ async def test_update_event_page_edits_without_create(tmp_path, monkeypatch):
             source_text="SRC",
             telegraph_path="abc",
             telegraph_url="https://telegra.ph/abc",
+            time_is_default=time_is_default,
         )
+        peer = m.Event(
+            title="T", description="D", date="2025-09-02", time="13:00",
+            location_name="Loc", source_text="SRC", time_is_default=time_is_default,
+            telegraph_url="https://telegra.ph/peer", lifecycle_status="active",
+        )
+        session.add(peer)
+        await session.flush()
+        ev.linked_event_ids = [peer.id]
         session.add(ev)
         await session.commit()
         eid = ev.id
+        caption, _ = m.format_event_caption(ev)
+        assert ("12:00" in caption) is (not time_is_default)
+        assert ("12:00" in m._format_daily_recommend_today_line(ev)) is (not time_is_default)
     async def fake_bspc(*a, **k):
+        summary = k["event_summary"]
+        assert summary.time == (None if time_is_default else "12:00")
+        assert len(summary.other_dates) == 1
+        assert summary.other_dates[0].time == (None if time_is_default else "13:00")
+        rendered = await m._build_source_summary_block(summary)
+        assert ("12:00" in rendered) is (not time_is_default)
+        assert ("13:00" in rendered) is (not time_is_default)
         return "<p>x</p>", "", ""
     monkeypatch.setattr(m, "build_source_page_content", fake_bspc)
     monkeypatch.setattr(m, "get_telegraph_token", lambda: "t")
