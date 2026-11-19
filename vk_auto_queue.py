@@ -1733,7 +1733,7 @@ async def run_vk_auto_import(
     except (Exception, asyncio.CancelledError) as exc:
         batch_error = exc
         report.cancelled = report.cancelled or isinstance(exc, asyncio.CancelledError)
-        report.errors.append(
+        report.errors.insert(0,
             f"{'batch_cancelled' if report.cancelled else 'batch_failed'}: {type(exc).__name__}: "
             f"{_shorten_reason(str(exc)) or 'interrupted'}"
             + (f"; last_source_url={report.source_urls[-1]}" if report.source_urls else "")

@@ -666,13 +666,14 @@ async def test_vk_batch_interruption_keeps_final_report_and_unprocessed_rows(
     if failure == "after_failed":
         assert "failed_technical https://vk.com/wall-1_101: UNEXPECTED_ERROR" in summary
     async with db.raw_conn() as conn:
-        status, metrics_json = await (await conn.execute(
-            "SELECT status,metrics_json FROM ops_run ORDER BY id DESC LIMIT 1"
+        status, metrics_json, details_json = await (await conn.execute(
+            "SELECT status,metrics_json,details_json FROM ops_run ORDER BY id DESC LIMIT 1"
         )).fetchone()
         rows = await (await conn.execute(
             "SELECT id,status,last_typed_reason FROM vk_inbox ORDER BY id"
         )).fetchall()
     assert status == expected_status
+    assert ("batch_cancelled" if cancelled else "batch_failed") in json.loads(details_json)["errors"][0]
     metrics = json.loads(metrics_json)
     assert metrics["inbox_failed_technical"] == (1 if failure == "after_failed" else 0)
     assert rows[1] == (2, "pending", None)
