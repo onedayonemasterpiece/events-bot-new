@@ -567,8 +567,19 @@ Update qualification. No missing hint or past hint excludes a source. This
 prevents a dated November 6 invitation published on November 3 from waiting
 behind a continuing stream of newer posts.
 
-### Background notification policy
+### Queue import notifications
 
-Scheduled and scheduled-catchup imports suppress per-source start/update progress,
-using the existing trigger and progress mechanism. The final batch summary and
-reports of actual created/updated events remain; manual import progress is unchanged.
+Manual, scheduled and scheduled-catchup queue imports send one logical final
+report with the operation outcome, created/updated event links, source URLs and
+terminal reasons. The report reads public URLs after inline jobs and includes
+`/log` links for event details. Existing `split_text` splits long reports without
+discarding source errors; each part is plain text. Batch-only start, progress,
+per-source error and per-source unified report messages have been removed.
+`VK_AUTO_IMPORT_SEND_PROGRESS` and `VK_AUTO_IMPORT_PROGRESS_EVERY` no longer
+control this batch path.
+
+An early terminal heavy-busy or storage-admission refusal retains its result
+message. Summary delivery failures remain logged, and independent provider
+CRITICAL alerts are unchanged. The separate single-source `_vkrev_import_flow`
+keeps its immediate responses. Notification consolidation does not retry failed
+sources or turn a partial/failed import into success.
