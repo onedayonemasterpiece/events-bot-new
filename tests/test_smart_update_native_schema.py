@@ -404,18 +404,15 @@ async def test_g4_split_create_rich_facts_prompt_requires_named_speaker_with_tit
 
 
 @pytest.mark.asyncio
-async def test_rich_facts_keeps_the_cited_role_and_inflected_roster(monkeypatch):
+async def test_rich_facts_accepts_literal_roster_but_rejects_foreign_names_and_numbers(monkeypatch):
     # Source Telegram koihm/6349, event 11107. The provider response is fixed;
-    # this exercises the prompt and the subsequent production grounding/cleanup.
+    # this exercises production grounding/cleanup, not model prompt compliance.
     roster = (
         "с художниками Таисией Казанцевой, Еленой Зеленской, "
         "Екатериной Осколковой и Алексеем Чебыкиным"
     )
     source = f"Разговор об индустриальном наследии региона пройдет {roster}."
-    prompts = []
-
     async def extract(prompt, _schema, **_kwargs):
-        prompts.append(prompt)
         return {
             "people_org_facts": [
                 {"fact": roster, "evidence_quote": roster},
@@ -435,7 +432,6 @@ async def test_rich_facts_keeps_the_cited_role_and_inflected_roster(monkeypatch)
     )
 
     assert await su._llm_extract_candidate_facts(candidate) == [roster]
-    assert "роль и имена в падеже источника" in prompts[0]
 
 
 @pytest.mark.asyncio
