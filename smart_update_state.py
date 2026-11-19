@@ -245,16 +245,20 @@ async def begin_candidate_attempt(
             stored_identity = (
                 str(row[5]),
                 str(row[6] or ""),
-                str(row[7]),
                 str(row[8]),
             )
             requested_identity = (
                 str(occurrence_key),
                 str(canonical_source_url or ""),
-                str(source_type),
                 str(intent),
             )
-            if stored_identity != requested_identity:
+            # A known URL/occurrence can re-enter through another intake.
+            # source_type records that attempt's provenance and remains part of
+            # its packet fingerprint; without a URL it must still guard identity.
+            if stored_identity != requested_identity or (
+                not str(canonical_source_url or "").strip()
+                and str(row[7]) != str(source_type)
+            ):
                 raise RuntimeError("candidate_key_identity_collision")
             # A prior process may have committed the Event/EventSource write
             # and died before acknowledging its attempt. Once its lease is no
@@ -271,10 +275,10 @@ async def begin_candidate_attempt(
             attempt_no = previous_attempts + 1
             attempt = previous_retry_attempts + 1
             await conn.execute(
-                "UPDATE smart_update_candidate_state SET attempts=?, retry_attempts=?, current_outcome='RETRY_SCHEDULED', "
+                "UPDATE smart_update_candidate_state SET source_type=?, attempts=?, retry_attempts=?, current_outcome='RETRY_SCHEDULED', "
                 "accepted_event_id=NULL, diagnostic_event_id=NULL, reason='attempt_started', "
                 "next_retry_at=CURRENT_TIMESTAMP, retry_exhausted=0, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                (attempt_no, attempt, state_id),
+                (source_type, attempt_no, attempt, state_id),
             )
             await conn.execute(
                 """

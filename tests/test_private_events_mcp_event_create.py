@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -437,11 +437,20 @@ async def test_database_init_creates_event_operation_ledger_idempotently(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("source_url", [None, "https://vk.com/wall-194927034_5002"])
+@pytest.mark.parametrize(
+    ("source_url", "prior_source_type"),
+    [
+        (None, None),
+        ("https://vk.com/wall-194927034_5002", None),
+        ("https://vk.com/wall-194927034_5002", "vk"),
+        ("https://vk.com/wall-194927034_5002", "manual"),
+    ],
+)
 async def test_main_executor_uses_full_smart_update_and_standard_joboutbox(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     source_url: str | None,
+    prior_source_type: str | None,
 ) -> None:
     database = Database(str(tmp_path / "real-executor.sqlite"))
     await database.init()
@@ -481,7 +490,37 @@ async def test_main_executor_uses_full_smart_update_and_standard_joboutbox(
     )
     runtime_request = EventCreateRuntime.request_from_arguments(request, context)
     try:
+        if prior_source_type:
+            from smart_update_identity import input_packet_fingerprint, stable_candidate_identity
+            from smart_update_state import begin_candidate_attempt, finish_candidate_attempt
+
+            prior = smart_update_module.EventCandidate(
+                source_type=prior_source_type, source_url=source_url,
+                source_text=runtime_request.raw_text, title="Тестовая лекция MCP",
+                date=future_date, time="19:00", location_name="Тестовый зал",
+                producer_ordinal=0,
+            )
+            key, occurrence = stable_candidate_identity(prior)
+            attempt = await begin_candidate_attempt(
+                database, candidate_key=key, occurrence_key=occurrence,
+                canonical_source_url=source_url, source_type=prior_source_type,
+                intent="UPSERT_EVENT", source_fingerprint=input_packet_fingerprint(prior),
+                candidate_payload=asdict(prior), lease_owner="earlier-intake",
+            )
+            await finish_candidate_attempt(
+                database, attempt,
+                outcome=smart_update_module.SmartUpdateTerminalOutcome.FAILED_TECHNICAL,
+                reason="earlier_intake_failed",
+            )
         result = await MainEventCreateExecutor(database).create(runtime_request)
+        assert result["status"] == "accepted", result
+        async with database.raw_conn() as conn:
+            state = await (await conn.execute(
+                "SELECT candidate_key,source_type,attempts FROM smart_update_candidate_state"
+            )).fetchone()
+        assert state[1:] == ("manual", 2 if prior_source_type else 1)
+        if prior_source_type:
+            assert state[0] == key
         async with database.get_session() as session:
             event_count = int(
                 (await session.execute(select(func.count(Event.id)))).scalar_one()
