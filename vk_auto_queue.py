@@ -1272,435 +1272,360 @@ async def run_vk_auto_import(
     """
     batch_id = f"auto:{int(time.time())}"
     report = VkAutoImportReport(batch_id=batch_id)
-    if not ops_run_id:
-        ops_run_id = await start_ops_run(
-            db,
-            kind="vk_auto_import",
-            trigger=trigger,
-            chat_id=chat_id,
-            operator_id=operator_id,
-            details={
-                "batch_id": batch_id,
-                "run_id": run_id,
-                "limit_requested": limit,
-                "include_skipped": int(bool(include_skipped)),
-            },
-        )
-    _clear_vk_auto_import_cancel(chat_id=chat_id, operator_id=operator_id)
     try:
         limit_int = int(limit)
     except Exception:
         limit_int = 25
     unbounded = limit_int <= 0
 
-    await vk_review.release_stale_locks(db)
-    await vk_review.release_due_deferred(db, batch_id=batch_id)
-
-    def _env_enabled(name: str, default: bool) -> bool:
-        raw = (os.getenv(name) or "").strip().lower()
-        if not raw:
-            return default
-        return raw in {"1", "true", "yes", "on"}
-
-    try:
-        row_timeout_raw = (os.getenv("VK_AUTO_IMPORT_ROW_TIMEOUT_SEC") or "").strip()
-        row_timeout_sec = float(row_timeout_raw) if row_timeout_raw else 30.0 * 60.0
-    except Exception:
-        row_timeout_sec = 30.0 * 60.0
-    if row_timeout_sec <= 0:
-        row_timeout_sec = 0.0
-    else:
-        row_timeout_sec = min(float(row_timeout_sec), 6.0 * 60.0 * 60.0)
-
-    # Optional: include previously skipped rows in the run. This is useful for
-    # E2E over a prod DB snapshot where an operator may have skipped items
-    # earlier, but we still want to validate Smart Update correctness.
-    if include_skipped:
-        async with db.raw_conn() as conn:
-            cur = await conn.execute("SELECT COUNT(1) FROM vk_inbox WHERE status='pending'")
-            row = await cur.fetchone()
-            pending_count = int((row[0] if row else 0) or 0)
-        # Do not inflate queue for this run: requeue only enough skipped rows
-        # to fill the remaining batch up to `limit`.
-        if unbounded:
-            requeue_limit = 10**9
-        else:
-            requeue_limit = max(0, int(limit_int) - pending_count)
-        if requeue_limit <= 0:
-            requeue_limit = 0
-        async with db.raw_conn() as conn:
-            cur = await conn.execute(
-                """
-                SELECT id
-                FROM vk_inbox
-                WHERE status='skipped'
-                ORDER BY date ASC,
-                         CASE WHEN event_ts_hint IS NULL THEN 1 ELSE 0 END,
-                         event_ts_hint ASC,
-                         id ASC
-                LIMIT ?
-                """,
-                (requeue_limit,),
-            )
-            ids = [int(r[0]) for r in (await cur.fetchall() or [])]
-            if ids:
-                placeholders = ",".join("?" for _ in ids)
-                await conn.execute(
-                    f"""
-                    UPDATE vk_inbox
-                    SET status='pending',
-                        locked_by=NULL,
-                        locked_at=NULL,
-                        review_batch=NULL
-                    WHERE id IN ({placeholders})
-                    """,
-                    tuple(ids),
-                )
-                await conn.commit()
-                report.skipped_requeued = len(ids)
-                logger.info(
-                    "vk_auto: requeued_skipped=%s pending=%s limit=%s",
-                    len(ids),
-                    pending_count,
-                    limit,
-                )
-
-    # Preload festival hints once per run.
-    try:
-        festival_names, festival_alias_pairs = await _load_festival_hints(db)
-    except Exception as exc:
-        festival_names, festival_alias_pairs = [], []
-        report.errors.append(f"festival_hints_failed: {exc}")
-
-    total_estimate = None
-    try:
-        statuses = ("pending", "skipped") if include_skipped else ("pending",)
-        placeholders = ",".join(["?"] * len(statuses))
-        async with db.raw_conn() as conn:
-            cur = await conn.execute(
-                f"""
-                SELECT COUNT(1)
-                FROM vk_inbox
-                WHERE status IN ({placeholders})
-                """,
-                statuses,
-            )
-            row = await cur.fetchone()
-            total_estimate = int((row[0] if row else 0) or 0)
-            if not unbounded:
-                total_estimate = min(int(total_estimate), int(limit_int))
-    except Exception:
-        total_estimate = None
-
     start = time.time()
-    heavy_mode = _vk_auto_import_heavy_mode(trigger)
-    waiting_meta = current_heavy_meta() if heavy_mode != "off" else None
-    if waiting_meta is not None and heavy_mode == "wait":
-        logger.info(
-            "vk_auto: waiting_heavy kind=%s trigger=%s run_id=%s operator_id=%s",
-            waiting_meta.kind,
-            waiting_meta.trigger,
-            waiting_meta.run_id,
-            waiting_meta.operator_id,
-        )
-    gate = (
-        _NoopHeavyOperation()
-        if heavy_mode == "off"
-        else heavy_operation(
-            kind="vk_auto_import",
-            trigger=trigger,
-            mode="try" if heavy_mode == "try" else "wait",
-            run_id=run_id,
-            operator_id=operator_id,
-            chat_id=chat_id,
-        )
-    )
-
-    async with gate as acquired:
-        if not acquired:
-            try:
-                await bot.send_message(
-                    chat_id,
-                    "⏳ VK auto import сейчас занят другой тяжёлой операцией. Повтори запуск позже.",
-                    disable_web_page_preview=True,
-                )
-            except Exception:
-                logger.warning("vk_auto: heavy_busy_notice_send_failed", exc_info=True)
-            report.cancelled = True
-            report.errors.append("heavy_busy")
-            await finish_ops_run(
+    total_estimate = None
+    batch_error: BaseException | None = None
+    try:
+        if not ops_run_id:
+            ops_run_id = await start_ops_run(
                 db,
-                run_id=ops_run_id,
-                status="skipped",
-                metrics={
-                    "inbox_processed": 0,
-                    "inbox_imported": 0,
-                    "inbox_rejected": 0,
-                    "inbox_failed": 0,
-                    "inbox_deferred": 0,
-                    "events_created": 0,
-                    "events_updated": 0,
-                    "cancelled": 1,
-                    "skipped_requeued": int(report.skipped_requeued),
+                kind="vk_auto_import",
+                trigger=trigger,
+                chat_id=chat_id,
+                operator_id=operator_id,
+                details={
+                    "batch_id": batch_id,
+                    "run_id": run_id,
+                    "limit_requested": limit,
                     "include_skipped": int(bool(include_skipped)),
-                    "limit": int(limit_int),
-                    "duration_sec": round(float(time.time() - start), 3),
-                },
-                details={
-                    "batch_id": batch_id,
-                    "run_id": run_id,
-                    "skip_reason": "heavy_busy",
-                    "errors": list(report.errors or [])[:40],
                 },
             )
-            return report
-        # Infrastructure admission belongs to the batch, not to a source
-        # terminal. Check after waiting for the heavy gate, before any claim or
-        # prefetch, so an unsafe volume cannot burn through pending carriers.
+        _clear_vk_auto_import_cancel(chat_id=chat_id, operator_id=operator_id)
+        await vk_review.release_stale_locks(db)
+        await vk_review.release_due_deferred(db, batch_id=batch_id)
+
+        def _env_enabled(name: str, default: bool) -> bool:
+            raw = (os.getenv(name) or "").strip().lower()
+            if not raw:
+                return default
+            return raw in {"1", "true", "yes", "on"}
+
         try:
-            vk_intake._require_vk_crawl_storage_headroom(db)
-        except RuntimeError as exc:
-            report.errors.append(str(exc))
-            await finish_ops_run(
-                db,
-                run_id=ops_run_id,
-                status="error",
-                metrics={"inbox_processed": 0, "inbox_failed_technical": 0},
-                details={
-                    "batch_id": batch_id,
-                    "run_id": run_id,
-                    "skip_reason": "storage_admission",
-                    "errors": list(report.errors),
-                },
-            )
-            logger.warning("vk_auto: batch storage admission blocked: %s", exc)
-            try:
-                await bot.send_message(
-                    chat_id,
-                    "⏸ VK auto import: недостаточно доступного места; "
-                    "очередь не обработана и сохранена для следующего запуска.\n"
-                    f"{exc}",
-                    disable_web_page_preview=True,
-                )
-            except Exception:
-                logger.warning("vk_auto: storage_notice_send_failed", exc_info=True)
-            return report
-
-        prefetch_enabled = _env_enabled("VK_AUTO_IMPORT_PREFETCH", False)
-
-        async def _await_prefetch(task: asyncio.Task | None) -> VkInboxPrefetch | None:
-            if task is None:
-                return None
-            try:
-                res = await task
-            except asyncio.CancelledError:
-                return None
-            except Exception:
-                return None
-            return res if isinstance(res, VkInboxPrefetch) else None
-
-        def _start_prefetch(post_obj: Any) -> asyncio.Task | None:
-            if not prefetch_enabled or not post_obj:
-                return None
-            next_url = _vk_wall_url(
-                post_obj.group_id,
-                post_obj.post_id,
-                getattr(post_obj, "owner_type", None) or "group",
-            )
-            return asyncio.create_task(
-                _prefetch_vk_inbox_row(
-                    db,
-                    bot=bot,
-                    post=post_obj,
-                    source_url=next_url,
-                    festival_names=festival_names,
-                    festival_alias_pairs=festival_alias_pairs,
-                )
-            )
-
-        async def _await_process_task(
-            *,
-            post_obj: Any,
-            source_url: str,
-            process_task: asyncio.Task,
-        ) -> None:
-            try:
-                if row_timeout_sec > 0:
-                    await asyncio.wait_for(process_task, timeout=row_timeout_sec)
-                else:
-                    await process_task
-            except asyncio.TimeoutError:
-                try:
-                    await _terminalize_vk_auto_failure(
-                        db,
-                        post=post_obj,
-                        report=report,
-                        typed_reason="ROW_TIMEOUT",
-                        source_url=source_url,
-                        error_detail=f"row timed out after {row_timeout_sec:.1f}s",
-                    )
-                except Exception:
-                    logger.exception("vk_auto: terminalization failed after timeout")
-                    raise
-                logger.warning(
-                    "vk_auto: inbox row timeout id=%s url=%s timeout_sec=%.1f",
-                    getattr(post_obj, "id", None),
-                    source_url,
-                    row_timeout_sec,
-                )
-            except Exception as exc:
-                try:
-                    await _terminalize_vk_auto_failure(
-                        db,
-                        post=post_obj,
-                        report=report,
-                        typed_reason="UNEXPECTED_ERROR",
-                        source_url=source_url,
-                        error_detail=str(exc),
-                    )
-                except Exception:
-                    logger.exception("vk_auto: terminalization failed after exception")
-                    raise
-                logger.exception(
-                    "vk_auto: unexpected exception in inbox row processing id=%s url=%s",
-                    getattr(post_obj, "id", None),
-                    source_url,
-                )
-
-        if unbounded:
-            post = await vk_review.pick_next(
-                db,
-                operator_id,
-                batch_id,
-                requeue_skipped=False,
-                prefer_oldest=True,
-                strict_chronological=True,
-            )
-            prefetch_task = _start_prefetch(post) if post else None
-            while post:
-                if _vk_auto_import_cancelled(chat_id=chat_id, operator_id=operator_id):
-                    report.cancelled = True
-                    try:
-                        await vk_review.mark_pending(db, int(post.id))
-                    except Exception:
-                        logger.warning("vk_auto: mark_pending failed on cancel", exc_info=True)
-                    if prefetch_task:
-                        prefetch_task.cancel()
-                    break
-
-                report.inbox_processed += 1
-                source_url = _vk_wall_url(
-                    post.group_id, post.post_id, getattr(post, "owner_type", None) or "group"
-                )
-                report.inbox_ids.append(int(post.id))
-                report.source_urls.append(source_url)
-
-                prefetched_row = await _await_prefetch(prefetch_task)
-                process_task = asyncio.create_task(
-                    _process_vk_inbox_row(
-                        db,
-                        bot,
-                        chat_id=chat_id,
-                        operator_id=operator_id,
-                        batch_id=batch_id,
-                        post=post,
-                        source_url=source_url,
-                        report=report,
-                        festival_names=festival_names,
-                        festival_alias_pairs=festival_alias_pairs,
-                        prefetched=prefetched_row,
-                        ops_run_id=ops_run_id,
-                    )
-                )
-
-                await _await_process_task(
-                    post_obj=post,
-                    source_url=source_url,
-                    process_task=process_task,
-                )
-
-                next_post = None
-                next_prefetch_task = None
-                if prefetch_enabled:
-                    next_post = await vk_review.pick_next(
-                        db,
-                        operator_id,
-                        batch_id,
-                        requeue_skipped=False,
-                        prefer_oldest=True,
-                        strict_chronological=True,
-                        resume_locked=False,
-                    )
-                    next_prefetch_task = _start_prefetch(next_post) if next_post else None
-                else:
-                    next_post = await vk_review.pick_next(
-                        db,
-                        operator_id,
-                        batch_id,
-                        requeue_skipped=False,
-                        prefer_oldest=True,
-                        strict_chronological=True,
-                    )
-
-                post = next_post
-                prefetch_task = next_prefetch_task
+            row_timeout_raw = (os.getenv("VK_AUTO_IMPORT_ROW_TIMEOUT_SEC") or "").strip()
+            row_timeout_sec = float(row_timeout_raw) if row_timeout_raw else 30.0 * 60.0
+        except Exception:
+            row_timeout_sec = 30.0 * 60.0
+        if row_timeout_sec <= 0:
+            row_timeout_sec = 0.0
         else:
-            remaining = max(1, int(limit_int))
-            post = await vk_review.pick_next(
-                db,
-                operator_id,
-                batch_id,
-                requeue_skipped=False,
-                prefer_oldest=True,
-                strict_chronological=True,
-            )
-            prefetch_task = _start_prefetch(post) if post else None
-            while post and remaining > 0:
-                if _vk_auto_import_cancelled(chat_id=chat_id, operator_id=operator_id):
-                    report.cancelled = True
-                    try:
-                        await vk_review.mark_pending(db, int(post.id))
-                    except Exception:
-                        logger.warning("vk_auto: mark_pending failed on cancel", exc_info=True)
-                    if prefetch_task:
-                        prefetch_task.cancel()
-                    break
+            row_timeout_sec = min(float(row_timeout_sec), 6.0 * 60.0 * 60.0)
 
-                remaining -= 1
-                report.inbox_processed += 1
-                source_url = _vk_wall_url(
-                    post.group_id, post.post_id, getattr(post, "owner_type", None) or "group"
+        # Optional: include previously skipped rows in the run. This is useful for
+        # E2E over a prod DB snapshot where an operator may have skipped items
+        # earlier, but we still want to validate Smart Update correctness.
+        if include_skipped:
+            async with db.raw_conn() as conn:
+                cur = await conn.execute("SELECT COUNT(1) FROM vk_inbox WHERE status='pending'")
+                row = await cur.fetchone()
+                pending_count = int((row[0] if row else 0) or 0)
+            # Do not inflate queue for this run: requeue only enough skipped rows
+            # to fill the remaining batch up to `limit`.
+            if unbounded:
+                requeue_limit = 10**9
+            else:
+                requeue_limit = max(0, int(limit_int) - pending_count)
+            if requeue_limit <= 0:
+                requeue_limit = 0
+            async with db.raw_conn() as conn:
+                cur = await conn.execute(
+                    """
+                    SELECT id
+                    FROM vk_inbox
+                    WHERE status='skipped'
+                    ORDER BY date ASC,
+                             CASE WHEN event_ts_hint IS NULL THEN 1 ELSE 0 END,
+                             event_ts_hint ASC,
+                             id ASC
+                    LIMIT ?
+                    """,
+                    (requeue_limit,),
                 )
-                report.inbox_ids.append(int(post.id))
-                report.source_urls.append(source_url)
+                ids = [int(r[0]) for r in (await cur.fetchall() or [])]
+                if ids:
+                    placeholders = ",".join("?" for _ in ids)
+                    await conn.execute(
+                        f"""
+                        UPDATE vk_inbox
+                        SET status='pending',
+                            locked_by=NULL,
+                            locked_at=NULL,
+                            review_batch=NULL
+                        WHERE id IN ({placeholders})
+                        """,
+                        tuple(ids),
+                    )
+                    await conn.commit()
+                    report.skipped_requeued = len(ids)
+                    logger.info(
+                        "vk_auto: requeued_skipped=%s pending=%s limit=%s",
+                        len(ids),
+                        pending_count,
+                        limit,
+                    )
 
-                prefetched_row = await _await_prefetch(prefetch_task)
-                process_task = asyncio.create_task(
-                    _process_vk_inbox_row(
+        # Preload festival hints once per run.
+        try:
+            festival_names, festival_alias_pairs = await _load_festival_hints(db)
+        except Exception as exc:
+            festival_names, festival_alias_pairs = [], []
+            report.errors.append(f"festival_hints_failed: {exc}")
+
+        try:
+            statuses = ("pending", "skipped") if include_skipped else ("pending",)
+            placeholders = ",".join(["?"] * len(statuses))
+            async with db.raw_conn() as conn:
+                cur = await conn.execute(
+                    f"""
+                    SELECT COUNT(1)
+                    FROM vk_inbox
+                    WHERE status IN ({placeholders})
+                    """,
+                    statuses,
+                )
+                row = await cur.fetchone()
+                total_estimate = int((row[0] if row else 0) or 0)
+                if not unbounded:
+                    total_estimate = min(int(total_estimate), int(limit_int))
+        except Exception:
+            total_estimate = None
+
+        heavy_mode = _vk_auto_import_heavy_mode(trigger)
+        waiting_meta = current_heavy_meta() if heavy_mode != "off" else None
+        if waiting_meta is not None and heavy_mode == "wait":
+            logger.info(
+                "vk_auto: waiting_heavy kind=%s trigger=%s run_id=%s operator_id=%s",
+                waiting_meta.kind,
+                waiting_meta.trigger,
+                waiting_meta.run_id,
+                waiting_meta.operator_id,
+            )
+        gate = (
+            _NoopHeavyOperation()
+            if heavy_mode == "off"
+            else heavy_operation(
+                kind="vk_auto_import",
+                trigger=trigger,
+                mode="try" if heavy_mode == "try" else "wait",
+                run_id=run_id,
+                operator_id=operator_id,
+                chat_id=chat_id,
+            )
+        )
+
+        async with gate as acquired:
+            if not acquired:
+                try:
+                    await bot.send_message(
+                        chat_id,
+                        "⏳ VK auto import сейчас занят другой тяжёлой операцией. Повтори запуск позже.",
+                        disable_web_page_preview=True,
+                    )
+                except Exception:
+                    logger.warning("vk_auto: heavy_busy_notice_send_failed", exc_info=True)
+                report.cancelled = True
+                report.errors.append("heavy_busy")
+                await finish_ops_run(
+                    db,
+                    run_id=ops_run_id,
+                    status="skipped",
+                    metrics={
+                        "inbox_processed": 0,
+                        "inbox_imported": 0,
+                        "inbox_rejected": 0,
+                        "inbox_failed": 0,
+                        "inbox_deferred": 0,
+                        "events_created": 0,
+                        "events_updated": 0,
+                        "cancelled": 1,
+                        "skipped_requeued": int(report.skipped_requeued),
+                        "include_skipped": int(bool(include_skipped)),
+                        "limit": int(limit_int),
+                        "duration_sec": round(float(time.time() - start), 3),
+                    },
+                    details={
+                        "batch_id": batch_id,
+                        "run_id": run_id,
+                        "skip_reason": "heavy_busy",
+                        "errors": list(report.errors or [])[:40],
+                    },
+                )
+                return report
+            # Infrastructure admission belongs to the batch, not to a source
+            # terminal. Check after waiting for the heavy gate, before any claim or
+            # prefetch, so an unsafe volume cannot burn through pending carriers.
+            try:
+                vk_intake._require_vk_crawl_storage_headroom(db)
+            except RuntimeError as exc:
+                report.errors.append(str(exc))
+                await finish_ops_run(
+                    db,
+                    run_id=ops_run_id,
+                    status="error",
+                    metrics={"inbox_processed": 0, "inbox_failed_technical": 0},
+                    details={
+                        "batch_id": batch_id,
+                        "run_id": run_id,
+                        "skip_reason": "storage_admission",
+                        "errors": list(report.errors),
+                    },
+                )
+                logger.warning("vk_auto: batch storage admission blocked: %s", exc)
+                try:
+                    await bot.send_message(
+                        chat_id,
+                        "⏸ VK auto import: недостаточно доступного места; "
+                        "очередь не обработана и сохранена для следующего запуска.\n"
+                        f"{exc}",
+                        disable_web_page_preview=True,
+                    )
+                except Exception:
+                    logger.warning("vk_auto: storage_notice_send_failed", exc_info=True)
+                return report
+
+            prefetch_enabled = _env_enabled("VK_AUTO_IMPORT_PREFETCH", False)
+
+            async def _await_prefetch(task: asyncio.Task | None) -> VkInboxPrefetch | None:
+                if task is None:
+                    return None
+                try:
+                    res = await task
+                except asyncio.CancelledError:
+                    current_task = asyncio.current_task()
+                    if current_task is not None and current_task.cancelling():
+                        raise
+                    return None
+                except Exception:
+                    return None
+                return res if isinstance(res, VkInboxPrefetch) else None
+
+            def _start_prefetch(post_obj: Any) -> asyncio.Task | None:
+                if not prefetch_enabled or not post_obj:
+                    return None
+                next_url = _vk_wall_url(
+                    post_obj.group_id,
+                    post_obj.post_id,
+                    getattr(post_obj, "owner_type", None) or "group",
+                )
+                return asyncio.create_task(
+                    _prefetch_vk_inbox_row(
                         db,
-                        bot,
-                        chat_id=chat_id,
-                        operator_id=operator_id,
-                        batch_id=batch_id,
-                        post=post,
-                        source_url=source_url,
-                        report=report,
+                        bot=bot,
+                        post=post_obj,
+                        source_url=next_url,
                         festival_names=festival_names,
                         festival_alias_pairs=festival_alias_pairs,
-                        prefetched=prefetched_row,
-                        ops_run_id=ops_run_id,
                     )
                 )
 
-                await _await_process_task(
-                    post_obj=post,
-                    source_url=source_url,
-                    process_task=process_task,
-                )
+            async def _await_process_task(
+                *,
+                post_obj: Any,
+                source_url: str,
+                process_task: asyncio.Task,
+            ) -> None:
+                try:
+                    if row_timeout_sec > 0:
+                        await asyncio.wait_for(process_task, timeout=row_timeout_sec)
+                    else:
+                        await process_task
+                except asyncio.TimeoutError:
+                    try:
+                        await _terminalize_vk_auto_failure(
+                            db,
+                            post=post_obj,
+                            report=report,
+                            typed_reason="ROW_TIMEOUT",
+                            source_url=source_url,
+                            error_detail=f"row timed out after {row_timeout_sec:.1f}s",
+                        )
+                    except Exception:
+                        logger.exception("vk_auto: terminalization failed after timeout")
+                        raise
+                    logger.warning(
+                        "vk_auto: inbox row timeout id=%s url=%s timeout_sec=%.1f",
+                        getattr(post_obj, "id", None),
+                        source_url,
+                        row_timeout_sec,
+                    )
+                except Exception as exc:
+                    try:
+                        await _terminalize_vk_auto_failure(
+                            db,
+                            post=post_obj,
+                            report=report,
+                            typed_reason="UNEXPECTED_ERROR",
+                            source_url=source_url,
+                            error_detail=str(exc),
+                        )
+                    except Exception:
+                        logger.exception("vk_auto: terminalization failed after exception")
+                        raise
+                    logger.exception(
+                        "vk_auto: unexpected exception in inbox row processing id=%s url=%s",
+                        getattr(post_obj, "id", None),
+                        source_url,
+                    )
 
-                next_post = None
-                next_prefetch_task = None
-                if remaining > 0:
+            if unbounded:
+                post = await vk_review.pick_next(
+                    db,
+                    operator_id,
+                    batch_id,
+                    requeue_skipped=False,
+                    prefer_oldest=True,
+                    strict_chronological=True,
+                )
+                prefetch_task = _start_prefetch(post) if post else None
+                while post:
+                    if _vk_auto_import_cancelled(chat_id=chat_id, operator_id=operator_id):
+                        report.cancelled = True
+                        try:
+                            await vk_review.mark_pending(db, int(post.id))
+                        except Exception:
+                            logger.warning("vk_auto: mark_pending failed on cancel", exc_info=True)
+                        if prefetch_task:
+                            prefetch_task.cancel()
+                        break
+
+                    report.inbox_processed += 1
+                    source_url = _vk_wall_url(
+                        post.group_id, post.post_id, getattr(post, "owner_type", None) or "group"
+                    )
+                    report.inbox_ids.append(int(post.id))
+                    report.source_urls.append(source_url)
+
+                    prefetched_row = await _await_prefetch(prefetch_task)
+                    process_task = asyncio.create_task(
+                        _process_vk_inbox_row(
+                            db,
+                            bot,
+                            chat_id=chat_id,
+                            operator_id=operator_id,
+                            batch_id=batch_id,
+                            post=post,
+                            source_url=source_url,
+                            report=report,
+                            festival_names=festival_names,
+                            festival_alias_pairs=festival_alias_pairs,
+                            prefetched=prefetched_row,
+                            ops_run_id=ops_run_id,
+                        )
+                    )
+
+                    await _await_process_task(
+                        post_obj=post,
+                        source_url=source_url,
+                        process_task=process_task,
+                    )
+
+                    next_post = None
+                    next_prefetch_task = None
                     if prefetch_enabled:
                         next_post = await vk_review.pick_next(
                             db,
@@ -1722,8 +1647,98 @@ async def run_vk_auto_import(
                             strict_chronological=True,
                         )
 
-                post = next_post
-                prefetch_task = next_prefetch_task
+                    post = next_post
+                    prefetch_task = next_prefetch_task
+            else:
+                remaining = max(1, int(limit_int))
+                post = await vk_review.pick_next(
+                    db,
+                    operator_id,
+                    batch_id,
+                    requeue_skipped=False,
+                    prefer_oldest=True,
+                    strict_chronological=True,
+                )
+                prefetch_task = _start_prefetch(post) if post else None
+                while post and remaining > 0:
+                    if _vk_auto_import_cancelled(chat_id=chat_id, operator_id=operator_id):
+                        report.cancelled = True
+                        try:
+                            await vk_review.mark_pending(db, int(post.id))
+                        except Exception:
+                            logger.warning("vk_auto: mark_pending failed on cancel", exc_info=True)
+                        if prefetch_task:
+                            prefetch_task.cancel()
+                        break
+
+                    remaining -= 1
+                    report.inbox_processed += 1
+                    source_url = _vk_wall_url(
+                        post.group_id, post.post_id, getattr(post, "owner_type", None) or "group"
+                    )
+                    report.inbox_ids.append(int(post.id))
+                    report.source_urls.append(source_url)
+
+                    prefetched_row = await _await_prefetch(prefetch_task)
+                    process_task = asyncio.create_task(
+                        _process_vk_inbox_row(
+                            db,
+                            bot,
+                            chat_id=chat_id,
+                            operator_id=operator_id,
+                            batch_id=batch_id,
+                            post=post,
+                            source_url=source_url,
+                            report=report,
+                            festival_names=festival_names,
+                            festival_alias_pairs=festival_alias_pairs,
+                            prefetched=prefetched_row,
+                            ops_run_id=ops_run_id,
+                        )
+                    )
+
+                    await _await_process_task(
+                        post_obj=post,
+                        source_url=source_url,
+                        process_task=process_task,
+                    )
+
+                    next_post = None
+                    next_prefetch_task = None
+                    if remaining > 0:
+                        if prefetch_enabled:
+                            next_post = await vk_review.pick_next(
+                                db,
+                                operator_id,
+                                batch_id,
+                                requeue_skipped=False,
+                                prefer_oldest=True,
+                                strict_chronological=True,
+                                resume_locked=False,
+                            )
+                            next_prefetch_task = _start_prefetch(next_post) if next_post else None
+                        else:
+                            next_post = await vk_review.pick_next(
+                                db,
+                                operator_id,
+                                batch_id,
+                                requeue_skipped=False,
+                                prefer_oldest=True,
+                                strict_chronological=True,
+                            )
+
+                    post = next_post
+                    prefetch_task = next_prefetch_task
+
+    except (Exception, asyncio.CancelledError) as exc:
+        batch_error = exc
+        report.cancelled = report.cancelled or isinstance(exc, asyncio.CancelledError)
+        report.errors.append(
+            f"{'batch_cancelled' if report.cancelled else 'batch_failed'}: {type(exc).__name__}: "
+            f"{_shorten_reason(str(exc)) or 'interrupted'}"
+            + (f"; last_source_url={report.source_urls[-1]}" if report.source_urls else "")
+        )
+        logger.exception("vk_auto: batch interrupted batch_id=%s", batch_id)
 
     took = time.time() - start
     total_txt = str(int(total_estimate)) if isinstance(total_estimate, int) else "?"
@@ -1743,9 +1758,9 @@ async def run_vk_auto_import(
         else "failed"
         if unresolved_rows > 0
         else "partial"
-        if report.inbox_failed > 0 and report.inbox_processed > report.inbox_failed
+        if (batch_error is not None or report.inbox_failed > 0) and report.inbox_processed > report.inbox_failed
         else "failed"
-        if report.inbox_failed > 0
+        if batch_error is not None or report.inbox_failed > 0
         else "success"
     )
     terminal_label = {
@@ -1870,6 +1885,8 @@ async def run_vk_auto_import(
             "duration_sec": round(float(took), 3),
         },
     )
+    if isinstance(batch_error, asyncio.CancelledError):
+        raise batch_error
     return report
 
 

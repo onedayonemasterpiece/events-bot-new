@@ -580,6 +580,111 @@ async def test_vk_auto_import_row_failure_notifications_keep_terminal_outcome(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "failure,limit",
+    [
+        ("setup", 2), ("before_first", 2), ("after_failed", 2),
+        ("after_imported", 2), ("after_failed", 0),
+        ("task_cancel", 2), ("prefetch_cancel", 2),
+    ],
+)
+async def test_vk_batch_interruption_keeps_final_report_and_unprocessed_rows(
+    tmp_path, monkeypatch, failure, limit
+):
+    db = Database(str(tmp_path / "interrupted-batch.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id,screen_name,name) VALUES(1,'club1','Source')"
+        )
+        await conn.executemany(
+            "INSERT INTO vk_inbox(id,group_id,post_id,date,text,has_date,status) "
+            "VALUES(?,1,?,0,'fixture',0,'pending')",
+            [(1, 101), (2, 102)],
+        )
+        await conn.commit()
+
+    entered = asyncio.Event()
+    never = asyncio.Event()
+    cancelled = failure.endswith("cancel")
+    monkeypatch.setenv("VK_AUTO_IMPORT_HEAVY_MODE", "off")
+    monkeypatch.setenv("VK_AUTO_IMPORT_PREFETCH", "1" if failure == "prefetch_cancel" else "0")
+    monkeypatch.setenv("VK_AUTO_IMPORT_ROW_TIMEOUT_SEC", "60")
+    original_pick = vk_auto_queue.vk_review.pick_next
+    pick_count = 0
+
+    async def pick(*args, **kwargs):
+        nonlocal pick_count
+        pick_count += 1
+        if failure == "before_first" or (failure.startswith("after_") and pick_count == 2):
+            raise RuntimeError("fixture queue selection failed")
+        return await original_pick(*args, **kwargs)
+
+    async def process(*_args, **kwargs):
+        if failure == "task_cancel":
+            entered.set()
+            await never.wait()
+        if failure == "after_failed":
+            raise RuntimeError("fixture row failed")
+        await vk_auto_queue.vk_review.mark_carrier_outcome(
+            db, inbox_id=kwargs["post"].id, outcome="EVENTS_RESOLVED"
+        )
+        kwargs["report"].inbox_imported += 1
+
+    async def prefetch(*_args, **_kwargs):
+        entered.set()
+        await never.wait()
+
+    async def setup_failure(*_args, **_kwargs):
+        raise RuntimeError("fixture queue preparation failed")
+
+    monkeypatch.setattr(vk_auto_queue.vk_review, "pick_next", pick)
+    monkeypatch.setattr(vk_auto_queue, "_process_vk_inbox_row", process)
+    monkeypatch.setattr(vk_auto_queue, "_prefetch_vk_inbox_row", prefetch)
+    if failure == "setup":
+        monkeypatch.setattr(vk_auto_queue.vk_review, "release_stale_locks", setup_failure)
+    bot = DummyBot()
+    task = asyncio.create_task(vk_auto_queue.run_vk_auto_import(
+        db, bot, chat_id=1, operator_id=123, limit=limit
+    ))
+    if cancelled:
+        await asyncio.wait_for(entered.wait(), 5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, 5)
+    else:
+        await task
+
+    assert len(bot.messages) == 1
+    summary = bot.messages[0][1]
+    expected_status = "canceled" if cancelled else "partial" if failure == "after_imported" else "failed"
+    expected_heading = {"canceled": "отменён", "partial": "частично", "failed": "ошибка"}[expected_status]
+    assert summary.splitlines()[0] == f"🏁 VK auto import завершён: {expected_heading}"
+    assert ("batch_cancelled" if cancelled else "batch_failed") in summary
+    if failure not in {"setup", "before_first"}:
+        assert "https://vk.com/wall-1_101" in summary
+    if failure == "after_failed":
+        assert "failed_technical https://vk.com/wall-1_101: UNEXPECTED_ERROR" in summary
+    async with db.raw_conn() as conn:
+        status, metrics_json = await (await conn.execute(
+            "SELECT status,metrics_json FROM ops_run ORDER BY id DESC LIMIT 1"
+        )).fetchone()
+        rows = await (await conn.execute(
+            "SELECT id,status,last_typed_reason FROM vk_inbox ORDER BY id"
+        )).fetchall()
+    assert status == expected_status
+    metrics = json.loads(metrics_json)
+    assert metrics["inbox_failed_technical"] == (1 if failure == "after_failed" else 0)
+    assert rows[1] == (2, "pending", None)
+    if cancelled:
+        assert rows[0] == (1, "locked", None)
+        assert metrics["unresolved_rows"] == 1
+    elif failure in {"setup", "before_first"}:
+        assert rows[0] == (1, "pending", None)
+        assert metrics["inbox_processed"] == 0
+
+
+@pytest.mark.asyncio
 async def test_vk_auto_import_requests_strict_chronological_pick_next(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
