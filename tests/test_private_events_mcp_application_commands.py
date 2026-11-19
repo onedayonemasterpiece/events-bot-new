@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from datetime import date, timedelta
+import json
 import time
 import pytest
 from sqlalchemy import select, text
@@ -777,6 +778,123 @@ async def test_partner_promo_readback_exposes_caps_and_safe_non_delivery_reasons
             )
         ).one()
         assert tuple(outcome) == ("failed", "provider_error", eid)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("field", "new_value", "source_fallback"),
+    [
+        ("time", "20:00", False),
+        ("date", "2099-12-31", False),
+        ("location_address", "Новая улица, 2", False),
+        ("time", "20:00", True),
+        ("time_is_default", False, False),
+        ("lifecycle_status", "active", False),
+    ],
+)
+async def test_reschedule_body_conflict_blocks_before_preparation(
+    config, tmp_path, monkeypatch, field, new_value, source_fallback,
+):
+    """Stub only the model verdict; exercise the real existing consistency gate."""
+    import smart_event_update
+    from private_events_mcp.event_commands import canonical_text_gate
+
+    c, db, store, eid, owner, a, b, events, promo = await setup(config, tmp_path)
+    try:
+        async with db.get_session() as session:
+            event = await session.get(Event, eid)
+            event.location_address = "Старая улица, 1"
+            old_value = getattr(event, field)
+            body = f"Confirmed {field}: {old_value}."
+            if field == "time_is_default":
+                event.time_is_default = True
+                body = "Начало в 18:00."
+            elif field == "lifecycle_status":
+                event.lifecycle_status = "postponed"
+                body = "Событие отложено, новая дата пока неизвестна."
+            changes = {field: new_value}
+            if field in {"time_is_default", "lifecycle_status"}:
+                changes = {"time": event.time}
+            event.description = "" if source_fallback else body
+            event.source_text = body if source_fallback else "Organizer"
+            await session.commit()
+            before = event.model_dump(mode="json")
+        calls = []
+
+        async def verdict(prompt, *args, **kwargs):
+            payload = json.loads(prompt.rsplit("\n", 1)[1])
+            assert payload["canonical"][field] == new_value
+            if field == "time_is_default":
+                assert payload["canonical"]["time"] == "19:00"
+            assert payload["public_text"] == body
+            calls.append(payload)
+            return {"verdict": "conflict", "fields": [field]}
+
+        async def no_rewrite(*args, **kwargs):
+            raise AssertionError("inherited body must not be rewritten")
+
+        monkeypatch.setattr(smart_event_update, "_ask_gemma_json", verdict)
+        monkeypatch.setattr(smart_event_update, "_llm_fact_first_description_md", no_rewrite)
+        events.text_gate = canonical_text_gate
+        with pytest.raises(ToolExecutionError) as exc:
+            await events.prepare(
+                owner, "reschedule", request(eid, changes=changes),
+                "reschedule-inherited-conflict",
+            )
+        assert exc.value.error_code == "PUBLIC_TEXT_FACT_CONFLICT"
+        assert len(calls) == 1
+        async with db.get_session() as session:
+            assert (await session.get(Event, eid)).model_dump(mode="json") == before
+            assert (await session.execute(text("SELECT COUNT(*) FROM event_change_log"))).scalar_one() == 0
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("new_time", "description", "expected_calls"),
+    [("20:00", None, 1), ("19:00", None, 0), ("20:00", "Starts at 20:00", 1)],
+)
+async def test_reschedule_body_gate_accepts_neutral_or_explicit_input(
+    config, tmp_path, monkeypatch, new_time, description, expected_calls,
+):
+    import smart_event_update
+    from private_events_mcp.event_commands import canonical_text_gate
+
+    c, db, store, eid, owner, a, b, events, promo = await setup(config, tmp_path)
+    calls = []
+
+    async def verdict(prompt, *args, **kwargs):
+        payload = json.loads(prompt.rsplit("\n", 1)[1])
+        assert payload["canonical"]["time"] == new_time
+        assert payload["public_text"] == (description or "Live music")
+        calls.append(payload)
+        return {"verdict": "consistent", "fields": []}
+
+    async def no_rewrite(*args, **kwargs):
+        raise AssertionError("preserve_original must not rewrite the body")
+
+    monkeypatch.setattr(smart_event_update, "_ask_gemma_json", verdict)
+    monkeypatch.setattr(smart_event_update, "_llm_fact_first_description_md", no_rewrite)
+    events.text_gate = canonical_text_gate
+    changes = {"time": new_time}
+    if description is not None:
+        changes["description"] = description
+    try:
+        prepared = await events.prepare(
+            owner, "reschedule", request(eid, changes=changes, text_policy="preserve_original"),
+            "reschedule-consistent-body",
+        )
+        assert len(calls) == expected_calls
+        result = await events.commit(owner, prepared["preparation_ref"], prepared["action_digest"])
+        assert result["status"] == "accepted"
+        async with db.get_session() as session:
+            event = await session.get(Event, eid)
+            assert event.time == new_time
+            assert event.description == (description or "Live music")
+    finally:
+        await db.close()
+
 
 @pytest.mark.asyncio
 async def test_promo_activity_outcome_is_safe_durable_and_revision_neutral(

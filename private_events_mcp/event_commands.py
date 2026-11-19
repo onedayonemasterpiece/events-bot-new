@@ -115,6 +115,18 @@ class EventCommandService:
                 {**before, **proposed},
                 request.get("text_policy", "smart_rewrite"),
             )
+        elif kind == "reschedule" and any(
+            before.get(field) != proposed.get(field, before.get(field))
+            for field in (
+                "date", "end_date", "time", "time_is_default",
+                "location_name", "location_address", "city", "lifecycle_status",
+            )
+        ):
+            body = (before.get("description") or "").strip() or (
+                before.get("source_text") or ""
+            ).strip()
+            if body:
+                await self.text_gate(body, {**before, **proposed}, "preserve_original")
         if request.get("public_notice"):
             await self.text_gate(
                 request["public_notice"], {**before, **proposed}, "replace_exact"
@@ -726,6 +738,7 @@ async def canonical_text_gate(value, proposed, mode):
         "date",
         "end_date",
         "time",
+        "time_is_default",
         "location_name",
         "location_address",
         "city",

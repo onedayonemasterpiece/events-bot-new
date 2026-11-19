@@ -131,6 +131,7 @@ jobs:
           tests/test_smart_event_update_fact_grounding.py
           tests/test_llm_incident_dedup.py
           tests/test_telegraph_side_effects.py
+          tests/test_private_events_mcp_application_commands.py
           tests/test_smart_update_identity_gate.py
           tests/test_smart_update_identity_incident_replay.py
           tests/test_smart_update_identity_persistence.py
