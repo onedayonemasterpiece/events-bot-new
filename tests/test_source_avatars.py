@@ -529,3 +529,27 @@ async def test_exact_programme_project_credit_restores_both_cached_portraits_and
     conflicting_profile = dict(display_name=project, profile_kind='project',
                                source_links_json='["https://vk.com/club12345"]')
     assert not any('Организатор' in p['roles'] for p in avatars.guide_participants(row(), [conflicting_profile]))
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('organizer,public_name,expected_roles', [
+    (None, 'Сердце Пруссии', []),
+    ('ВОСТОК НА ЗАПАДЕ', 'ВОСТОК НА ЗАПАДЕ, музей в Калининграде', ['Организатор']),
+])
+async def test_cached_original_portrait_survives_checked_roles(tmp_path, monkeypatch, organizer, public_name, expected_roles):
+    """Actual digest 360 cases: a checked uncredited source and a full museum title."""
+    image = tmp_path / 'original.webp'
+    Image.new('RGB', (80, 80), 'green').save(image)
+    async def registry(db):
+        return [], {}
+    monkeypatch.setattr(avatars, '_guide_registry', registry)
+    monkeypatch.setattr(avatars, 'avatar_path', lambda owner: image if owner == -236106900 else None)
+    monkeypatch.setattr(avatars, 'avatar_metadata', lambda owner: {'name': public_name})
+    row = dict(source_platform='vk', source_username='club236106900',
+        source_flags_json='{"vk_id":236106900}', source_roles_checked=True,
+        fact_pack={'guide_names': [], 'organizer_names': [organizer] if organizer else []})
+    await avatars.prepare_guide_avatars([row])
+    from guide_excursions.visual_digest import _shown_medallions
+    shown = _shown_medallions(row['participant_medallions'], registered=True)
+    assert len(shown) == 1
+    assert (shown[0]['owner'], shown[0]['path'], shown[0]['roles']) == (-236106900, str(image), expected_roles)
+    assert row['fact_pack']['guide_names'] == []

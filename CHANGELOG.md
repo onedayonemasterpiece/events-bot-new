@@ -1,3 +1,7 @@
+## 2026-11-20
+
+- Guide medallions retain the cached original community portrait when no person is credited, and match a confirmed organizer to the full community title using the existing whole-brand boundary rule.
+
 ## 2026-11-19
 
 - Telegraph передаёт принятое описание в HTML без повторного LLM-редактирования: сохраняются льготные тарифы, ограничения, контакты для бронирования и объединённая программа; краткий блок даты, места и цены остаётся.
