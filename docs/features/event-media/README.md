@@ -32,8 +32,9 @@ This applies to both CDN materialization and pair-review source downloads.
 существующие `unavailable` / `download_unavailable`: URL и provenance сохраняются,
 готовые изображения остаются доступными. Новый импорт восстановленного
 источника открывает её прежним путём. Повторный media job не передаёт
-тот же недоступный URL из source rehydrate обратно в Smart Update; новые
-URL этого источника продолжают поступать. Смешанные ошибки (например 503 и 404)
+тот же недоступный URL из source rehydrate обратно в Smart Update.
+Для ledger и кандидатов используется существующая URL identity обоих полей
+catbox_url/supabase_url; кандидат с новым адресом продолжает поступать. Смешанные ошибки (например 503 и 404)
 не считаются исчезнувшим источником.
 
 Остальная ошибка оставляет `review_status=pending_review`,

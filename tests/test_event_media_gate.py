@@ -2545,7 +2545,8 @@ async def test_cdn_missing_source_terminates_without_hiding_transient_failure(
 
 
 @pytest.mark.asyncio
-async def test_separate_media_jobs_do_not_reimport_unchanged_missing_source(tmp_path, monkeypatch):
+@pytest.mark.parametrize("missing_field", ["catbox_url", "supabase_url"])
+async def test_separate_media_jobs_do_not_reimport_unchanged_missing_source(tmp_path, monkeypatch, missing_field):
     import main
     import urllib.error
     from models import EventSource
@@ -2559,13 +2560,14 @@ async def test_separate_media_jobs_do_not_reimport_unchanged_missing_source(tmp_
     downloads = []
     recovered = False
     add_fresh = False
+    source_ready = False
     def download(url, **kw):
         downloads.append(url)
         if url == missing and not recovered:
             raise urllib.error.HTTPError(url, 404, "test", {}, None)
         return DownloadedPoster(_png_bytes(metadata=url), "image/png", url)
     async def fetch(_type, source, **kw):
-        if not source.endswith("/1"):
+        if not source_ready or not source.endswith("/1"):
             return []
         return [PosterCandidate(catbox_url=missing)] + ([PosterCandidate(catbox_url=fresh)] if add_fresh else [])
     async def review(*args, **kw):
@@ -2589,18 +2591,19 @@ async def test_separate_media_jobs_do_not_reimport_unchanged_missing_source(tmp_
             supabase_path=f"p/image/v2/cc/{digest}.webp", review_status=APPROVED,
             thumbnail_256_url=display, thumbnail_512_url=display))
         session.add(EventPoster(event_id=eid, poster_hash=hashlib.sha256(f"url:{missing}".encode()).hexdigest(),
-            catbox_url=missing, review_status=PENDING_REVIEW, review_reason="cdn_mirror_pending"))
+            **{missing_field: missing}, review_status=PENDING_REVIEW, review_reason="cdn_mirror_pending"))
         for i in range(1, 4):
             session.add(EventSource(event_id=eid, source_type="telegram", source_url=f"https://t.me/test/{i}"))
         await session.commit()
     await main.job_event_media_review(eid, db, None)
     count = downloads.count(missing)
     assert count > 0
+    source_ready = True
     await main.job_event_media_review(eid, db, None)
     assert downloads.count(missing) == count
     async with db.get_session() as session:
         rows = (await session.execute(select(EventPoster).where(EventPoster.event_id == eid))).scalars().all()
-        assert next(p for p in rows if p.catbox_url == missing).review_status == "unavailable"
+        assert next(p for p in rows if missing in (p.catbox_url, p.supabase_url)).review_status == "unavailable"
         event = await session.get(Event, eid)
         assert event.photo_urls == [display]
     add_fresh = True

@@ -792,3 +792,10 @@ ordinary import recovery. Full job regression runs two separate media jobs
 with an approved survivor, adds a new source photo, then recovers the original
 through ordinary Smart Update. Baseline fails on repeated download; fixed
 test passes. No second recovery mechanism or new state is introduced.
+
+Second independent review found the same repeat when the legacy source URL
+exists only in supabase_url. The same full-job test is now parametrized for
+either stored field: old filter fails only the supabase-only case, fixed
+filter passes both. Reuse existing Smart Update URL identity for both ledger
+and candidates; skip only candidates whose nonempty URL set is fully known
+unavailable. A new alternate URL still proceeds. No new identity algorithm.
