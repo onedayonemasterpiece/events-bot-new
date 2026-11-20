@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:smart-update-quality-20261119-r3
+    image: runcoveer/events:media-source-download-20261120
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
