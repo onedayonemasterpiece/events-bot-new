@@ -774,7 +774,7 @@ queue, state, timer, provider path or manual replay is introduced.
 Regression controls: large valid source; all404; mixed503/404;403; existing
 recovered-unavailable, approved survivor, CDN strict projection and consumer
 resize tests. Baseline:3 distinguishing failures and2 negative controls pass.
-Simplicity review PASS, net+15 production lines.
+Initial simplicity review PASS; the subsequent rehydrate correction is under review.
 Local suites:82 pass;5 resize tests fail because this host lacks dwebp.
 The complete gate suite (75 tests) passes. Actual source JPEG downloads
 10,983,325 bytes and prepares canonical WebP1,946,044 bytes at4928x3280
@@ -783,3 +783,12 @@ Evidence: retained task20261112T111614Z-similar-events-check,
 media-download-boundary-20261120.json and media-baseline.log.
 Root owns main release and normal live receipt verification. Code is local;
 deployment has not started. This section does not close the parent incident.
+
+Independent review of PR1099 requested a correction before release: the next
+media job's source rehydrate could feed the same unavailable URL into Smart
+Update and reopen it. The existing rehydrate now excludes unchanged stored
+download_unavailable URLs, while retaining new photos from that source and
+ordinary import recovery. Full job regression runs two separate media jobs
+with an approved survivor, adds a new source photo, then recovers the original
+through ordinary Smart Update. Baseline fails on repeated download; fixed
+test passes. No second recovery mechanism or new state is introduced.
