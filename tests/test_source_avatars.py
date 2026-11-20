@@ -553,3 +553,5 @@ async def test_cached_original_portrait_survives_checked_roles(tmp_path, monkeyp
     assert len(shown) == 1
     assert (shown[0]['owner'], shown[0]['path'], shown[0]['roles']) == (-236106900, str(image), expected_roles)
     assert row['fact_pack']['guide_names'] == []
+    from guide_excursions.visual_digest import _source_name
+    assert _source_name(row) == (organizer or '')

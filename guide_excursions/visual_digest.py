@@ -579,7 +579,7 @@ def _is_katya_kostyugova(row: Mapping[str, Any]) -> bool:
 
 def _source_name(row: Mapping[str, Any]) -> str:
     if people := row.get("participant_medallions"):
-        return ", ".join(dict.fromkeys(_plain(p["name"]) for p in people))
+        return ", ".join(dict.fromkeys(_plain(p["name"]) for p in people if p.get("roles") != []))
     row = {**row, **{k: v for k, v in (row.get("fact_pack") or {}).items() if k in ("guide_names", "organizer_names")}}
     guides = [_plain(x) for x in (row.get("guide_names") or []) if _plain(x)] if isinstance(row.get("guide_names"), list) else []
     orgs = [_plain(x) for x in (row.get("organizer_names") or []) if _plain(x)] if isinstance(row.get("organizer_names"), list) else []
