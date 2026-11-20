@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import urllib.error
 import urllib.request
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta, timezone
@@ -854,14 +855,12 @@ async def materialize_event_media_candidate_to_cdn(
 
     if not urls:
         return False
-    max_bytes = _env_int(
-        "EVENT_MEDIA_REVIEW_MAX_IMAGE_BYTES", 8_000_000, lo=100_000, hi=EVENT_MEDIA_SOURCE_MAX_BYTES
-    )
+    max_bytes = EVENT_MEDIA_SOURCE_MAX_BYTES
     timeout = float(
         _env_int("EVENT_MEDIA_REVIEW_DOWNLOAD_TIMEOUT_SEC", 25, lo=3, hi=120)
     )
     downloaded: DownloadedPoster | None = None
-    last_error: Exception | None = None
+    errors: list[Exception] = []
     for url in urls:
         try:
             downloaded = await asyncio.to_thread(
@@ -869,9 +868,20 @@ async def materialize_event_media_candidate_to_cdn(
             )
             break
         except Exception as exc:
-            last_error = exc
+            errors.append(exc)
     if downloaded is None:
-        logger.warning("event_media.cdn_download_failed url=%s err=%s", urls[0], last_error)
+        missing = all(isinstance(exc, urllib.error.HTTPError) and exc.code == 404
+                      for exc in errors)
+        if missing and isinstance(candidate, EventPoster):
+            candidate.review_status = UNAVAILABLE
+            candidate.review_reason = "download_unavailable"
+            candidate.reviewed_at = datetime.now(timezone.utc)
+        logger.warning(
+            "event_media.cdn_download_failed poster_id=%s event_id=%s error_type=%s http_status=%s outcome=%s",
+            getattr(candidate, "id", None), getattr(candidate, "event_id", None),
+            type(errors[-1]).__name__, getattr(errors[-1], "code", None),
+            "unavailable" if isinstance(candidate, EventPoster) and candidate.review_status == UNAVAILABLE else "retry",
+        )
         return False
 
     quality = _env_int("SUPABASE_POSTERS_WEBP_QUALITY", 82, lo=1, hi=100)
@@ -1004,6 +1014,11 @@ async def materialize_event_posters_to_cdn(session: Any, event_id: int) -> tuple
         )
         ok = await materialize_event_media_candidate_to_cdn(row, session=session)
         if not ok:
+            if row.review_status == UNAVAILABLE:
+                row.updated_at = datetime.now(timezone.utc)
+                session.add(row)
+                updated += 1
+                continue
             row.review_status = PENDING_REVIEW
             row.review_reason = "cdn_mirror_pending"
             row.reviewed_at = None
@@ -1033,7 +1048,7 @@ async def _download_poster(poster: EventPoster) -> DownloadedPoster:
     url = str(preferred or "").strip()
     if not url:
         raise RuntimeError("event_media_download_failed:no_current_display_url")
-    max_bytes = _env_int("EVENT_MEDIA_REVIEW_MAX_IMAGE_BYTES", 8_000_000, lo=100_000, hi=EVENT_MEDIA_SOURCE_MAX_BYTES)
+    max_bytes = EVENT_MEDIA_SOURCE_MAX_BYTES
     timeout = float(_env_int("EVENT_MEDIA_REVIEW_DOWNLOAD_TIMEOUT_SEC", 25, lo=3, hi=120))
     try:
         return await asyncio.to_thread(

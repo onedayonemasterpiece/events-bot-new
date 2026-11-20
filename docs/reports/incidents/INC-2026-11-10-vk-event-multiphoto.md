@@ -753,3 +753,49 @@ wrong-text cases pass. After the fix the existing review keeps the appropriate
 photo and rejects the unrelated no-text candidate from canonical gallery.
 Source tests cover the local pipeline. I did not deploy this change or inspect
 a new ordinary production import; the parent operator performs those steps.
+
+
+### 2026-11-20: источник 404 и неверный лимит загрузки оригинала
+
+Retained runtime log20Nov02:08 UTC: poster35832/event10557 failed before
+CDN upload with HTTP404. Log07:28 UTC: poster38245/event11034 failed
+with image_too_large. A targeted HEAD during repair reproduced404 and
+measured the second JPEG at10,983,325 bytes (HTTP200); runtime review limit
+was the default8,000,000. This is a mechanical download boundary defect,
+not a semantic rejection or evidence of a CDN upload outage.
+
+Materialization and display download now use existing source max36,700,160
+before the existing1200px comparison preparation. All saved URLs404
+terminates the persisted ledger row as existing unavailable/download_unavailable.
+Original URL/provenance stay stored; mixed/transient failures retain the normal
+retry. Existing import can reopen unavailable rows. No new source parser,
+queue, state, timer, provider path or manual replay is introduced.
+
+Regression controls: large valid source; all404; mixed503/404;403; existing
+recovered-unavailable, approved survivor, CDN strict projection and consumer
+resize tests. Baseline:3 distinguishing failures and2 negative controls pass.
+Initial simplicity review PASS; the subsequent rehydrate correction is under review.
+Local suites:82 pass;5 resize tests fail because this host lacks dwebp.
+The complete gate suite (75 tests) passes. Actual source JPEG downloads
+10,983,325 bytes and prepares canonical WebP1,946,044 bytes at4928x3280
+with two thumbnails; no upload, DB change or publication was performed.
+Evidence: retained task20261112T111614Z-similar-events-check,
+media-download-boundary-20261120.json and media-baseline.log.
+Root owns main release and normal live receipt verification. Code is local;
+deployment has not started. This section does not close the parent incident.
+
+Independent review of PR1099 requested a correction before release: the next
+media job's source rehydrate could feed the same unavailable URL into Smart
+Update and reopen it. The existing rehydrate now excludes unchanged stored
+download_unavailable URLs, while retaining new photos from that source and
+ordinary import recovery. Full job regression runs two separate media jobs
+with an approved survivor, adds a new source photo, then recovers the original
+through ordinary Smart Update. Baseline fails on repeated download; fixed
+test passes. No second recovery mechanism or new state is introduced.
+
+Second independent review found the same repeat when the legacy source URL
+exists only in supabase_url. The same full-job test is now parametrized for
+either stored field: old filter fails only the supabase-only case, fixed
+filter passes both. Reuse existing Smart Update URL identity for both ledger
+and candidates; skip only candidates whose nonempty URL set is fully known
+unavailable. A new alternate URL still proceeds. No new identity algorithm.

@@ -2486,3 +2486,134 @@ async def test_pair_retry_uses_existing_media_transient_schedule(tmp_path, monke
             assert any(j.next_run_at.replace(tzinfo=timezone.utc) <= due for j in jobs)
     finally:
         await db.engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_materialization_accepts_source_larger_than_comparison_limit(monkeypatch):
+    monkeypatch.setenv("PUBLIC_ASSET_BASE_URL", "https://static.kenigevents.ru")
+    original = _png_bytes(metadata="x" * 8_100_000)
+    def download(url, *, max_bytes, timeout):
+        if len(original) > max_bytes:
+            raise ValueError("image_too_large")
+        return DownloadedPoster(original, "image/png", url)
+    monkeypatch.setattr(event_media, "_download_url", download)
+    monkeypatch.setattr("yandex_storage.upload_yandex_public_bytes",
+        lambda data, *, object_path, **kw: f"https://static.kenigevents.ru/{object_path}")
+    poster = EventPoster(event_id=1, poster_hash="large", catbox_url="https://source.example/large.png")
+    assert await event_media.materialize_event_media_candidate_to_cdn(poster)
+    assert poster.supabase_url.startswith("https://static.kenigevents.ru/")
+    assert poster.catbox_url == "https://source.example/large.png"
+    assert (await event_media._download_poster(poster)).data == original
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("codes,expected_failed,expected_status", [
+    ([404], 0, "unavailable"),
+    ([404, 404], 0, "unavailable"),
+    ([503, 404], 1, "pending_review"),
+    ([403], 1, "pending_review"),
+])
+async def test_cdn_missing_source_terminates_without_hiding_transient_failure(
+    tmp_path, monkeypatch, codes, expected_failed, expected_status,
+):
+    import urllib.error
+    def download(url, **kw):
+        code = codes[0] if url.endswith("original") else codes[-1]
+        raise urllib.error.HTTPError(url, code, "test", {}, None)
+    monkeypatch.setattr(event_media, "_download_url", download)
+    db = Database(str(tmp_path / "missing-source.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.flush()
+        poster = EventPoster(event_id=event.id, poster_hash="missing",
+            catbox_url="https://source.example/original",
+            supabase_url="https://source.example/alternate" if len(codes)>1 else None,
+            review_status=PENDING_REVIEW, review_reason="cdn_mirror_pending")
+        session.add(poster)
+        await session.commit()
+        updated, failed = await event_media.materialize_event_posters_to_cdn(session, event.id)
+        await session.commit()
+        assert failed == expected_failed
+        assert updated == (1 if expected_status == "unavailable" else 0)
+        assert poster.review_status == expected_status
+        assert poster.catbox_url == "https://source.example/original"
+        if expected_status == "unavailable":
+            assert await event_media.materialize_event_posters_to_cdn(session, event.id) == (0, 0)
+    await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("missing_field", ["catbox_url", "supabase_url"])
+async def test_separate_media_jobs_do_not_reimport_unchanged_missing_source(tmp_path, monkeypatch, missing_field):
+    import main
+    import urllib.error
+    from models import EventSource
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "1")
+    monkeypatch.setenv("PUBLIC_ASSET_BASE_URL", "https://static.kenigevents.ru")
+    monkeypatch.setenv("EVENT_SOURCE_MEDIA_REHYDRATE_ENABLED", "1")
+    missing = "https://source.example/missing.jpg"
+    fresh = "https://source.example/new.jpg"
+    digest = "c" * 64
+    display = f"https://static.kenigevents.ru/p/image/v2/cc/{digest}.webp"
+    downloads = []
+    recovered = False
+    add_fresh = False
+    source_ready = False
+    def download(url, **kw):
+        downloads.append(url)
+        if url == missing and not recovered:
+            raise urllib.error.HTTPError(url, 404, "test", {}, None)
+        return DownloadedPoster(_png_bytes(metadata=url), "image/png", url)
+    async def fetch(_type, source, **kw):
+        if not source_ready or not source.endswith("/1"):
+            return []
+        return [PosterCandidate(catbox_url=missing)] + ([PosterCandidate(catbox_url=fresh)] if add_fresh else [])
+    async def review(*args, **kw):
+        return False
+    async def schedule(*args, **kw):
+        return None
+    monkeypatch.setattr(event_media, "_download_url", download)
+    monkeypatch.setattr(event_media, "review_next_event_media_pair", review)
+    monkeypatch.setattr(main, "_fetch_event_source_poster_candidates", fetch)
+    monkeypatch.setattr(main, "schedule_event_update_tasks", schedule)
+    monkeypatch.setattr("yandex_storage.upload_yandex_public_bytes",
+        lambda data, *, object_path, **kw: f"https://static.kenigevents.ru/{object_path}")
+    db = Database(str(tmp_path / "separate-jobs.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.flush()
+        eid = event.id
+        session.add(EventPoster(event_id=eid, poster_hash="survivor", supabase_url=display,
+            supabase_path=f"p/image/v2/cc/{digest}.webp", review_status=APPROVED,
+            thumbnail_256_url=display, thumbnail_512_url=display))
+        session.add(EventPoster(event_id=eid, poster_hash=hashlib.sha256(f"url:{missing}".encode()).hexdigest(),
+            **{missing_field: missing}, review_status=PENDING_REVIEW, review_reason="cdn_mirror_pending"))
+        for i in range(1, 4):
+            session.add(EventSource(event_id=eid, source_type="telegram", source_url=f"https://t.me/test/{i}"))
+        await session.commit()
+    await main.job_event_media_review(eid, db, None)
+    count = downloads.count(missing)
+    assert count > 0
+    source_ready = True
+    await main.job_event_media_review(eid, db, None)
+    assert downloads.count(missing) == count
+    async with db.get_session() as session:
+        rows = (await session.execute(select(EventPoster).where(EventPoster.event_id == eid))).scalars().all()
+        assert next(p for p in rows if missing in (p.catbox_url, p.supabase_url)).review_status == "unavailable"
+        event = await session.get(Event, eid)
+        assert event.photo_urls == [display]
+    add_fresh = True
+    await main.job_event_media_review(eid, db, None)
+    assert fresh in downloads
+    assert downloads.count(missing) == count
+    recovered = True
+    async with db.get_session() as session:
+        await _apply_posters(session, eid, [PosterCandidate(catbox_url=missing)])
+        await session.commit()
+        rows = (await session.execute(select(EventPoster).where(EventPoster.event_id == eid))).scalars().all()
+        assert next(p for p in rows if p.catbox_url == missing).review_status != "unavailable"
+    await db.close()

@@ -21260,16 +21260,13 @@ async def _rehydrate_missing_event_source_posters_for_telegraph(
         if str(source_url or "").strip() and int(event_count or 0) > 1
     }
 
-    existing_count = int(
-        (
-            await session.execute(
-                select(func.count()).select_from(EventPoster).where(
-                    EventPoster.event_id == int(event_id),
-                    EventPoster.review_status.in_(("approved", "pending_review")),
-                )
-            )
-        ).scalar_one()
-        or 0
+    existing_posters = (
+        await session.execute(
+            select(EventPoster).where(EventPoster.event_id == int(event_id))
+        )
+    ).scalars().all()
+    existing_count = sum(
+        row.review_status in ("approved", "pending_review") for row in existing_posters
     )
     # INC-2026-05-05 still protects ordinary single-source rows from repeated
     # aggregation.  A single-source event with no usable media is different:
@@ -21296,10 +21293,21 @@ async def _rehydrate_missing_event_source_posters_for_telegraph(
                 limit=per_source_limit,
             )
         )
+    from smart_event_update import _apply_posters, _poster_identity_keys
+
+    unavailable_urls = {
+        url for row in existing_posters
+        if row.review_status == "unavailable" and row.review_reason == "download_unavailable"
+        for kind, url in _poster_identity_keys(row) if kind == "url"
+    }
+    candidates = [
+        candidate for candidate in candidates
+        if not (candidate_urls := {
+            url for kind, url in _poster_identity_keys(candidate) if kind == "url"
+        }) or not candidate_urls.issubset(unavailable_urls)
+    ]
     if not candidates:
         return 0
-
-    from smart_event_update import _apply_posters
 
     added, _urls, _preview, _rejected, _changed = await _apply_posters(
         session,
