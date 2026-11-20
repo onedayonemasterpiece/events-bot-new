@@ -44,6 +44,8 @@
 
 ## [Unreleased]
 
+- Event media: load originals with the existing source-size limit before creating comparison copies; stop CDN retries for a ledger image whose saved URLs all return 404, preserving source provenance and available gallery images.
+
 - Проверка галереи не скачивает повторно изображения, для которых зеркалирование в CDN уже завершилось ошибкой; готовые фотографии продолжают обработку.
 
 - Импорт событий не передаёт сгенерированное краткое описание как первичную выдержку для повторного извлечения фактов; сайтовый парсер сохраняет исходное описание.

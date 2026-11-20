@@ -25,7 +25,16 @@ Source downloads encode international hostnames with the standard IDNA codec
 before the existing urllib request; UTF-8 paths and queries remain percent-encoded.
 This applies to both CDN materialization and pair-review source downloads.
 
-Ошибка оставляет `review_status=pending_review`,
+Загрузка оригинала и текущего display использует существующий source cap
+`EVENT_MEDIA_SOURCE_MAX_BYTES` (36 700 160 байт); review copies отдельно
+уменьшаются до 1200 px. Лимит сравнения не отбрасывает исходник до уменьшения.
+Если все сохранённые адреса ledger row отвечают HTTP 404, строка получает
+существующие `unavailable` / `download_unavailable`: URL и provenance сохраняются,
+готовые изображения остаются доступными. Новый импорт восстановленного
+источника открывает её прежним путём. Смешанные ошибки (например 503 и 404)
+не считаются исчезнувшим источником.
+
+Остальная ошибка оставляет `review_status=pending_review`,
 `review_reason=cdn_mirror_pending` и durable retry `event_media_review`. Это
 единый путь для новых событий, existing-event parser updates, source rehydrate
 и TelegramMonitor; static/Telegraph/Telegram/VK только читают projection.

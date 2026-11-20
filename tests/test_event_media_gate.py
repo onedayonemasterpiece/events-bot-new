@@ -2486,3 +2486,59 @@ async def test_pair_retry_uses_existing_media_transient_schedule(tmp_path, monke
             assert any(j.next_run_at.replace(tzinfo=timezone.utc) <= due for j in jobs)
     finally:
         await db.engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_materialization_accepts_source_larger_than_comparison_limit(monkeypatch):
+    monkeypatch.setenv("PUBLIC_ASSET_BASE_URL", "https://static.kenigevents.ru")
+    original = _png_bytes(metadata="x" * 8_100_000)
+    def download(url, *, max_bytes, timeout):
+        if len(original) > max_bytes:
+            raise ValueError("image_too_large")
+        return DownloadedPoster(original, "image/png", url)
+    monkeypatch.setattr(event_media, "_download_url", download)
+    monkeypatch.setattr("yandex_storage.upload_yandex_public_bytes",
+        lambda data, *, object_path, **kw: f"https://static.kenigevents.ru/{object_path}")
+    poster = EventPoster(event_id=1, poster_hash="large", catbox_url="https://source.example/large.png")
+    assert await event_media.materialize_event_media_candidate_to_cdn(poster)
+    assert poster.supabase_url.startswith("https://static.kenigevents.ru/")
+    assert poster.catbox_url == "https://source.example/large.png"
+    assert (await event_media._download_poster(poster)).data == original
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("codes,expected_failed,expected_status", [
+    ([404], 0, "unavailable"),
+    ([404, 404], 0, "unavailable"),
+    ([503, 404], 1, "pending_review"),
+    ([403], 1, "pending_review"),
+])
+async def test_cdn_missing_source_terminates_without_hiding_transient_failure(
+    tmp_path, monkeypatch, codes, expected_failed, expected_status,
+):
+    import urllib.error
+    def download(url, **kw):
+        code = codes[0] if url.endswith("original") else codes[-1]
+        raise urllib.error.HTTPError(url, code, "test", {}, None)
+    monkeypatch.setattr(event_media, "_download_url", download)
+    db = Database(str(tmp_path / "missing-source.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.flush()
+        poster = EventPoster(event_id=event.id, poster_hash="missing",
+            catbox_url="https://source.example/original",
+            supabase_url="https://source.example/alternate" if len(codes)>1 else None,
+            review_status=PENDING_REVIEW, review_reason="cdn_mirror_pending")
+        session.add(poster)
+        await session.commit()
+        updated, failed = await event_media.materialize_event_posters_to_cdn(session, event.id)
+        await session.commit()
+        assert failed == expected_failed
+        assert updated == (1 if expected_status == "unavailable" else 0)
+        assert poster.review_status == expected_status
+        assert poster.catbox_url == "https://source.example/original"
+        if expected_status == "unavailable":
+            assert await event_media.materialize_event_posters_to_cdn(session, event.id) == (0, 0)
+    await db.close()
