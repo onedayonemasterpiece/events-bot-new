@@ -513,8 +513,6 @@ async def _prepare_guide_avatars(rows, db, *, refresh):
                 if person.get("avatar_platform") != "telegram":
                     person.update(path=str(path), avatar_platform="vk")
         row["participant_medallions"] = participants
-        if row.get("source_roles_checked") and not participants:
-            continue
         flags = json.loads(row.get("source_flags_json") or "{}")
         if row.get("source_platform") == "telegram" and not participants:
             state = flags.get("avatar")
@@ -541,6 +539,8 @@ async def _prepare_guide_avatars(rows, db, *, refresh):
             resolved = []
             for person in participants:
                 matched = source_names & _identity_names({"display_name": person["name"]})
+                if "Организатор" in person["roles"]:
+                    matched = matched or _organizer_in_title(person["name"], public_name)
                 if owner < 0 and person["roles"] == ["Гид"]:
                     matched = matched and any("Организатор" in p["roles"] and
                         source_names & _identity_names({"display_name": p["name"]}) for p in participants)
