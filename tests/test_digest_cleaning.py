@@ -15,6 +15,11 @@ def test_clean_search_digest_normalization():
     assert clean_search_digest(None) is None
     assert clean_search_digest("   12:00   ") is None
 
+def test_digest_rejects_leaked_character_count_from_rammstein_card():
+    assert clean_search_digest('Трибьют Rammstein в котором дета льно воссоздают музыку. (138 символов)') is None
+    assert clean_search_digest('Концерт продлится 138 минут.') == 'Концерт продлится 138 минут.'
+
+
 def test_clean_search_digest_complex():
     input_str = "Лекция о  искусстве  начало в 18:30, вход свободный"
     expected = "Лекция о искусстве начало в , вход свободный"
