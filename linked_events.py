@@ -223,6 +223,11 @@ async def _programme_chunk(db, children, target_ids, past, future, limit):
             continue
         tid, pid = item.get('target_id'), item.get('peer_id')
         tq, pq, relation = item.get('target_quote'), item.get('peer_quote'), item.get('relation')
+        # A sorted review pair can list the existing peer before the current target.
+        if (type(tid) is int and type(pid) is int and tid not in decisions and pid in decisions
+            and tid in (events[pid].linked_event_ids or [])):
+            tid, pid = pid, tid
+            tq, pq = pq, tq
         if (type(tid) is int and type(pid) is int and tid in decisions and pid in packets and tid != pid
             and relation in {'duplicate_same_slot', 'independent_event'}
             and isinstance(tq, str) and isinstance(pq, str) and tq and pq

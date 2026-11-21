@@ -336,3 +336,46 @@ async def test_child_scope_and_summary_precede_latest_media_receipt(tmp_path, mo
         assert len(calls) == 1
     finally:
         await db.close()
+
+
+@pytest.mark.parametrize('target,peer', [(10346, 7236), (7236, 10346)])
+@pytest.mark.asyncio
+async def test_existing_programme_edge_review_accepts_sorted_pair_in_either_direction(tmp_path, monkeypatch, target, peer):
+    db = Database(str(tmp_path / 'nutcracker.sqlite'))
+    await db.init()
+    ballet, story = {7236, 7237}, {10346, 10436}
+    labels = {i: ('Балет Гордеева' if i in ballet else 'Новогодняя сказка') for i in ballet | story}
+    mate = {7236: 7237, 10346: 10436}
+    links = {
+        7236: [7237, 10346], 7237: [7236],
+        10346: [7236, 10436], 10436: [10346],
+    }
+
+    async def classify(prompt, schema, **kwargs):
+        packet = json.loads(prompt[prompt.index('{"target_ids"'):])
+        assert packet['target_ids'] == [target]
+        reviewed = [min(target, peer), max(target, peer)]
+        assert reviewed in packet['review_pairs']
+        first, second = reviewed
+        return {'groups': [], 'decisions': [
+            dict(target_id=first, peer_id=second, relation='independent_event',
+                 target_quote=labels[first], peer_quote=labels[second])
+        ]}
+
+    monkeypatch.setattr('smart_event_update._ask_gemma_json', classify)
+    try:
+        async with db.get_session() as session:
+            for i in sorted(labels):
+                session.add(Event(id=i, title='Щелкунчик', description='', source_text='',
+                    short_description=labels[i], location_name='Янтарь-холл',
+                    date='2026-12-19' if i in ballet else '2027-01-05',
+                    time='12:00' if i in (7236, 10436) else ('15:00' if i == 10346 else '17:00'),
+                    linked_event_ids=links[i]))
+            await session.commit()
+        await recompute_linked_event_ids(db, target)
+        async with db.get_session() as session:
+            for i in (target, peer):
+                assert (await session.get(Event, i)).linked_event_ids == [mate[i]]
+                assert (await session.get(Event, mate[i])).linked_event_ids == [i]
+    finally:
+        await db.close()
