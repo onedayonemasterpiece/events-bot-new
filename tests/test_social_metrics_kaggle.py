@@ -39,6 +39,24 @@ def test_kaggle_vk_matcher_keeps_strict_title_date_anchor_contract():
     }) == (0, 0.0)
 
 
+@pytest.mark.parametrize("post_text,expected_score", [
+    ('Мастер-класс «Мозаика в формах»\n📅 25 ноября 14:00\n📍 Стёкла, Ушинского 1, #Калининград', 4),
+    ('Мастер-класс «Мозаика на формах»\n25 ноября 14:00\nСтёкла', 0),
+    ('Мастер-класс «Мозаика в формах»\n26 ноября 14:00\nСтёкла', 0),
+    ('Мастер-класс «Мозаика в формах»\n25 ноября\nДругая площадка', 0),
+])
+def test_exact_published_title_keeps_internal_short_words(post_text, expected_score):
+    # Public post 16036, read 2026-11-25: retain the actual title/date/venue excerpt.
+    from datetime import date
+    from types import SimpleNamespace
+    import poll_to_forward_popularity as pfp
+    candidate = {"title": "Мастер-класс «Мозаика в формах»", "date": "2026-11-25",
+                 "time": "14:00", "location_name": "Стёкла"}
+    item = {"text": post_text}
+    assert pfp._match_post_score(SimpleNamespace(**candidate), item, date(2026, 11, 25))[0] == expected_score
+    assert collector._match_post(candidate, item)[0] == expected_score
+
+
 @pytest.mark.asyncio
 async def test_kaggle_vk_resolver_does_not_publish_postponed_direct_row(monkeypatch):
     observed = int(NOW.timestamp())
@@ -46,7 +64,7 @@ async def test_kaggle_vk_resolver_does_not_publish_postponed_direct_row(monkeypa
         "candidate_id": "vkresolve:klgdevents:1",
         "publisher_id": "231920894",
         "stored_post_id": 1001,
-        "title": "Событие 1",
+        "title": "Событие в студии 1",
         "date": "2026-07-20",
         "time": "19:00",
         "location_name": "Площадка",
@@ -54,12 +72,12 @@ async def test_kaggle_vk_resolver_does_not_publish_postponed_direct_row(monkeypa
     scheduled = {
         "id": 1001,
         "date": observed + 60 * 60,
-        "text": "Событие 1\n20 июля 19:00\nПлощадка",
+        "text": "Событие в студии 1\n20 июля 19:00\nПлощадка",
     }
     published = {
         "id": 2001,
         "date": observed - 60,
-        "text": "Событие 1\n20 июля 19:00\nПлощадка",
+        "text": "Событие в студии 1\n20 июля 19:00\nПлощадка",
     }
 
     def fake_vk_request(method, _token, **_params):
@@ -81,7 +99,7 @@ async def test_kaggle_vk_resolver_does_not_publish_postponed_direct_row(monkeypa
         "match_confidence": 1.0,
         "live_post_id": 2001,
         "post_ts": observed - 60,
-        "evidence_text": "Событие 1\n20 июля 19:00\nПлощадка",
+        "evidence_text": "Событие в студии 1\n20 июля 19:00\nПлощадка",
         "views": None,
         "likes": None,
         "comments": None,
@@ -298,6 +316,7 @@ async def test_kaggle_vk_resolution_is_revalidated_and_imported_with_metrics(tmp
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     event = _event(1, 703)
+    event.title = "Событие в студии 1"
     event.source_vk_post_url = "https://vk.com/wall-231920894_1001"
     async with db.get_session() as session:
         session.add(event)
@@ -334,7 +353,7 @@ async def test_kaggle_vk_resolution_is_revalidated_and_imported_with_metrics(tmp
         "post_ts": post_ts,
         "match_method": "wall_scan",
         "match_confidence": 1.0,
-        "evidence_text": "Событие 1\n20 июля 19:00\nПлощадка",
+        "evidence_text": "Событие в студии 1\n20 июля 19:00\nПлощадка",
         "views": 500,
         "likes": 20,
         "comments": 3,

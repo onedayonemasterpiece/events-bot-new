@@ -81,7 +81,7 @@ async def test_kldevents_wall_scan_recovers_stale_ids_fixture(tmp_path, monkeypa
             stored_id = 1000 + idx if idx <= 22 else None
             event = _event_model(
                 idx,
-                title=f"Событие {idx}",
+                title=f"Событие в студии {idx}",
                 post_id=500 + idx,
                 stored_vk_id=stored_id,
             )
@@ -92,7 +92,7 @@ async def test_kldevents_wall_scan_recovers_stale_ids_fixture(tmp_path, monkeypa
     direct = {
         1001: _vk_item(
             1001,
-            title="Событие 1",
+            title="Событие в студии 1",
             location="Площадка 1",
             views=500,
         )
@@ -100,7 +100,7 @@ async def test_kldevents_wall_scan_recovers_stale_ids_fixture(tmp_path, monkeypa
     wall = [
         _vk_item(
             1001 if idx == 1 else 2000 + idx,
-            title=f"Событие {idx}",
+            title=f"Событие в студии {idx}",
             location=f"Площадка {idx}",
             views=100 + idx * 40,
         )

@@ -146,12 +146,7 @@ def _contains_token_sequence(tokens: Sequence[str], needle: Sequence[str]) -> bo
 
 
 def _title_key(title: str | None) -> str:
-    tokens = [
-        token
-        for token in _normalize_text(title).split()
-        if len(token) >= 3 or token.isdigit()
-    ]
-    return " ".join(tokens[:6])
+    return " ".join(_normalize_text(title).split()[:6])
 
 
 def _location_tokens(location: str | None) -> tuple[str, ...]:

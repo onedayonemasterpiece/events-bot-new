@@ -95,7 +95,7 @@ def _match_post(candidate: dict[str, Any], item: dict[str, Any]) -> tuple[int, f
         return 0, 0.0
     text = str(item.get("text") or "")
     normalized = _normalize_text(text)
-    title_tokens = [token for token in _normalize_text(candidate.get("title")).split() if len(token) >= 3 or token.isdigit()][:6]
+    title_tokens = _normalize_text(candidate.get("title")).split()[:6]
     if not title_tokens or not _contains_sequence(_normalize_text(text).split(), title_tokens):
         return 0, 0.0
     if _normalize_text(f"{target_date.day} {MONTHS_RU_GEN.get(target_date.month, '')}") not in normalized:

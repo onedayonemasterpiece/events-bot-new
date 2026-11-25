@@ -232,3 +232,7 @@ repost mappings at the cut, so its historical backfill proves the transport and
 future automatic collection without pretending that digest/video engagement
 belongs to current events. Status callbacks included start, preflight, alive,
 terminal report and both lease releases; temporary datasets were deleted.
+
+### Точное название VK-поста
+
+Штатный resolver и Kaggle collector сравнивают первые шесть нормализованных токенов названия как непрерывную последовательность, сохраняя короткие слова внутри неё. Удаление «в» из «Мозаика в формах» нарушало даже точное совпадение. Дата и прежний дополнительный признак времени или места остаются обязательными по существующему контракту; другой предлог не подменяет точное название. Исправление matcher не означает повторной публикации или правки старого VK-поста.
