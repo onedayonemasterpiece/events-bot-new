@@ -532,7 +532,10 @@ between checks. Run `disk-maintenance.py` for a dry run, then install/enable
 `disk-maintenance.service` and `.timer` under the `runcoveer-` prefix. Every
 15 minutes they check both disk bytes and inodes and prune only Docker build
 cache older than seven days. Under pressure they also clear the APT package
-cache. Service data, Docker images used for rollback and backups are preserved.
+cache. Before pressure cleanup they also record bounded directory sizes and
+Events container scratch/data and writable-layer sizes in the same receipt and
+journal (three read-only commands, at most eight seconds and 16 KiB each).
+Service data, Docker images used for rollback and backups are preserved.
 Warning thresholds: 80% full (bytes or inodes) or less than 2 GB free. Critical:
 90% full or less than 1 GB free; the service fails visibly in systemd. Latest
 state: `/run/runcoveer/disk-status.json`, with results also in journalctl. No

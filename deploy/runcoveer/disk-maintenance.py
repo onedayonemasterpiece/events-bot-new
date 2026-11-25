@@ -25,6 +25,28 @@ def disk_state(path='/'):
                 inode_used_percent=round(inode_percent, 2))
 
 
+def pressure_breakdown():
+    """Keep bounded directory/container evidence before pressure disappears."""
+    commands = [
+        ['du', '-x', '-B1', '--max-depth=1', '/var/lib/containerd',
+         '/var/lib/runcoveer/events', '/opt/runcoveer', '/var/backups'],
+        ['docker', 'exec', 'deployment-events-1',
+         'du', '-x', '-B1', '--max-depth=1', '/tmp', '/data'],
+        ['docker', 'ps', '-a', '--size', '--format',
+         '{{.ID}} {{.Names}} {{.Size}}'],
+    ]
+    evidence = []
+    for command in commands:
+        try:
+            result = subprocess.run(command, capture_output=True, timeout=8,
+                                    text=True)
+            evidence.append(dict(command=command, returncode=result.returncode,
+                                 output=result.stdout[:16384]))
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            evidence.append(dict(command=command, error=type(exc).__name__))
+    return evidence
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--apply', action='store_true')
@@ -34,14 +56,17 @@ def main():
     if before['severity'] != 'ok':
         commands.append(['apt-get', 'clean'])
     actions = []
+    breakdown = []
     if args.apply:
+        if before['severity'] != 'ok':
+            breakdown = pressure_breakdown()
         for command in commands:
             result = subprocess.run(command, capture_output=True, timeout=120)
             # Do not copy arbitrary daemon output into the status receipt.
             actions.append(dict(command=command, returncode=result.returncode))
     after = disk_state()
     report = dict(before=before, after=after, apply=args.apply,
-                  planned_commands=commands, actions=actions)
+                  planned_commands=commands, actions=actions, breakdown=breakdown)
     if args.apply:
         root = Path('/run/runcoveer')
         root.mkdir(mode=0o700, exist_ok=True)

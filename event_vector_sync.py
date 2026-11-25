@@ -19,11 +19,13 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from sqlalchemy.orm import load_only
 from sqlmodel import Session, create_engine, select
 
 from models import Event
 from ops_run import finish_ops_run, start_ops_run
 from static_site_release import (
+    EVENT_PUBLIC_REVISION_FIELDS,
     create_immutable_projection_snapshot, event_public_revision,
     prune_immutable_snapshots,
 )
@@ -117,20 +119,22 @@ def static_release_guard(db_path: str, *, now: datetime | None = None) -> dict[s
 
 
 def _create_sqlite_snapshot(source_path: str, target_path: Path) -> None:
-    """Take a transactionally consistent SQLite backup for export + revisions."""
+    """Copy the public read model, excluding operational tables and journals."""
 
-    source = Path(source_path).resolve()
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(f"file:{source}?mode=ro", uri=True, timeout=60.0) as source_db:
-        with sqlite3.connect(target_path, timeout=60.0) as target_db:
-            source_db.backup(target_db)
+    create_immutable_projection_snapshot(
+        source_path, target_path.parent,
+        request_payload={}, snapshot_id=target_path.stem,
+    )
+    logger.info("event_vector_snapshot_ready size_bytes=%d", target_path.stat().st_size)
 
 
 def _snapshot_event_revisions(snapshot_path: Path) -> dict[str, str]:
     engine = create_engine(f"sqlite:///{snapshot_path}")
     try:
         with Session(engine) as session:
-            events = session.exec(select(Event)).all()
+            events = session.exec(select(Event).options(load_only(
+                *(getattr(Event, name) for name in EVENT_PUBLIC_REVISION_FIELDS)
+            ))).all()
             return {
                 str(int(event.id)): event_public_revision(event)
                 for event in events

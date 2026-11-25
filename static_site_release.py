@@ -91,6 +91,9 @@ STATIC_SITE_PROJECTION_COLUMNS: dict[str, tuple[str, ...]] = {
         "age_restriction", "age_restriction_status",
         "age_restriction_provenance", "age_restriction_decision_version",
         "age_assessment", "linked_event_ids", "revision", "updated_at",
+        "search_digest", "time_is_default", "age_restriction_input_hash",
+        "age_assessment_status", "age_assessment_decision_version",
+        "age_assessment_input_hash", "photo_count",
     ),
     "event_artist_appearance": (
         "event_id", "artist_id", "role", "status", "physical_visit_status",
@@ -559,6 +562,46 @@ def _bounded_unique(values: Iterable[Any], *, limit: int, max_len: int = 200) ->
     return result
 
 
+EVENT_PUBLIC_REVISION_FIELDS = (
+    "id",
+    "title",
+    "description",
+    "short_description",
+    "search_digest",
+    "festival",
+    "date",
+    "end_date",
+    "time",
+    "time_is_default",
+    "location_name",
+    "location_address",
+    "city",
+    "ticket_price_min",
+    "ticket_price_max",
+    "ticket_link",
+    "ticket_status",
+    "event_type",
+    "is_free",
+    "pushkin_card",
+    "silent",
+    "lifecycle_status",
+    "identity_status",
+    "merged_into_event_id",
+    "age_restriction",
+    "age_restriction_status",
+    "age_restriction_decision_version",
+    "age_restriction_input_hash",
+    "age_assessment",
+    "age_assessment_status",
+    "age_assessment_decision_version",
+    "age_assessment_input_hash",
+    "linked_event_ids",
+    "photo_urls",
+    "photo_count",
+    "topics",
+)
+
+
 def event_public_revision(event: Any) -> str:
     """Return a deterministic revision hash for fields consumed by static pages.
 
@@ -567,45 +610,7 @@ def event_public_revision(event: Any) -> str:
     counters whose refresh does not require a full page rebuild.
     """
 
-    fields = (
-        "id",
-        "title",
-        "description",
-        "short_description",
-        "search_digest",
-        "festival",
-        "date",
-        "end_date",
-        "time",
-        "time_is_default",
-        "location_name",
-        "location_address",
-        "city",
-        "ticket_price_min",
-        "ticket_price_max",
-        "ticket_link",
-        "ticket_status",
-        "event_type",
-        "is_free",
-        "pushkin_card",
-        "silent",
-        "lifecycle_status",
-        "identity_status",
-        "merged_into_event_id",
-        "age_restriction",
-        "age_restriction_status",
-        "age_restriction_decision_version",
-        "age_restriction_input_hash",
-        "age_assessment",
-        "age_assessment_status",
-        "age_assessment_decision_version",
-        "age_assessment_input_hash",
-        "linked_event_ids",
-        "photo_urls",
-        "photo_count",
-        "topics",
-    )
-    payload = {name: getattr(event, name, None) for name in fields}
+    payload = {name: getattr(event, name, None) for name in EVENT_PUBLIC_REVISION_FIELDS}
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 

@@ -235,6 +235,11 @@ async def test_snapshot_revisions_match_static_request_revision(tmp_path: Path) 
             location_name="Дом искусств",
             city="Калининград",
             source_text="source",
+            search_digest="Search revision must survive projection",
+            time_is_default=True,
+            photo_count=3,
+            age_assessment_status="resolved",
+            age_assessment_input_hash="assessment-hash",
         )
         session.add(event)
         await session.commit()
@@ -242,10 +247,19 @@ async def test_snapshot_revisions_match_static_request_revision(tmp_path: Path) 
         expected = main.event_public_revision(event)
         event_id = int(event.id)
 
+    with sqlite3.connect(database.path) as db:
+        db.execute("CREATE TABLE operational_payload (payload BLOB)")
+        db.execute("INSERT INTO operational_payload VALUES (zeroblob(8388608))")
+
     snapshot = tmp_path / "snapshot.sqlite"
     evs._create_sqlite_snapshot(database.path, snapshot)
 
     assert evs._snapshot_event_revisions(snapshot)[str(event_id)] == expected
+    with sqlite3.connect(snapshot) as db:
+        assert not db.execute(
+            "SELECT name FROM sqlite_master WHERE name='operational_payload'"
+        ).fetchone()
+    assert snapshot.stat().st_size < Path(database.path).stat().st_size / 2
     await database.close()
 
 

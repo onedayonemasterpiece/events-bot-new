@@ -482,6 +482,17 @@ def test_projection_preserves_source_order_across_different_query_plans(
                 (3, "https://t.me/source/a-first-by-url", 3),
             ],
         )
+        con.executescript("""
+            create table event_publication(
+                event_id integer, platform text, target text,
+                stored_url text, live_url text, status text
+            );
+            insert into event_publication values
+                (1,'vk','afisha','https://vk.com/wall-1_2',NULL,'published'),
+                (1,'telegraph','page','https://telegra.ph/event',NULL,'published');
+            create unique index publication_identity
+                on event_publication(event_id,platform,target);
+        """)
         # The production database and compact projection intentionally do not
         # share indexes. The public source order must therefore be explicit,
         # not an accidental consequence of either query plan.
@@ -505,6 +516,8 @@ def test_projection_preserves_source_order_across_different_query_plans(
             "https://t.me/source/1",
             "https://t.me/source/z-last-by-url",
             "https://t.me/source/a-first-by-url",
+            "https://telegra.ph/event",
+            "https://vk.com/wall-1_2",
         ]
         assert exporter.collect_source_urls(live, 1, live_event) == expected
         assert exporter.collect_source_urls(projected, 1, projected_event) == expected
