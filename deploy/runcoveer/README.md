@@ -47,6 +47,17 @@ release context rather than a deployment gate. A concrete observed risk may
 need an action specific to that operation; it does not justify a general ban.
 This owner decision supersedes the historical wait-for-import wording below.
 
+## New Year occurrence identity release, 2026-11-25
+
+Events image `runcoveer/events:newyear-occurrence-identity-20261125` contains
+merged main `e903d755c52b60bbae10e0d64226ded1e1aed0e2` (PR 1105).
+All 4627 tracked files matched main, 159 image tests and the isolated startup
+passed. Live readiness, DB and scheduler passed; Kotopogoda is unchanged.
+Rollback: `runcoveer/events:vk-title-tokens-20261125`. The existing occurrence
+scoping and final merge gate now agree on the selected session. Public/data
+cleanup and the outstanding old ICS-channel deletion access are recorded in
+[the incident](../../docs/reports/incidents/INC-2026-11-25-newyear-own-channel-reingestion.md).
+
 ## VK gallery replay and cover correction, 2026-11-10
 
 Events-only image `runcoveer/events:vk-multiphoto-replay-20261110` contains

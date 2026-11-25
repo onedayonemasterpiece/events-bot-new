@@ -217,3 +217,55 @@ Local focused regression: 88 tests passed. Real model replay and exact-main
 RunCoveer deployment are still being executed; this section does not claim a
 release. Evidence and deletion manifests are retained under
 `/home/dev/artifacts/events-bot-new/20261125T191607Z-newyear-spam-remediation-20261125/`.
+
+## Live release and cleanup evidence — 25 November, 19:42 UTC
+
+PR [1105](https://github.com/onedayonemasterpiece/events-bot-new/pull/1105)
+passed CI and merged as `e903d755c52b60bbae10e0d64226ded1e1aed0e2`.
+Image `runcoveer/events:newyear-occurrence-identity-20261125` was built from
+the running title-matcher release `fc6fe00036ae5b8c7ca5263e767a3dc20a9e3a68`,
+which is an ancestor of the candidate. All 4627 tracked files matched exact
+main. Image qualification passed 159 tests and a network-isolated startup.
+Events-only Compose cutover preserved Kotopogoda. Runtime readback reports
+the merged SHA; live readiness, DB, scheduler and outbox worker are healthy.
+Disk free at that readback: 7650 MiB. Rollback is the actual prior image
+`runcoveer/events:vk-title-tokens-20261125`, preserving the earlier disk fixes.
+
+Real configured-provider replay scoped both incident packets 32452/32467 and
+returned `allow_merge/source_update`, confidence 1.0, against 11015. Three
+negative controls against the other dates/times returned
+`skip_merge_side_effects/related_but_distinct`. An initial positive request
+received provider 503/fallback and exceeded the existing 90-second deadline;
+the subsequent completed replay passed. No provider or retry configuration
+was changed. Local focused suites passed 88 and 83 tests; PR CI passed.
+The deployed image also passed the stale own-source import boundary tests.
+A live monitoring config request excluded both own channels.
+
+Final data reconciliation: 78 merged aliases, four cancelled aggregate/context
+fragments, six active canonical cards. These are the four exact sessions,
+original December 1 opening 10219 (copies 10241/10258 merged), and school
+programme 10311. All six were restored from temporary silence after release.
+For 11017 both Telegram post URL and post ID now reference 6084. Eight
+canonical publication records reflect exact provider readbacks.
+
+Public cleanup: all 71 duplicate messages in `kldevents` and 29 VK public
+posts are absent; canonical session posts remain. All nine native VK scheduled
+duplicates are absent; three unrelated scheduled posts remain. Sixteen
+`kenigevents` digest messages were edited and read back, removing 107 duplicate
+lines across split daily digests and remapping retained links to canonical
+cards. Unrelated entries and entities were preserved.
+
+Additional ICS channel inspection found 76 duplicate calendar documents.
+The production bot deleted 41 and the provider readback retained the four
+original session documents. Thirty-five older duplicates remain in
+`kenigeventscalendar`: Bot API returned `message can't be deleted`; the local
+human inspection account is not a participant and has no delete permission
+in that channel. The owner was asked to grant delete access to Telegram ID
+8336351413. No membership or administrator roles were changed.
+The exact remaining IDs/texts are retained in `calendar-after.json`. This
+remaining public cleanup keeps the incident open; source exclusion, root
+repair and the primary-channel cleanup have already been deployed/applied.
+
+The existing coalesced `event_vector_sync:prod` request was rearmed after the
+repair. Its completion is tracked in the incident registry; no new publication
+or monitoring mechanism was added.
