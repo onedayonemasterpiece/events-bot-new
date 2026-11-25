@@ -1744,7 +1744,7 @@ def collect_source_urls(con: sqlite3.Connection, event_id: int, row: sqlite3.Row
         pass
     try:
         for publication in con.execute(
-            "select stored_url, live_url from event_publication where event_id=? and status='published'",
+            "select stored_url, live_url from event_publication where event_id=? and status='published' order by platform asc, target asc",
             (event_id,),
         ):
             add(publication["stored_url"])

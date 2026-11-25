@@ -139,8 +139,12 @@ Retained: `/home/dev/artifacts/events-bot-new/20261125T113655Z-runcoveer-disk-gr
 
 Цель владельца: принять меры против повторного заполнения, сохранив данные и
 импорты. Локальные изменения реализованы; 126 тестов прошли. Проверка на
-production data выполняется в отдельном network-none контейнере с read-only
-mount: сравнивает все revisions и экспорт. Следующие шаги — CI, merge exact
+production data нашла различие только порядка двух publication URL события
+9779. У event_publication полный DB index задавал platform/target порядок,
+а компактная копия без индексов давала порядок вставки. Экспорт теперь явно
+сортирует platform/target, добавлен regression с разными query plans.
+Измерение выполняется без сети; SELECT-only доступ к live SQLite использует
+rw mount для штатных WAL/SHM metadata. Следующие шаги — CI, merge exact
 main, Events-only release и установка host maintenance, затем live readback.
 
 ## Release And Closure Evidence
