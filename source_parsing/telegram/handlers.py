@@ -51,7 +51,7 @@ from smart_event_update import (
     smart_event_update,
 )
 from smart_update_identity import canonicalize_identity_url
-from telegram_sources import canonicalize_tg_url, normalize_tg_username, parse_tg_post_url
+from telegram_sources import canonicalize_tg_url, is_excluded_tg_source, normalize_tg_username, parse_tg_post_url
 from source_parsing.post_metrics import (
     PopularityBaseline,
     PopularityMarks,
@@ -5913,6 +5913,7 @@ async def process_telegram_results(
     )
 
     source_meta_map = _build_sources_meta_map(data.get("sources_meta"))
+    source_meta_map = {name: meta for name, meta in source_meta_map.items() if not is_excluded_tg_source(name)}
     if source_meta_map:
         for username, meta in source_meta_map.items():
             try:
@@ -6013,6 +6014,13 @@ async def process_telegram_results(
         message_started_ts = time.monotonic()
         username = normalize_tg_username(message.get("source_username"))
         if not username:
+            continue
+        if is_excluded_tg_source(username):
+            report.messages_skipped += 1
+            logger.info(
+                "tg_monitor.message skip reason=own_publication_channel run_id=%s source=%s message_id=%s",
+                report.run_id, username, message.get("message_id"),
+            )
             continue
         post_has_video = message.get("has_video")
         if isinstance(post_has_video, str):
