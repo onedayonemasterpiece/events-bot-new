@@ -259,6 +259,7 @@ jobs:
         run: >-
           python -m pytest -vv
           tests/test_event_vector_sync.py
+          tests/test_runcoveer_disk_maintenance.py
           tests/test_event_identity.py
           tests/test_static_site_release.py
           tests/test_static_site_build_debounce.py

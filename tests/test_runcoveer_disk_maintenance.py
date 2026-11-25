@@ -38,6 +38,7 @@ def test_critical_cleanup_preserves_images_volumes_and_backups(monkeypatch, tmp_
     monkeypatch.setattr(sys, 'argv', ['disk-maintenance.py', '--apply'])
     monkeypatch.setattr(guard, 'disk_state', lambda: {'severity': 'critical'})
     monkeypatch.setattr(guard, 'Path', lambda _: tmp_path)
+    monkeypatch.setattr(guard, 'pressure_breakdown', lambda: [])
     commands = []
     def run(command, **kwargs):
         commands.append(command)
@@ -49,6 +50,23 @@ def test_critical_cleanup_preserves_images_volumes_and_backups(monkeypatch, tmp_
         ['apt-get', 'clean'],
     ]
     assert (tmp_path / 'disk-status.json').exists()
+
+
+def test_pressure_breakdown_is_bounded_and_failure_does_not_stop_capture(monkeypatch):
+    guard = load_guard()
+    calls = []
+    def run(command, **kwargs):
+        calls.append(command)
+        assert kwargs['timeout'] == 8
+        if len(calls) == 1:
+            raise guard.subprocess.TimeoutExpired(command, 8)
+        return SimpleNamespace(returncode=0, stdout='x' * 20000)
+    monkeypatch.setattr(guard.subprocess, 'run', run)
+    evidence = guard.pressure_breakdown()
+    assert len(evidence) == 3
+    assert evidence[0]['error'] == 'TimeoutExpired'
+    assert len(evidence[1]['output']) == 16384
+    assert all('prune' not in command for command in calls)
 
 
 def load_backup():

@@ -88,10 +88,24 @@ WAL-пика, но не поддерживают его как основной 
 
 ## Immediate mitigation and corrective actions
 
-В этом расследовании не удалялись файлы/БД/images, не менялись пороги,
-не расширялся диск и не перезапускались сервисы. Место освободилось при
-более ранней штатной замене контейнера в другой задаче. Это временное
-восстановление ёмкости, а не доказанный prevention fix.
+По прямому требованию владельца 25 ноября вместо одного расследования
+подготовлены меры против повторения:
+
+- `event_vector_sync` использует существующий compact public projection вместо
+  полной копии SQLite со служебными таблицами. Поля public revision сохранены
+  в allowlist; ревизии читаются с SQLAlchemy type conversion. Семантика экспорта
+  и поиска не меняется. TemporaryDirectory сохраняет штатную очистку.
+- Существующий 15-минутный disk-maintenance при warning/critical до очистки
+  сохраняет размеры разрешённых host-каталогов, `/tmp` и `/data` Events и
+  container writable sizes в journal и status receipt. Три read-only команды
+  ограничены восемью секундами каждая и 16 KiB вывода. Ошибка измерения не
+  останавливает существующую безопасную очистку builder/APT cache.
+- Новых таймеров, автоматического расширения, удаления images/volumes,
+  canonical data, failed/unknown outputs или изменения admission floor нет.
+
+Это сокращает измеренный штатный пик; writer исторического накопления в
+удалённом контейнере по-прежнему неизвестен. Сбор разбивки закрывает конкретный
+пробел прежнего maintenance, который сохранял только общий free bytes.
 
 ## Automation Contract
 
@@ -123,17 +137,16 @@ Retained: `/home/dev/artifacts/events-bot-new/20261125T113655Z-runcoveer-disk-gr
 
 ## Current work and next step
 
-Расследование локализовало container-lifecycle pressure и измерило обычный
-snapshot peak. Для точного root cause не хватает содержимого удалённого
-старого слоя. Следующий шаг — сохранить разбивку `/tmp`, runtime outputs и
-container writable bytes при следующем предупреждении через существующий
-host maintenance, а затем исправлять установленного writer. Такой сбор и
-фоновое наблюдение этой задачей ещё не настроены. Автоматическое расширение
-диска и слепая очистка не предлагаются как исправление причины.
+Цель владельца: принять меры против повторного заполнения, сохранив данные и
+импорты. Локальные изменения реализованы; 126 тестов прошли. Проверка на
+production data выполняется в отдельном network-none контейнере с read-only
+mount: сравнивает все revisions и экспорт. Следующие шаги — CI, merge exact
+main, Events-only release и установка host maintenance, затем live readback.
 
 ## Release And Closure Evidence
 
-Нового исправления для disk growth нет, тесты и deployment этого
-исправления не запускались. Общий инцидент открыт. Current VK recovery
-проверена по ops 13446; существующий vector run 13453 завершился успешно
-и удалил свой временный snapshot.
+Локально: 126 passed (`event_vector_sync`, `runcoveer_disk_maintenance`,
+`static_site_release`, projection snapshot/handoff/content, pgvector export).
+Развёртывание этого исправления ещё не запускалось. Общий инцидент открыт:
+исторический накопитель не установлен. VK catch-up 13446 уже завершён и
+повторно не запускается; существующий vector 13453 штатно удалил snapshot.
