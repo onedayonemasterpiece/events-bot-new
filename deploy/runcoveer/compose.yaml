@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:media-source-download-20261120
+    image: runcoveer/events:own-telegram-exclusion-20261125
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
