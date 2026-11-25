@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vk-title-tokens-20261125
+    image: runcoveer/events:newyear-occurrence-identity-20261125
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

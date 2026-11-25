@@ -180,3 +180,40 @@ source row — 17 июля 2026 23:54:18 UTC (18 июля 01:54:18 Калини�
 Regression tests проверяют случайный enabled-source, ручной targeted run,
 формы username/URL и импорт старого результата без регистрации источника
 или создания заданий. Release evidence дополняется после доставки.
+
+## Remediation continuation — 25 November, 19:16 UTC onward
+
+Owner explicitly requested removal of existing and postponed duplicates and a
+root-cause repair. Source exclusion alone did not cancel already-created events
+and their outbound jobs. At 19:17 UTC, all 88 cohort cards were temporarily
+silenced and 101 pending/error outbound jobs terminalized as skipped.
+
+Provider cleanup used a manually reviewed exact-message manifest, with current
+text checked before deletion. Nine native VK postponed duplicates were deleted;
+a fresh postponed feed retained three unrelated items. Twenty-nine published VK
+duplicates were deleted; provider readback retained four distinct-session posts:
+14855, 14682, 14773, 14950. Telegram cleanup removed 71 duplicate messages and
+verified their absence. Canonical messages 5723 (26 December, both times),
+5989 (27 December 15:00), 6084 (27 December 12:30) remain. The bot API removed
+38 recent messages; the local, explicitly authorized channel admin removed the
+33 older messages refused by the bot. Other programmes and multi-event digests
+were preserved.
+
+The existing manifest repair implementation merged 76 exact-slot aliases into
+11015–11018 transactionally, preserving obsolete event shells, source facts,
+media evidence and decision history. Accepted candidate ownership was repointed;
+obsolete jobs were terminalized. Canonical cards remain silent during release
+qualification. The other eight cards are outside the exact-slot merge manifest.
+
+The producer already invokes occurrence scoping for these four-session packets.
+Its prompt incorrectly allowed one programme with several sessions to count as
+single_event; the final merge identity payload then ignored occurrence_scope_text
+and supplied the complete sibling caption again. Fix the existing scoping
+contract and feed its selected evidence into the existing final identity gate.
+Retain full source context for audit, while explicitly distinguishing it from
+the target occurrence. No new classifier, state, queue or retry is introduced.
+
+Local focused regression: 88 tests passed. Real model replay and exact-main
+RunCoveer deployment are still being executed; this section does not claim a
+release. Evidence and deletion manifests are retained under
+`/home/dev/artifacts/events-bot-new/20261125T191607Z-newyear-spam-remediation-20261125/`.
