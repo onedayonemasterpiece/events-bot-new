@@ -137,20 +137,46 @@ Retained: `/home/dev/artifacts/events-bot-new/20261125T113655Z-runcoveer-disk-gr
 
 ## Current work and next step
 
-Цель владельца: принять меры против повторного заполнения, сохранив данные и
-импорты. Локальные изменения реализованы; 126 тестов прошли. Проверка на
-production data нашла различие только порядка двух publication URL события
-9779. У event_publication полный DB index задавал platform/target порядок,
-а компактная копия без индексов давала порядок вставки. Экспорт теперь явно
-сортирует platform/target, добавлен regression с разными query plans.
-Измерение выполняется без сети; SELECT-only доступ к live SQLite использует
-rw mount для штатных WAL/SHM metadata. Следующие шаги — CI, merge exact
-main, Events-only release и установка host maintenance, затем live readback.
+Меры реализованы, проверены и развёрнуты. Исходный writer накопления нескольких
+гигабайт в удалённом 25 ноября контейнере неизвестен: его содержимое не было
+снято перед удалением. Инцидент остаётся открытым по этой части. Исправление
+убирает доказанный лишний пик, а установленный сбор разбивки сохраняет
+свидетельства при pressure через уже существующий maintenance timer.
 
 ## Release And Closure Evidence
 
-Локально: 126 passed (`event_vector_sync`, `runcoveer_disk_maintenance`,
-`static_site_release`, projection snapshot/handoff/content, pgvector export).
-Развёртывание этого исправления ещё не запускалось. Общий инцидент открыт:
-исторический накопитель не установлен. VK catch-up 13446 уже завершён и
-повторно не запускается; существующий vector 13453 штатно удалил snapshot.
+- PR [#1102](https://github.com/onedayonemasterpiece/events-bot-new/pull/1102),
+  merged main `819c13668853a67472b6d178d114c50d149c35a3`.
+- Локально и внутри release image: по 126 passed (`event_vector_sync`,
+  `runcoveer_disk_maintenance`, `static_site_release`, projection
+  snapshot/handoff/content, pgvector export). Четыре основных CI jobs прошли;
+  дополнительный collections skeleton/gate прошёл, product job штатно skipped.
+- Замороженная production SQLite: полный файл 1 566 277 632 bytes, компактный
+  126 980 096 bytes. Совпали все 11 066 event revisions и 722 экспортируемые
+  карточки. Обнаруженная перестановка двух publication URL события 9779
+  устранена явной platform/target сортировкой; regression проверяет разные
+  query plans полной базы и компактной копии.
+- Image `runcoveer/events:compact-vector-snapshot-20261125`,
+  `sha256:385f2c189752263933765b9cd2c79595a85e575b3f5ccdfb2ff2034b915a1c85`.
+  Полная проверка 4 625 tracked source files прошла. Изолированный network-none
+  HTTP preflight прошёл. Текущий до выпуска SHA 496bc7d — ancestor кандидата;
+  его immutable image сохранён для rollback.
+- Events-only cutover завершился около 12:43 UTC 25 ноября. Kotopogoda
+  container сохранён; live env и data mounts сохранены. Health: ready=true,
+  db=ok, schedulers/tasks=ok, issues=[], free=7696 MiB, scratch tempfile=ok.
+- Host disk-maintenance установлен из того же main. Штатный service запуск
+  успешен; существующий timer active. Все три новые диагностические команды
+  испытаны на RunCoveer: returncode=0, bounded output. Данных и images не удаляли.
+- После cutover обычный outbox job 170596 / ops 13456 начал работу в
+  12:44:35 UTC. В его собственном логе `event_vector_snapshot_ready` размер
+  126 996 480 bytes; весь `/tmp` в этот момент 127 033 344 bytes. Это измерение
+  рабочего процесса нового runtime, отдельно от изолированной проверки.
+- VK catch-up 13446 ранее завершён и повторно не запускался. Новый live
+  VK-import после данного cutover этим record не заявляется: следующий
+  плановый слот 13:30 UTC. Admission floor не менялся.
+
+Retained release receipts: `projection-measurement-final.log`,
+`pressure-breakdown-proof.json`, `build-release.log`, `qualify-cutover.log`,
+`host-maintenance-installed.txt`, `live-health.json`, `live-runtime.txt` в
+указанном выше task artifact directory. Последующий terminal readback ops 13456
+записывается в registry timeline `inc_a8cee70d439ddda8bca27e4d`.
