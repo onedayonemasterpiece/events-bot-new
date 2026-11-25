@@ -46,7 +46,7 @@ from remote_telegram_session import (
     raise_if_remote_telegram_session_busy,
 )
 from source_parsing.telegram.deduplication import get_month_context_urls
-from telegram_sources import normalize_tg_username
+from telegram_sources import is_excluded_tg_source, normalize_tg_username
 from source_parsing.telegram.handlers import (
     TelegramMonitorEventInfo,
     TelegramMonitorImportProgress,
@@ -459,6 +459,7 @@ async def _build_config_payload(
             stmt = stmt.where(TelegramSource.username.in_(sorted(set(requested_usernames))))
         res = await session.execute(stmt)
         sources = res.scalars().all()
+        sources = [src for src in sources if not is_excluded_tg_source(src.username)]
         force_map: dict[int, list[int]] = {}
         source_ids = [src.id for src in sources if src.id is not None]
         if source_ids:

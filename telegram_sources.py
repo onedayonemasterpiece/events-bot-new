@@ -26,6 +26,7 @@ class TelegramSourceSpec:
 
 _USERNAME_RE = re.compile(r"^[a-z0-9_]{4,64}$")
 TELEGRAM_PUBLIC_HOSTS = frozenset({"t.me", "telegram.me"})
+OWN_EVENT_CHANNELS = frozenset({"kldevents", "kenigevents"})
 
 
 def canonicalize_tg_url(value: str | None) -> str | None:
@@ -111,6 +112,11 @@ def normalize_tg_username(value: str | None) -> str:
 def trust_priority(value: str | None) -> int:
     key = (value or "").strip().lower()
     return _TRUST_PRIORITY.get(key, 0)
+
+
+def is_excluded_tg_source(value: str | None) -> bool:
+    """Our publication channels must never feed the event monitor back into itself."""
+    return normalize_tg_username(value) in OWN_EVENT_CHANNELS
 
 
 def _load_canonical_sources() -> list[TelegramSourceSpec]:

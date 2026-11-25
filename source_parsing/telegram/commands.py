@@ -16,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from db import Database
 from models import TelegramScannedMessage, TelegramSource
 from source_parsing.post_metrics import load_telegram_popularity_overview
-from telegram_sources import normalize_tg_username
+from telegram_sources import is_excluded_tg_source, normalize_tg_username
 from telegram_sources_seed import seed_telegram_sources
 from heavy_ops import heavy_operation
 from .service import (
@@ -656,6 +656,9 @@ async def add_source(
     options: dict[str, str] | None = None,
 ) -> None:
     options = options or {}
+    if is_excluded_tg_source(username):
+        await message.answer("⚠️ Собственный канал публикаций исключён из мониторинга событий.")
+        return
     trust = options.get("trust")
     if trust and trust.lower() not in {"high", "medium", "low"}:
         await message.answer("⚠️ trust должен быть high|medium|low")
