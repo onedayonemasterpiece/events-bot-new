@@ -7012,7 +7012,10 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
         "отдельными элементами массива, не склеивая их. Сохрани полное содержание target, включая его сюжет, "
         "имена и конкретные характеристики героев; не ограничивайся названием, датой и адресом. "
         "Если принадлежность строк неясна — uncertain. "
-        "single_event означает, что ВЕСЬ source_text описывает только одну программу, включая все его OCR-блоки; "
+        "single_event означает ровно ОДИН сеанс target во ВСЁМ source_text и всех OCR-блоках. "
+        "Одна программа с несколькими датами, временами или возрастными сеансами — несколько occurrences: "
+        "для target верни scoped, сохрани общую программу и дословные строки именно его даты и времени. "
+        "Заголовок соседнего сеанса не относится к target, даже если общая афиша содержит оба. "
         "если среди них есть другие самостоятельные события, для конкретного target верни scoped, "
         "даже когда у него точно указаны название, дата и место. "
         "Но обложка афиши с общим диапазоном дат не является одной многодневной программой, "
@@ -14375,7 +14378,12 @@ async def _llm_merge_identity_gate(
             "source_type": candidate.source_type,
             "source_url": candidate.source_url,
             "raw_excerpt": _clip(candidate.raw_excerpt, 1200),
-            "source_text": _clip(candidate.source_text, SMART_UPDATE_REWRITE_SOURCE_MAX_CHARS),
+            "source_text": _clip(
+                candidate.occurrence_scope_text or candidate.source_text,
+                SMART_UPDATE_REWRITE_SOURCE_MAX_CHARS,
+            ),
+            "occurrence_scope_text": _clip(candidate.occurrence_scope_text, SMART_UPDATE_REWRITE_SOURCE_MAX_CHARS),
+            "source_context": _clip(candidate.source_text, SMART_UPDATE_REWRITE_SOURCE_MAX_CHARS),
             "poster_texts": [_clip(p.ocr_text, 500) for p in candidate.posters if p.ocr_text][:3],
             "poster_titles": [_clip(p.ocr_title, 160) for p in candidate.posters if (p.ocr_title or "").strip()][:3],
         },
@@ -14394,6 +14402,15 @@ async def _llm_merge_identity_gate(
         "НЕ доказывают same_event. Нужен конкретный общий identity anchor: тот же показ/лекция/выставка, "
         "та же программа/название/персона в той же роли, та же билетная ссылка, та же афиша или явный текст "
         "источника, что это обновление уже существующего события.\n\n"
+        "Сравнивай именно выбранную occurrence candidate.date/time с event_before.date/time. "
+        "occurrence_scope_text — уже выбранные LLM дословные свидетельства этого сеанса; "
+        "source_text использует этот scope, если он выделен. source_context, raw_excerpt и общая афиша "
+        "могут содержать соседние сеансы и их заголовки. Дата/время соседнего сеанса не являются "
+        "доказательством отличия текущего candidate. Если выбранный target и event_before — тот же "
+        "сеанс той же программы, выбирай allow_merge/source_update; не создавай копию из-за чужого заголовка. "
+        "Если выбраны действительно разные даты или времена, сохраняй related_but_distinct и цитируй "
+        "свидетельства именно выбранного target, а не другого пункта афиши. При неясности принадлежности "
+        "свидетельств верни unknown, не distinct.\n\n"
         "`curated_venue_reference`, если присутствует, — проверенная запись справочника площадок, "
         "а не утверждение источника. Для одной конкретной площадки используй адрес из этого справочника; "
         "ошибочный адрес в source_text сохраняется как исходное свидетельство, но сам по себе не доказывает "
@@ -14445,6 +14462,7 @@ async def _llm_merge_identity_gate(
     raw_evidence = data.get("source_grounded_evidence")
     if isinstance(raw_evidence, list):
         grounding_corpus = [
+            candidate.occurrence_scope_text,
             candidate.source_text,
             *[
                 p.ocr_text

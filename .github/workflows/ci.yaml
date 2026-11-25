@@ -138,6 +138,7 @@ jobs:
           tests/test_smart_update_identity_persistence.py
           tests/test_smart_update_identity_replay_contracts.py
           tests/test_smart_update_merge_identity_gate.py
+          tests/test_newyear_occurrence_identity.py
           tests/test_smart_update_source_identity_contract.py
           tests/test_smart_update_outcome_boundary_hotfix.py
           tests/test_pre_create_duplicate_probe.py
