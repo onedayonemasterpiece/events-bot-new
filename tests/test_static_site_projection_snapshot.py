@@ -730,6 +730,9 @@ def test_projection_progress_handler_interrupts_long_source_query(
         ("2026-12-03..2026-12-32", None, None),
         ("2026-12-25..2026-12-03", None, None),
         ("2026-12-03..2026-12-25", "bad", None),
+        ("2026-12-03 ..2026-12-25", None, None),
+        ("2026-12-0\u200d3", None, None),
+        ("2026-10-01", "\u200d", None),
     ],
 )
 def test_canonical_date_range_enters_related_projection_without_db_rewrite(

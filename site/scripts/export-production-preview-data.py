@@ -478,9 +478,11 @@ def normalize_date(value: Any) -> str | None:
 
 
 def event_date_bounds(row: sqlite3.Row) -> tuple[str | None, str | None]:
-    start_raw, separator, end_raw = clean_text(row_get(row, "date")).partition("..")
+    raw = str(row_get(row, "date") or "")
+    start_raw, separator, end_raw = raw.partition("..")
     start, embedded_end = normalize_date(start_raw), normalize_date(end_raw)
-    if not start or (separator and (not embedded_end or embedded_end < start)):
+    if (not start or (separator and (not embedded_end or embedded_end < start))
+            or raw != f"{start}{separator}{embedded_end or ''}"):
         return None, None
     return start, normalize_date(row_get(row, "end_date")) or embedded_end
 
@@ -585,7 +587,8 @@ def public_projection_gate_reason(row: sqlite3.Row) -> str | None:
             return f"{field}:blocked_status"
     if not event_date_bounds(row)[0]:
         return "date:invalid_iso"
-    if row_has_key(row, "end_date") and clean_text(row_get(row, "end_date")) and not normalize_date(row_get(row, "end_date")):
+    explicit_end = str(row_get(row, "end_date") or "").strip(" ")
+    if explicit_end and explicit_end != normalize_date(explicit_end):
         return "end_date:invalid_iso"
     for field in PUBLIC_TEXT_FIELDS:
         if row_has_key(row, field) and text_value_blocks_public_projection(field, row_get(row, field)):
