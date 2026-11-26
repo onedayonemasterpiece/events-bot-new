@@ -269,3 +269,31 @@ repair and the primary-channel cleanup have already been deployed/applied.
 The existing coalesced `event_vector_sync:prod` request was rearmed after the
 repair. Its completion is tracked in the incident registry; no new publication
 or monitoring mechanism was added.
+
+## Ordinary monitoring verification — 26 November
+
+The scheduled 25 November 23:40 Kaliningrad run (`ops_run=13479`,
+`run_id=1514802b724f479d9e978265f6560270`) was later marked crashed on recovery.
+Import-only recovery of the same retained result completed successfully as
+`ops_run=13486` on 26 November 17:31:57 Kaliningrad: 53 messages processed,
+34 messages with events, five new messages, two events created, one merged,
+zero terminal errors. This is a recovered scheduled run, not an uninterrupted
+success of the original process.
+
+The retained `telegram_results.json` contains 53 messages and 54 source metadata
+records; neither messages nor metadata contain `kldevents` or `kenigevents`.
+A live DB read at 26 November 20:15 Kaliningrad still found six active canonical
+cards, 78 merged aliases and four cancelled context fragments, zero new cards
+for the incident programme after 11451 and zero active outbound publication
+jobs for the cohort. The own sources remain disabled. Runtime is still
+`e903d755c52b60bbae10e0d64226ded1e1aed0e2`, live readiness/DB/schedulers passed;
+disk free was 7298 MiB. Fresh Telegram census retained the exact same primary
+post IDs as after cleanup, with no new announcements of the four-session
+programme.
+
+The remaining action is unchanged: 35 old ICS calendar copies. A fresh local
+admin access probe on 26 November returned `UserNotParticipantError`; no
+messages were deleted by that probe and no roles were changed. The incident
+stays open for this precise permission-dependent cleanup. No further timed
+waiting for the scheduled-cycle verification is needed: recovery and import
+have completed and were inspected.
