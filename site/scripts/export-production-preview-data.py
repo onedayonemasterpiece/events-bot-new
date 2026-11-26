@@ -477,6 +477,26 @@ def normalize_date(value: Any) -> str | None:
     return text
 
 
+def event_date_bounds(row: sqlite3.Row) -> tuple[str | None, str | None]:
+    raw = str(row_get(row, "date") or "")
+    start_raw, separator, end_raw = raw.partition("..")
+    start, embedded_end = normalize_date(start_raw), normalize_date(end_raw)
+    if (not start or (separator and (not embedded_end or embedded_end < start))
+            or raw != f"{start}{separator}{embedded_end or ''}"):
+        return None, None
+    return start, normalize_date(row_get(row, "end_date")) or embedded_end
+
+
+def event_date_sql(columns: set[str] | None) -> tuple[str, str, str]:
+    day = "20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]"
+    explicit_end = "nullif(trim(end_date),'')," if columns is None or "end_date" in columns else ""
+    return (
+        "substr(date,1,10)",
+        f"coalesce({explicit_end}nullif(substr(date,13),''),substr(date,1,10))",
+        f"(date glob '{day}' or date glob '{day}..{day}')",
+    )
+
+
 PUBLIC_REVIEW_STATUS_MARKERS = {
     "cancelled",
     "deleted",
@@ -565,9 +585,10 @@ def public_projection_gate_reason(row: sqlite3.Row) -> str | None:
     for field in PUBLIC_STATUS_COLUMNS:
         if row_has_key(row, field) and status_value_blocks_public_projection(row_get(row, field)):
             return f"{field}:blocked_status"
-    if not normalize_date(row_get(row, "date")):
+    if not event_date_bounds(row)[0]:
         return "date:invalid_iso"
-    if row_has_key(row, "end_date") and clean_text(row_get(row, "end_date")) and not normalize_date(row_get(row, "end_date")):
+    explicit_end = str(row_get(row, "end_date") or "").strip(" ")
+    if explicit_end and explicit_end != normalize_date(explicit_end):
         return "end_date:invalid_iso"
     for field in PUBLIC_TEXT_FIELDS:
         if row_has_key(row, field) and text_value_blocks_public_projection(field, row_get(row, field)):
@@ -2228,18 +2249,12 @@ def event_active_where(
     # Time-sensitive surfaces such as Popular apply their own start-instant
     # eligibility after export. `current_time` remains for caller compatibility
     # and ledger parity, but must not narrow the shared catalog.
-    start_not_elapsed = f"(date >= '{current_date}')"
-    clauses = ["date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]'"]
+    start, end, valid = event_date_sql(available)
+    clauses = [valid, f"({start} >= '{current_date}' or {end} >= '{current_date}')"]
     if available is None or "lifecycle_status" in available:
         clauses.append("coalesce(nullif(trim(lifecycle_status),''),'active') = 'active'")
     if available is None or "silent" in available:
         clauses.append("coalesce(silent,0) = 0")
-    if available is None or "end_date" in available:
-        clauses.append(
-            f"({start_not_elapsed} or (end_date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]' and end_date >= '{current_date}'))"
-        )
-    else:
-        clauses.append(start_not_elapsed)
     return " and ".join(clauses)
 
 
@@ -2286,6 +2301,7 @@ def fetch_rows(
         str(row[1]) for row in con.execute("pragma table_info('event')").fetchall()
     }
     active = event_active_where(current_date, current_time, columns=event_columns)
+    start, end, _ = event_date_sql(event_columns)
 
     if include_ids:
         placeholders = ",".join("?" for _ in include_ids)
@@ -2296,14 +2312,10 @@ def fetch_rows(
         "coalesce(nullif(time,''),'23:59') asc, " if "time" in event_columns else ""
     )
     today_time_order = f"{time_order}id asc"
-    single_day_clause = (
-        "and (end_date is null or trim(end_date) = '' or end_date = date)"
-        if "end_date" in event_columns
-        else ""
-    )
+    single_day_clause = f"and {end} = {start}"
     if limit is None:
         for row in con.execute(
-            f"select * from event where {active} order by date asc, {time_order}id asc"
+            f"select * from event where {active} order by {start} asc, {time_order}id asc"
         ):
             add_row(row)
         return ordered_rows
@@ -2315,9 +2327,9 @@ def fetch_rows(
             f"""
             select * from event
             where {active}
-              and date between ? and ?
+              and {start} between ? and ?
               {single_day_clause}
-            order by date asc, {time_order}id asc
+            order by {start} asc, {time_order}id asc
             limit ?
             """,
             (focus_from, focus_to, max(limit * 2, 80)),
@@ -2327,9 +2339,9 @@ def fetch_rows(
             f"""
             select * from event
             where {active}
-              and date >= ?
+              and {start} >= ?
               {single_day_clause}
-            order by date asc, {time_order}id asc
+            order by {start} asc, {time_order}id asc
             limit ?
             """,
             (focus_from, max(limit * 2, 80)),
@@ -2338,7 +2350,7 @@ def fetch_rows(
     # old date-ascending slice was quickly filled by long-running exhibitions,
     # hiding same-day concerts/workshops/meetings from `/segodnya/`.
     add_query(
-        f"select * from event where {active} and date = ? order by {today_time_order} limit ?",
+        f"select * from event where {active} and {start} = ? order by {today_time_order} limit ?",
         (current_date, max(limit, 80)),
     )
     if len(ordered_rows) < limit:
@@ -2346,29 +2358,28 @@ def fetch_rows(
             f"""
             select * from event
             where {active}
-              and date > ?
+              and {start} > ?
               {single_day_clause}
-            order by date asc, {time_order}id asc
+            order by {start} asc, {time_order}id asc
             limit ?
             """,
             (current_date, max(limit * 2, 80)),
         )
-    if len(ordered_rows) < limit and "end_date" in event_columns:
+    if len(ordered_rows) < limit:
         add_query(
             f"""
             select * from event
             where {active}
-              and date < ?
-              and end_date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
-              and end_date >= ?
-            order by end_date asc, date desc, {time_order}id asc
+              and {start} < ?
+              and {end} >= ?
+            order by {end} asc, {start} desc, {time_order}id asc
             limit ?
             """,
             (current_date, current_date, max(limit * 2, 80)),
         )
     if len(ordered_rows) < limit:
         add_query(
-            f"select * from event where {active} order by date asc, {time_order}id asc limit ?",
+            f"select * from event where {active} order by {start} asc, {time_order}id asc limit ?",
             (max(limit * 3, limit + len(include_ids) + 20),),
         )
     return ordered_rows[:limit]
@@ -2394,11 +2405,7 @@ def fetch_recent_event_detail_archive_rows(
     cutoff = (current_day - timedelta(days=max(1, retention_days))).isoformat()
     rows: list[sqlite3.Row] = []
     columns = {str(row[1]) for row in con.execute("pragma table_info('event')")}
-    end_expression = (
-        "coalesce(nullif(trim(end_date),''), date)"
-        if "end_date" in columns
-        else "date"
-    )
+    _, end_expression, valid = event_date_sql(columns)
     lifecycle_clause = (
         "and coalesce(nullif(trim(lifecycle_status),''),'active') = 'active'"
         if "lifecycle_status" in columns
@@ -2407,7 +2414,7 @@ def fetch_recent_event_detail_archive_rows(
     silent_clause = "and coalesce(silent,0) = 0" if "silent" in columns else ""
     query = f"""
         select * from event
-        where date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+        where {valid}
           and {end_expression} >= ?
           and {end_expression} < ?
           {lifecycle_clause}
@@ -2473,14 +2480,8 @@ def _candidate_catalog_rows(
     columns = {str(row[1]) for row in con.execute("pragma table_info('event')")}
     # Match `event_active_where`: include all events on the current local date,
     # including already-started one-offs shown by Today as elapsed/muted.
-    start_not_elapsed = f"date >= '{current_date}'"
-    if "end_date" in columns:
-        date_clause = (
-            f"({start_not_elapsed} or "
-            f"(end_date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]' and end_date >= '{current_date}'))"
-        )
-    else:
-        date_clause = start_not_elapsed
+    start, end, _ = event_date_sql(columns)
+    date_clause = f"({start} >= '{current_date}' or {end} >= '{current_date}')"
     return list(con.execute(f"select * from event where {date_clause} order by id asc"))
 
 
@@ -2630,8 +2631,8 @@ def build_event(
     venue = clean_place(row["location_name"])
     venue = drop_city_only_venue(venue, city)
     address = clean_place(row["location_address"])
-    start_date = normalize_date(row["date"]) or current_date
-    end_date = normalize_date(row["end_date"])
+    start_date, end_date = event_date_bounds(row)
+    start_date = start_date or current_date
     start_time, time_end, display_time = split_time(row["time"])
     description = str(
         occurrence["description"]
@@ -2941,7 +2942,7 @@ def build_interest_clubs_projection(
                   and ie.policy_version=ice.policy_version
                   and ie.input_hash=ice.input_hash
               )
-            order by e.date asc, e.id asc
+            order by substr(e.date,1,10) asc, e.id asc
             """,
             (club_id,),
         ).fetchall()
@@ -2949,7 +2950,7 @@ def build_interest_clubs_projection(
         if not public_events:
             continue
 
-        observed_dates = sorted({str(row["date"]) for row in public_events})
+        observed_dates = sorted({event_date_bounds(row)[0] for row in public_events})
         # Public v1 requires recurring evidence and current activity. This is a
         # retrieval/publication gate, not a semantic club decision: the latter
         # remains owned by the approved identity and active relation verdicts.
@@ -2962,7 +2963,7 @@ def build_interest_clubs_projection(
             continue
         future_meetings: list[dict[str, Any]] = []
         for event_row in public_events:
-            start_date = str(event_row["date"])
+            start_date, _ = event_date_bounds(event_row)
             if start_date < current_date:
                 continue
             event_id = int(event_row["id"])
@@ -3136,7 +3137,7 @@ def build_interest_clubs_projection_v2(
              and ie.policy_version=ice.policy_version
              and ie.input_hash=ice.input_hash
             where ice.club_id=? and ice.status='active'
-            order by e.date,e.id
+            order by substr(e.date,1,10),e.id
             """,
             (club_id,),
         ).fetchall()
@@ -3152,10 +3153,8 @@ def build_interest_clubs_projection_v2(
                 continue
             if clean_text(row_get(event_row, "festival")):
                 receipt["festival_relation_allowed_count"] += 1
-            event_end = date.fromisoformat(
-                clean_text(row_get(event_row, "end_date"))
-                or clean_text(row_get(event_row, "date"))
-            )
+            event_start, event_end = event_date_bounds(event_row)
+            event_end = date.fromisoformat(event_end or event_start)
             if event_end >= cutoff_12m:
                 history_rows_12m.append(event_row)
             if event_end < cutoff_6m:
@@ -3167,12 +3166,12 @@ def build_interest_clubs_projection_v2(
             receipt["dormant_identity_count"] += 1
             continue
 
-        dates = [date.fromisoformat(clean_text(row_get(row, "date"))) for row in eligible_rows]
+        dates = [date.fromisoformat(event_date_bounds(row)[0]) for row in eligible_rows]
         historical_dates = [value for value in dates if value <= current_day]
         future_dates = [value for value in dates if value >= current_day]
         count_6m = sum(cutoff_6m <= value <= current_day for value in dates)
         count_12m = sum(
-            cutoff_12m <= date.fromisoformat(clean_text(row_get(row, "date"))) <= current_day
+            cutoff_12m <= date.fromisoformat(event_date_bounds(row)[0]) <= current_day
             for row in history_rows_12m
         )
         catalog_event_ids: list[int] = []
@@ -3184,7 +3183,7 @@ def build_interest_clubs_projection_v2(
                 catalog_event_ids.append(event_id)
             else:
                 receipt["catalog_event_id_omitted_count"] += 1
-            start_date = clean_text(row_get(event_row, "date"))
+            start_date, _ = event_date_bounds(event_row)
             if start_date < current_date or not event_slug:
                 continue
             start_time, _, display_time = split_time(row_get(event_row, "time"))

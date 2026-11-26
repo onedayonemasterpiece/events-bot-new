@@ -147,6 +147,9 @@ The sync is incremental by `(event_id, embedding_model, embedding_dim, embedding
 
 ### Static related pipeline
 
+The shared catalog accepts canonical `YYYY-MM-DD..YYYY-MM-DD` date ranges as well as single dates. Export, eligibility ledger, archive and club projections use the same start/end boundaries; an explicit `end_date` keeps its existing precedence. Date and time ranges remain unchanged in canonical storage. Invalid or reversed embedded ranges remain excluded. This keeps a pending first VK publication in the verifier workset instead of waiting forever for a graph entry omitted by the exporter.
+
+
 Exporter: `site/scripts/export-production-preview-data.py`.
 
 For `--related-mode pgvector`:
