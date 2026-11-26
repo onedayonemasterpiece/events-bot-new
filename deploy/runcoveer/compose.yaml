@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:newyear-occurrence-identity-20261125
+    image: runcoveer/events:related-live-peer-20261126
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

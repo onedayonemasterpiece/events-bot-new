@@ -602,3 +602,72 @@ def test_five_related_rows_keep_full_search_digest_below_medallions(monkeypatch)
     for offset in range(0, len(drawn), 3):
         assert ' '.join(value for _, value in drawn[offset:offset + 3]) == description
         assert all(124 <= xy[1] and xy[1] + 19 <= 184 for xy, _ in drawn[offset:offset + 3])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('ledger,visibility,expected_post', [
+    ('published', 'post', 14371),
+    ('published', 'postpone', None),
+    ('published', 'deleted', None),
+    ('published', 'old_only', None),
+    ('missing', 'post', 14171),
+    ('wrong_target', 'post', 14171),
+    ('wrong_platform', 'post', 14171),
+    ('absent', 'post', 14171),
+])
+async def test_related_consumes_live_ledger_without_bypassing_public_filter(
+    tmp_path, monkeypatch, ledger, visibility, expected_post,
+):
+    db = main.Database(str(tmp_path / 'live-peer.sqlite'))
+    await db.init()
+    requested = 14371 if ledger == 'published' else 14171
+    published_at = int(datetime.now(timezone.utc).timestamp())
+    calls = []
+    async def public(method, params, *args, **kwargs):
+        assert method == 'wall.getById'
+        calls.append(params['posts'])
+        if params['posts'] == '-231920894_16036':
+            return {'response': [{'id': 16036, 'date': published_at,
+                'text': 'Анонс\nПОХОЖИЕ СОБЫТИЯ\nЖивопись'}]}
+        assert kwargs['token_kind'] == 'service' and kwargs['skip_captcha']
+        return {'response': [{'owner_id': -231920894,
+            'id': 14171 if visibility == 'old_only' else requested,
+            'post_type': 'postpone' if visibility == 'postpone' else 'post',
+            'is_deleted': visibility == 'deleted'}]}
+    monkeypatch.setattr(main, '_vk_api', public)
+    monkeypatch.setattr(main, '_vk_user_token', lambda: 'fixture')
+    try:
+        async with db.get_session() as session:
+            for eid, title, post in [(1, 'Мозаика в формах', 16036),
+                    (10902, 'Мастер-класс по живописи маслом', 14171)]:
+                session.add(main.Event(id=eid, title=title, description='', source_text='',
+                    date='2099-11-29', time='12:00', location_name='Портовая 18, корпус 2',
+                    source_vk_post_url=f'https://vk.com/wall-231920894_{post}', photo_urls=['original']))
+            await session.commit()
+            anchor = await session.get(main.Event, 1)
+        if ledger != 'absent':
+            async with db.raw_conn() as conn:
+                await conn.execute('''INSERT INTO event_publication(
+                    event_id,platform,target,stored_url,live_url,stored_post_id,live_post_id,status)
+                    VALUES(10902,?,?,?,?,14171,14371,?)''', (
+                    'telegram' if ledger == 'wrong_platform' else 'vk',
+                    'other' if ledger == 'wrong_target' else 'klgdevents',
+                    'https://vk.com/wall-231920894_14171',
+                    'https://vk.com/wall-231920894_14371',
+                    'missing' if ledger == 'missing' else 'published'))
+                await conn.commit()
+        relations.graph_path(db).write_text(json.dumps({'related': {'1': {'pure_related': [10902]}}}))
+        data = await relations.presentation(db, anchor)
+        assert calls == [f'-231920894_{requested}']
+        assert [row['url'] for row in data['related']] == (
+            [f'https://vk.com/wall-231920894_{expected_post}'] if expected_post else [])
+        if expected_post:
+            assert 'Мастер-класс по живописи маслом' in relations.append_list('body', data)
+            await relations.ensure_comment(db, anchor, anchor.source_vk_post_url, data)
+            async with db.get_session() as session:
+                job = (await session.execute(relations.select(main.JobOutbox).where(
+                    main.JobOutbox.coalesce_key == 'vk_related_comment:-231920894:16036'))).scalar_one()
+                assert job.payload['relations'] == data
+                assert job.payload['relations']['related'][0]['url'].endswith(f'_{expected_post}')
+    finally:
+        await db.close()

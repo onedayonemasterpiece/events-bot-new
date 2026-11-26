@@ -12,6 +12,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy import select
 from models import Event, Setting, JobOutbox, JobStatus
+from social_metrics_batch import OWN_VK_TARGET
 
 ROOT = Path(__file__).parent
 
@@ -42,8 +43,18 @@ async def presentation(db, event):
             and not main._event_start_has_passed_for_publication(row)}
     dates = sorted((rows[i] for i in linked_ids if i in rows),
                    key=lambda row: (row.date, row.time or '', row.id))
-    peer_ids = {row.id: main._vk_owner_and_post_id(row.source_vk_post_url or '')
+    peer_urls = {row.id: row.source_vk_post_url or ''
                 for row in rows.values() if row.id in similar_ids and row.id not in linked_ids}
+    if peer_urls:
+        async with db.raw_conn() as conn:
+            cursor = await conn.execute(
+                "SELECT event_id, live_url FROM event_publication WHERE event_id IN ("
+                + ','.join('?' for _ in peer_urls)
+                + ") AND platform='vk' AND target=? AND status='published'"
+                  " AND live_url IS NOT NULL AND live_url!=''",
+                (*peer_urls, OWN_VK_TARGET))
+            peer_urls.update(await cursor.fetchall())
+    peer_ids = {eid: main._vk_owner_and_post_id(url) for eid, url in peer_urls.items()}
     posts = ','.join('_'.join(ids) for ids in peer_ids.values() if ids)
     public_ids = set()
     if posts:
@@ -52,8 +63,9 @@ async def presentation(db, event):
         public_ids = {(str(row['owner_id']), str(row['id']))
                       for row in main._vk_wall_get_by_id_items(response)
                       if row.get('post_type') == 'post' and not row.get('is_deleted')}
-        logging.info('vk_related_public_peers event_id=%s candidates=%s visible=%s',
-                     event.id, len(peer_ids), len(public_ids))
+        logging.info('vk_related_public_peers event_id=%s candidates=%s visible=%s resolved_urls=%s',
+                     event.id, len(peer_ids), len(public_ids),
+                     sum(url != (rows[eid].source_vk_post_url or '') for eid, url in peer_urls.items()))
     programmes = []
     for row in rows.values():
         programme = {row.id, *(row.linked_event_ids or [])}
@@ -65,9 +77,9 @@ async def presentation(db, event):
     related, seen_programmes, seen_urls = [], set(), {event.source_vk_post_url}
     for i in similar_ids:
         row = rows.get(i)
-        if not row or peer_ids.get(i) not in public_ids or row.source_vk_post_url in seen_urls:
+        if not row or peer_ids.get(i) not in public_ids or peer_urls[i] in seen_urls:
             continue
-        seen_urls.add(row.source_vk_post_url)
+        seen_urls.add(peer_urls[i])
         programme = next(index for index, ids in enumerate(programmes) if row.id in ids)
         if programme not in seen_programmes:
             related.append(row)
@@ -87,7 +99,7 @@ async def presentation(db, event):
         return {'id': row.id, 'date': label, 'date_iso': start, 'end_date_iso': end.isoformat() if end else '',
                 'time': '' if row.time_is_default else (row.time or ''), 'title': row.title,
                 'place': row.location_name or '', 'event_type': row.event_type or '',
-                'url': row.source_vk_post_url or '',
+                'url': peer_urls.get(row.id, row.source_vk_post_url or ''),
                 'description': row.search_digest or '', 'daily_hours': daily_hours,
                 'medallions': resolve_event_graphic_medallions(row, limit=2),
                 'is_free': bool(row.is_free)}
