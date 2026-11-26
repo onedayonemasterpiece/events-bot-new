@@ -718,3 +718,51 @@ def test_projection_progress_handler_interrupts_long_source_query(
             "pragma wal_checkpoint(truncate)"
         ).fetchone()
     assert busy == 0
+
+
+@pytest.mark.parametrize(
+    "raw_date,explicit_end,expected_dates",
+    [
+        ("2026-12-03..2026-12-25", "2026-12-25", ("2026-12-03", "2026-12-25")),
+        ("2026-12-03..2026-12-25", None, ("2026-12-03", "2026-12-25")),
+        ("2026-12-03", None, ("2026-12-03", None)),
+        ("2026-12-03..bad", "2026-12-25", None),
+        ("2026-12-03..2026-12-32", None, None),
+        ("2026-12-25..2026-12-03", None, None),
+        ("2026-12-03..2026-12-25", "bad", None),
+    ],
+)
+def test_canonical_date_range_enters_related_projection_without_db_rewrite(
+    tmp_path: Path, raw_date: str, explicit_end: str | None,
+    expected_dates: tuple[str, str | None] | None,
+) -> None:
+    source = tmp_path / "source.sqlite"
+    _source_database(source)
+    _add_full_exporter_products(source)
+    exporter = _load_exporter()
+    with sqlite3.connect(source) as con:
+        con.row_factory = sqlite3.Row
+        con.execute("delete from event where id != 1")
+        con.execute(
+            "update event set date=?, end_date=?, time=? where id=1",
+            (raw_date, explicit_end, "08:00..17:00"),
+        )
+        rows = exporter.fetch_rows(con, None, "2026-11-27", [])
+        assert [row["id"] for row in rows] == ([1] if expected_dates else [])
+        ledger = exporter.build_catalog_ledger(
+            con, rows, current_date="2026-11-27", current_time=None,
+            generated_at="2026-11-27T00:00:00+02:00", repo_sha="test", run_id="test",
+            build_id="test", snapshot_id="test", snapshot_sha256="test", snapshot_size=0,
+        )
+        assert [item["event_id"] for item in ledger["eligible"]] == [row["id"] for row in rows]
+        if expected_dates:
+            exported = exporter.build_event(con, rows[0], "2026-11-27", participants=[], video_assets=[])
+            assert (exported["start_date"], exported["end_date"]) == expected_dates
+            assert (exported["start_time"], exported["time_range_end"]) == ("08:00", "17:00")
+            final_day = expected_dates[1] or expected_dates[0]
+            assert [row["id"] for row in exporter.fetch_rows(con, 1, final_day, [])] == [1]
+            archive = exporter.fetch_recent_event_detail_archive_rows(con, "2026-12-26")
+            assert [row["id"] for row in archive] == [1]
+        assert con.execute("select date,end_date,time from event where id=1").fetchone()[:] == (
+            raw_date, explicit_end, "08:00..17:00",
+        )

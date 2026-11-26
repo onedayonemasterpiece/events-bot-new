@@ -36,6 +36,16 @@ driver needs `libatomic.so.1` to start even its `install --with-deps` command on
 a fresh `python:3.12-slim` base. Keep this prerequisite in the declared OS
 dependency layer alongside `webp`.
 
+## Canonical date-range catalog release, prepared 2026-11-26
+
+Image: `runcoveer/events:related-date-range-20261126`; rollback:
+`runcoveer/events:related-live-peer-20261126`. Build from merged main and use
+an Events-only update. Verify the next ordinary related build includes the
+pending date-range anchor with its original start/end and hours, followed by
+its ready first VK carousel and paced frozen comment. Do not rewrite canonical
+rows, replay old jobs or edit existing VK posts. The image pin records the
+intended release; actual deployment and product receipts are separate evidence.
+
 ## Release during ordinary imports, owner decision 2026-11-12
 
 Active imports or background jobs do not by themselves block a prepared,
