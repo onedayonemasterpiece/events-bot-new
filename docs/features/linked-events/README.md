@@ -335,10 +335,9 @@ HTML/Astro не запускаются, второй publisher или отдел
 многоточием и не перекрывает медальоны. В текстовом VK списке полное название
 сохраняется. Изменение renderer отражено в существующей версии VK format hash.
 
-После публикации postponed VK ID может измениться. Существующий
-`_recover_managed_vk_live_url` сохраняет найденный public URL. Его результат —
-boolean, поэтому delayed comment всегда
-берёт обновлённый `Event.source_vk_post_url`, а не return value recovery.
+После публикации postponed VK ID может измениться. Однократные комментарии сначала используют единственный published receipt `event_publication` для сохранённого в payload URL и нашего VK target. Прямое service-чтение проверяет публичный owner/ID и исходный postponed ID; если VK его не вернул, сопоставление сверяется с сохранённым временем публикации. Противоречивый receipt не перенаправляет комментарий на другой пост. Такой путь не меняет canonical URL, название, даты или frozen выборку; календарь включает активные события того же старого либо живого URL.
+
+Без подходящего receipt сохраняется прежний поиск: `_recover_managed_vk_live_url` возвращает boolean и сохраняет найденный URL; delayed related comment берёт обновлённый `Event.source_vk_post_url`, а не return value recovery.
 
 VK также может не вернуть `postponed_id`: это подтверждено живой public
 выборкой 13 ноября. Consumer передаёт уже полученные public items в

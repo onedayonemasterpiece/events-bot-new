@@ -67,7 +67,7 @@ async def schedule_calendar_comment(db, event_id, post_url, publish_date):
     )
 
 
-async def ensure_calendar_comment(db, event, post_url):
+async def ensure_calendar_comment(db, event, post_url, *, stored_url=None):
     import aiohttp
     import main
     ids = main._vk_owner_and_post_id(str(post_url or ""))
@@ -77,7 +77,7 @@ async def ensure_calendar_comment(db, event, post_url):
     owner, post = map(int, ids)
     async with main.get_ics_semaphore():
         async with db.get_session() as session:
-            events = list((await session.execute(select(Event).where(Event.source_vk_post_url == post_url).order_by(Event.id))).scalars().all())
+            events = list((await session.execute(select(Event).where(Event.source_vk_post_url.in_((post_url, stored_url or post_url))).order_by(Event.id))).scalars().all())
         events = [e for e in events if not e.silent and e.lifecycle_status == "active" and e.identity_status != "merged"]
         if not events:
             return False

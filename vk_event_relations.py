@@ -207,7 +207,7 @@ async def cards(data, slots):
     return result
 
 
-async def ensure_comment(db, event, post_url, data, bot=None, *, deferred=False):
+async def ensure_comment(db, event, post_url, data, bot=None, *, deferred=False, public_item=None):
     """Create one group comment; existing comments are never edited or deleted."""
     import main
     owner, post = map(int, main._vk_owner_and_post_id(post_url))
@@ -225,8 +225,8 @@ async def ensure_comment(db, event, post_url, data, bot=None, *, deferred=False)
         f"{row['date']} {row['time']}".strip() + f" [{row['url']}|{row['title']}]" for row in data['related']) if data['related'] else ''
     if state.get('comment_id') or not message:
         return False
-    response = await api('wall.getById', posts=f'{owner}_{post}')
-    items = main._vk_wall_get_by_id_items({'response': response})
+    items = [public_item] if public_item is not None else main._vk_wall_get_by_id_items(
+        {'response': await api('wall.getById', posts=f'{owner}_{post}')})
     if not items:
         raise RuntimeError('vk_relations_post_missing')
     if message and 'ПОХОЖИЕ СОБЫТИЯ\n' not in str(items[0].get('text') or ''):

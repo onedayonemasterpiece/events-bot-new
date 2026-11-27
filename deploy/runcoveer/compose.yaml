@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:google-text-parts-20261127
+    image: runcoveer/events:vk-comment-receipt-20261127
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

@@ -1,5 +1,7 @@
 # Инциденты
 
+- [INC-2026-11-27 — комментарии после смены отложенного VK ID](INC-2026-11-27-vk-comment-publication-receipt.md). Published receipt и physical public identity вместо повторного сопоставления mutable заголовка; общий календарный состав и frozen related выборка.
+
 - [INC-2026-11-27 — разрывы текста между частями ответа Google AI](INC-2026-11-27-google-text-part-assembly.md). Сборка ответа меняла пробелы и вставляла переносы; различающий тест проверяет настоящий клиент с fake SDK, включая thought-only и пустой ответ.
 
 - [INC-2026-11-27 — VK flood между ожидающими запросами](INC-2026-11-27-vk-flood-queued-admission.md). Общий credential cooldown проверялся до ожидания semaphore; офлайн GET/POST воспроизводят второй физический запрос после code9. Исправление не меняет внешний flood, длительность cooldown или единичность комментариев.
