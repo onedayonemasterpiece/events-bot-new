@@ -398,7 +398,8 @@ async def test_related_peers_must_be_public_but_other_dates_need_no_post(tmp_pat
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('linked', [False, True, 'individual'])
-async def test_related_comment_resolves_public_linked_header_once(tmp_path, monkeypatch, linked):
+@pytest.mark.parametrize('ledger', [False, True])
+async def test_related_comment_resolves_public_linked_header_once(tmp_path, monkeypatch, linked, ledger):
     """The delayed job uses the same real linked-time view as initial publication."""
     from unittest.mock import AsyncMock
     db = main.Database(str(tmp_path / 'linked-public-related.sqlite'))
@@ -427,12 +428,19 @@ async def test_related_comment_resolves_public_linked_header_once(tmp_path, monk
                 next_run_at=datetime.now(timezone.utc) - timedelta(seconds=1)))
             await session.commit()
             event = await session.get(main.Event, 1)
+        if ledger:
+            async with db.raw_conn() as conn:
+                await conn.execute('''INSERT INTO event_publication(
+                    event_id,platform,target,stored_url,live_url,status)
+                    VALUES(1,'vk','klgdevents','https://vk.com/wall-1_10',
+                    'https://vk.com/wall-1_20','published')''')
+                await conn.commit()
         publish_event, _ = await main._prepare_same_day_linked_publish_event(db, event)
         if linked == "individual":
             publish_event = event
         header = next(line for line in main.build_vk_source_header(publish_event, None) if line.startswith('📅 '))
         assert ('11:00 и 12:30' in header) == (linked is True)
-        public = {'id': 20, 'date': int(datetime.now(timezone.utc).timestamp()) - 1800,
+        public = {'id': 20, 'owner_id': -1, 'date': int(datetime.now(timezone.utc).timestamp()) - 1800,
                   'post_type': 'post', 'text': 'Матч за 5 место\n' + header + '\nПОХОЖИЕ СОБЫТИЯ\nСохранённый выбор'}
         async def api(method, params, *args, **kwargs):
             calls.append((method, params))

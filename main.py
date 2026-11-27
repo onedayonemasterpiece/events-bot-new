@@ -16286,35 +16286,63 @@ async def _recover_managed_vk_live_url(
 
 async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload: dict) -> bool | datetime:
     """Run once after this announcement's known public time, using JobOutbox."""
-    if payload.get("relations"):
-        if not isinstance(payload["relations"], dict):
-            logging.info("vk.related_comment_skipped event_id=%s reason=missing_carousel_selection", event_id)
-            return False
-        from vk_event_relations import ensure_comment
-        async with db.get_session() as session:
-            event = await session.get(Event, event_id)
-        if not event or event.silent or event.lifecycle_status != "active":
-            return False
-        if payload.get("publish_date"):
-            public_due = datetime.fromtimestamp(int(payload["publish_date"]) + 180, timezone.utc)
-            if public_due > datetime.now(timezone.utc):
-                return public_due
+    from vk_calendar_comments import ensure_calendar_comment
+    from vk_event_relations import ensure_comment
+    from social_metrics_batch import OWN_VK_TARGET
+
+    relations = payload.get("relations")
+    if relations and not isinstance(relations, dict):
+        logging.info("vk.related_comment_skipped event_id=%s reason=missing_carousel_selection", event_id)
+        return False
+    async with db.get_session() as session:
+        event = await session.get(Event, event_id)
+    if not event or event.silent or event.lifecycle_status != "active" or (not relations and event.identity_status == "merged"):
+        return False
+    postponed_url = payload.get("post_url") or ""
+    delay = 180 if relations else random.Random(postponed_url).randint(300, 720)
+    if payload.get("publish_date"):
+        planned_due = datetime.fromtimestamp(int(payload["publish_date"]) + delay, timezone.utc)
+        if planned_due > datetime.now(timezone.utc):
+            return planned_due
+    async with db.raw_conn() as conn:
+        receipts = await (await conn.execute(
+            "SELECT DISTINCT p.live_url FROM event_publication p JOIN event e ON e.id=p.event_id "
+            "WHERE p.platform='vk' AND p.target=? AND p.status='published' AND p.stored_url=? AND p.stored_url!='' "
+            "AND p.live_url IS NOT NULL AND p.live_url!='' "
+            "AND (p.event_id=? OR e.source_vk_post_url IN (p.stored_url,p.live_url))",
+            (OWN_VK_TARGET, postponed_url, event_id))).fetchall()
+    if receipts and payload.get("publish_date"):
+        live_url = receipts[0][0]
+        old_ids, live_ids = _vk_owner_and_post_id(postponed_url), _vk_owner_and_post_id(live_url)
+        group = str(VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
+        if (len(receipts) != 1 or not old_ids or not live_ids or not group
+                or int(old_ids[0]) != -int(group) or old_ids[0] != live_ids[0]
+                or event.source_vk_post_url not in (postponed_url, live_url)):
+            raise RuntimeError("vk_comment_publication_identity_conflict")
+        owner, post = map(int, live_ids)
+        response = await _vk_api("wall.getById", {"posts": f"{owner}_{post}"}, db, bot,
+                                 token=VK_SERVICE_TOKEN, token_kind="service", skip_captcha=True)
+        items = _vk_wall_get_by_id_items(response)
+        item = items[0] if len(items) == 1 else {}
+        if not item or item.get("post_type") != "post" or item.get("is_deleted"):
+            raise RuntimeError("vk_relations_post_missing" if relations else "vk_calendar_public_post_not_found")
+        if (item.get("id") != post or item.get("owner_id") != owner
+                or (int(item["postponed_id"]) != int(old_ids[1]) if item.get("postponed_id") is not None
+                    else post != int(old_ids[1]) and item.get("date") != payload.get("publish_date"))):
+            raise RuntimeError("vk_comment_publication_identity_conflict")
+        public_due = datetime.fromtimestamp(int(item["date"]) + delay, timezone.utc)
+        if public_due > datetime.now(timezone.utc):
+            return public_due
+        logging.info("vk.comment_publication_resolved event_id=%s old_post_id=%s live_post_id=%s", event_id, old_ids[1], post)
+        if relations:
+            return await ensure_comment(db, event, live_url, relations, bot, deferred=True, public_item=item)
+        return await ensure_calendar_comment(db, event, live_url, stored_url=postponed_url)
+    if relations:
         publish_event, group = await _prepare_same_day_linked_publish_event(db, event)
         if all(item.source_vk_post_url == event.source_vk_post_url for item in group):
             event = publish_event
         await _recover_managed_vk_live_url(db, event, bot=bot)
-        return await ensure_comment(db, event, event.source_vk_post_url, payload["relations"], bot, deferred=True)
-    from vk_calendar_comments import ensure_calendar_comment
-
-    async with db.get_session() as session:
-        event = await session.get(Event, event_id)
-    if not event or event.silent or event.lifecycle_status != "active" or event.identity_status == "merged":
-        return False
-    postponed_url = payload["post_url"]
-    delay = random.Random(postponed_url).randint(300, 720)
-    planned_due = datetime.fromtimestamp(int(payload["publish_date"]) + delay, timezone.utc)
-    if planned_due > datetime.now(timezone.utc):
-        return planned_due
+        return await ensure_comment(db, event, event.source_vk_post_url, relations, bot, deferred=True)
     owner, postponed_id = map(int, _vk_owner_and_post_id(postponed_url))
     response = await _vk_api(
         "wall.get", {"owner_id": owner, "filter": "owner", "count": 100},
@@ -20687,9 +20715,10 @@ async def _run_due_jobs_once_locked(
                     retry = not (
                         uncertain_cls is not None and isinstance(exc, uncertain_cls)
                     )
-                    if (obj.task == JobTask.vk_calendar_comment
-                            and isinstance(obj.payload, dict) and obj.payload.get("relations")
-                            and isinstance(exc, RuntimeError) and str(exc) == "vk_live_id_ambiguous"):
+                    if (obj.task == JobTask.vk_calendar_comment and isinstance(exc, RuntimeError)
+                            and (str(exc) == "vk_comment_publication_identity_conflict"
+                                 or (isinstance(obj.payload, dict) and obj.payload.get("relations")
+                                     and str(exc) == "vk_live_id_ambiguous"))):
                         retry = False
                     if obj.task == JobTask.static_site_build:
                         static_failure = classify_static_site_failure(exc)

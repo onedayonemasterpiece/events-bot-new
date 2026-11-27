@@ -36,6 +36,16 @@ driver needs `libatomic.so.1` to start even its `install --with-deps` command on
 a fresh `python:3.12-slim` base. Keep this prerequisite in the declared OS
 dependency layer alongside `webp`.
 
+## VK comment publication receipt release, prepared 2026-11-27
+
+Image: `runcoveer/events:vk-comment-receipt-20261127`; rollback:
+`runcoveer/events:google-text-parts-20261127`. Use the normal merged-main
+Events-only update. Delayed calendar and frozen related comments resolve the
+original announcement through its existing published receipt and a direct
+public identity read. No canonical URL or old VK post/comment edits. Run the
+calendar/related job regression tests, then verify ordinary queued jobs reach
+one comment on the correct public post; never replay old publication jobs.
+
 ## Google text parts release, prepared 2026-11-27
 
 Image: `runcoveer/events:google-text-parts-20261127`; rollback:
