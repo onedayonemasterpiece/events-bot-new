@@ -21289,6 +21289,18 @@ async def _rehydrate_missing_event_source_posters_for_telegraph(
         for source_url, event_count in source_counts
         if str(source_url or "").strip() and int(event_count or 0) > 1
     }
+    # Excluded siblings do not make a multi-event carrier a single-event source.
+    # Its saved per-child poster assignment must survive later media recovery.
+    from models import VKSourcePacket
+
+    shared_source_urls.update(
+        (await session.execute(
+            select(VKSourcePacket.source_url).where(
+                VKSourcePacket.source_url.in_(source_urls),
+                func.json_array_length(VKSourcePacket.parse_result_json, "$.drafts") > 1,
+            )
+        )).scalars().all()
+    )
 
     existing_posters = (
         await session.execute(

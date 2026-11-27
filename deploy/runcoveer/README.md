@@ -36,6 +36,15 @@ driver needs `libatomic.so.1` to start even its `install --with-deps` command on
 a fresh `python:3.12-slim` base. Keep this prerequisite in the declared OS
 dependency layer alongside `webp`.
 
+## VK source poster assignment release, prepared 2026-11-27
+
+Image: `runcoveer/events:vk-source-poster-assignment-20261127`; rollback:
+`runcoveer/events:vk-calendar-upload-shape-20261127`. Normal merged-main Events-only
+update. The existing raw-source recovery skips known multi-draft VK carriers,
+including those with excluded siblings. Saved child media assignments remain
+intact; ordinary single-event recovery is preserved. Verify ordinary new media
+processing and initial publication; do not replay or edit existing VK posts.
+
 ## VK calendar upload observation release, prepared 2026-11-27
 
 Image: `runcoveer/events:vk-calendar-upload-shape-20261127`; rollback:

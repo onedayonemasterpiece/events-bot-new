@@ -512,3 +512,58 @@ async def test_event_renderer_preserves_accepted_description_and_summary(
         assert len(published) == 1
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("parsed_children", [1, 3])
+async def test_rehydrate_respects_multi_child_source_when_only_one_child_is_accepted(
+    tmp_path, monkeypatch, parsed_children
+):
+    from models import VKSourcePacket
+    import smart_event_update
+
+    m = importlib.reload(orig_main)
+    db = m.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    source_url = "https://vk.com/wall-149955604_25765"
+    async with db.get_session() as session:
+        event = m.Event(
+            title="Дискотека", description="D", date="2026-11-27", time="23:00",
+            location_name="Бар Бастион", source_text="SRC", photo_urls=[], photo_count=0,
+        )
+        session.add(event)
+        await session.flush()
+        event_id = int(event.id)
+        session.add(m.EventSource(
+            event_id=event_id, source_type="vk", source_url=source_url, source_text="SRC",
+        ))
+        session.add(VKSourcePacket(
+            owner_id=149955604, post_id=25765, revision=1, source_url=source_url,
+            published_at=1795770000, raw_text="SRC", raw_payload_json="{}",
+            payload_hash="payload", source_revision_hash="revision", status="imported",
+            parse_result_json=json.dumps({"drafts": [
+                {"title": str(index), "poster_media": [], "allow_raw_photo_fallback": False}
+                for index in range(parsed_children)
+            ]}),
+        ))
+        await session.commit()
+
+    fetched = []
+    async def fake_fetch(source_type, source_url, *, limit):
+        fetched.append(source_url)
+        return [SimpleNamespace(catbox_url="https://cdn.example/other-programme.jpg", sha256="other")]
+
+    async def fake_apply(session, event_id, candidates):
+        return len(candidates), [], False, 0, False
+
+    monkeypatch.setattr(m, "_fetch_event_source_poster_candidates", fake_fetch)
+    monkeypatch.setattr(smart_event_update, "_apply_posters", fake_apply)
+    monkeypatch.setenv("EVENT_SOURCE_MEDIA_REHYDRATE_ON_TELEGRAPH", "1")
+    async with db.get_session() as session:
+        event = await session.get(m.Event, event_id)
+        added = await m._rehydrate_missing_event_source_posters_for_telegraph(
+            session, event, event_id=event_id,
+        )
+    await db.close()
+    assert added == (1 if parsed_children == 1 else 0)
+    assert fetched == ([source_url] if parsed_children == 1 else [])
