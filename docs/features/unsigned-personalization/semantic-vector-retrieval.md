@@ -385,9 +385,12 @@ otherwise unchanged Search receipt drift according to network availability;
 the comparator temporarily enables the exporter's probe-free mode under a
 process lock and restores the previous exporter setting afterward.
 The shared exporter orders `event_source` rows by their durable source id.
-The compact Kaggle projection intentionally drops production indexes, so an
-unordered scan could otherwise permute `source_urls` while preserving every
-row and still produce a different exact-catalog revision.
+The compact projection does not copy production indexes or operational DDL.
+After closing the source read transaction, it creates fixed nonunique indexes
+for the exporter's poster, source, publication and latest-metric lookups; only
+existing allowlisted columns are indexed. Explicit durable source ordering and
+metric timestamp ties (`rowid ASC` for ascending popularity history) preserve
+exported facts and exact-catalog revisions when query plans change.
 
 StaticSiteBuilder remains a build consumer. A manual canary/backfill may
 explicitly refresh vectors, but production keeps

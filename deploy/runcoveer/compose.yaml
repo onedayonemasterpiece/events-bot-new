@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vector-preview-only-20261127
+    image: runcoveer/events:public-projection-indexes-20261127
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
