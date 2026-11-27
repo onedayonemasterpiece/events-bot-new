@@ -36,6 +36,15 @@ driver needs `libatomic.so.1` to start even its `install --with-deps` command on
 a fresh `python:3.12-slim` base. Keep this prerequisite in the declared OS
 dependency layer alongside `webp`.
 
+## VK calendar upload observation release, prepared 2026-11-27
+
+Image: `runcoveer/events:vk-calendar-upload-shape-20261127`; rollback:
+`runcoveer/events:vk-comment-receipt-20261127`. Normal merged-main Events-only
+update. A no-file upload warning records HTTP status, ICS byte count and fixed
+response shape flags only; it never records response values, URLs or tickets.
+Delivery, retry and receipt behavior are unchanged. Verify ordinary queued
+calendar delivery or inspect the safe warning on recurrence; no manual replay.
+
 ## VK comment publication receipt release, prepared 2026-11-27
 
 Image: `runcoveer/events:vk-comment-receipt-20261127`; rollback:
