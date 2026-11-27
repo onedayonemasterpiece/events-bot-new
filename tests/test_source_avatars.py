@@ -8,6 +8,25 @@ from PIL import Image, ImageDraw
 import source_avatars as avatars
 
 
+@pytest.mark.parametrize('identity_field', ['location_name', 'tg_source_author'])
+@pytest.mark.parametrize('owners,venue,expected', [
+    ([-148784347], 'Дом китобоя', ['dom-kitoboya']),
+    ([-999], 'Дом китобоя', ['dom-kitoboya', 'vk-source--999']),
+    ([-148784347, -999], 'Дом китобоя', ['dom-kitoboya', 'vk-source--999']),
+    ([148784347], 'Дом китобоя', ['dom-kitoboya', 'vk-source-148784347']),
+    ([-148784347], '', ['vk-source--148784347']),
+])
+def test_curated_venue_deduplicates_only_its_signed_source_owner(tmp_path, monkeypatch, owners, venue, expected, identity_field):
+    from tg_graphic_medallions import resolve_event_graphic_medallions
+    portrait = tmp_path / 'portrait.webp'
+    Image.new('RGB', (80, 80), 'blue').save(portrait)
+    monkeypatch.setattr(avatars, 'avatar_path', lambda owner: portrait)
+    event = SimpleNamespace(**{identity_field: venue},
+        source_post_url=f'https://vk.com/wall{owners[0]}_1',
+        source_urls=[f'https://vk.com/wall{owner}_1' for owner in owners[1:]])
+    assert [item['slug'] for item in resolve_event_graphic_medallions(event)] == expected
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize('owner,method', [(123, 'users.get'), (-123, 'groups.getById')])
 async def test_vk_portrait_reaches_both_consumers_and_reuses_download(tmp_path, monkeypatch, owner, method):

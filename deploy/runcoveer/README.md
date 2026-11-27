@@ -36,6 +36,16 @@ driver needs `libatomic.so.1` to start even its `install --with-deps` command on
 a fresh `python:3.12-slim` base. Keep this prerequisite in the declared OS
 dependency layer alongside `webp`.
 
+## Source medallion owner dedup release, prepared 2026-11-27
+
+Image: `runcoveer/events:source-medallion-owner-20261127`; rollback:
+`runcoveer/events:vk-calendar-upload-code-20261127`. Exact merged-main
+Events-only update. The shared manifest binds Dom Kitoboya to its signed VK
+profile; TG/VK and both site consumers omit only a source portrait already
+represented by a selected curated identity. Other source owners and the
+original-source precedence remain. Check new ordinary cards; do not edit old
+VK posts/comments or generate/publish the deferred static site for this fix.
+
 ## VK calendar upload code observation release, prepared 2026-11-27
 
 Image: `runcoveer/events:vk-calendar-upload-code-20261127`; rollback:
