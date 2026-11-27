@@ -1,5 +1,7 @@
 # Инциденты
 
+- [INC-2026-11-27 — VK flood между ожидающими запросами](INC-2026-11-27-vk-flood-queued-admission.md). Общий credential cooldown проверялся до ожидания semaphore; офлайн GET/POST воспроизводят второй физический запрос после code9. Исправление не меняет внешний flood, длительность cooldown или единичность комментариев.
+
 - [INC-2026-11-25 — рост диска RunCoveer](INC-2026-11-25-runcoveer-disk-growth.md). Реальные storage admission failures после расширения, рабочий пик полной SQLite-копии и освобождение старого container layer. Точный writer накопления ещё не установлен; cleanup не выполнялся.
 
 - [INC-2026-11-25 — повторные анонсы усадьбы Деда Мороза](INC-2026-11-25-newyear-own-channel-reingestion.md). Собственный канал, многосеансовая афиша, ошибочный `FINAL_DISTINCT`, 88 активных карточек. Расследование выполнено; production repair и prevention не выполнялись.

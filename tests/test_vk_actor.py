@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import pytest
 from collections import defaultdict
@@ -12,6 +13,68 @@ class DummyResp:
 
     def json(self):
         return self._data
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('transport', ['get', 'post'])
+async def test_vk_queued_request_respects_flood_opened_by_previous_call(monkeypatch, transport):
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+    second_waiting = asyncio.Event()
+
+    class ObservedSemaphore(asyncio.Semaphore):
+        async def acquire(self):
+            if self.locked():
+                second_waiting.set()
+            return await super().acquire()
+
+    monkeypatch.setattr(main, 'VK_SEMAPHORE', ObservedSemaphore(1))
+    monkeypatch.setattr(main, '_vk_captcha_needed', False)
+    monkeypatch.setattr(main, 'VK_USER_TOKEN', 'test-user')
+    monkeypatch.setattr(main, '_vk_user_token', lambda: main.VK_USER_TOKEN)
+    monkeypatch.setattr(main, 'BACKOFF_DELAYS', [0])
+    monkeypatch.setattr(main, 'VK_FLOOD_COOLDOWN_SECONDS', 3600)
+    monkeypatch.setattr(main, 'vk_actor_flood_blocked', {})
+    monkeypatch.setattr(main, 'vk_flood_control_total', defaultdict(int))
+    monkeypatch.setattr(main._time, 'time', lambda: 1000.0)
+    calls = []
+
+    async def no_throttle():
+        pass
+
+    async def fake_http_call(name, method, url, **kwargs):
+        token = kwargs.get('data', kwargs.get('params'))['access_token']
+        calls.append(token)
+        if token == 'other-user':
+            return DummyResp({'response': 'ok'})
+        first_started.set()
+        await release_first.wait()
+        return DummyResp({'error': {'error_code': 9, 'error_msg': 'Flood control'}})
+
+    async def call(method):
+        if transport == 'get':
+            return await main.vk_api(method, _force_user_actor=True)
+        return await main._vk_api(method, {}, token=main.VK_USER_TOKEN, token_kind='user')
+
+    monkeypatch.setattr(main, '_vk_throttle', no_throttle)
+    monkeypatch.setattr(main, 'http_call', fake_http_call)
+    first = asyncio.create_task(call('utils.getShortLink'))
+    await asyncio.wait_for(first_started.wait(), 2)
+    second = asyncio.create_task(call('utils.getShortLink'))
+    await asyncio.wait_for(second_waiting.wait(), 2)
+    release_first.set()
+    results = await asyncio.gather(first, second, return_exceptions=True)
+
+    assert calls == ['test-user']
+    assert all(isinstance(result, main.VKFloodControlError) for result in results)
+    assert main.vk_flood_control_total['user'] == 1
+    assert main._vk_actor_flood_remaining('test-user') == 3600
+    with pytest.raises(main.VKFloodControlError):
+        await call('wall.createComment')
+    assert calls == ['test-user']
+    monkeypatch.setattr(main, 'VK_USER_TOKEN', 'other-user')
+    assert await call('wall.getById') in ('ok', {'response': 'ok'})
+    assert calls == ['test-user', 'other-user']
 
 
 @pytest.mark.asyncio
