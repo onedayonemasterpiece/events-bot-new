@@ -36,6 +36,17 @@ driver needs `libatomic.so.1` to start even its `install --with-deps` command on
 a fresh `python:3.12-slim` base. Keep this prerequisite in the declared OS
 dependency layer alongside `webp`.
 
+## Vector preview-only release, prepared 2026-11-27
+
+Image: `runcoveer/events:vector-preview-only-20261127`; rollback:
+`runcoveer/events:vk-flood-admission-20261127`. Build from merged main and use
+an Events-only update. The existing `--skip-related` route returns after the
+preview file instead of building unused ancillary projections; full export
+and collection semantic compute retain their outputs. Verify fresh vector
+completion and ordinary first-publication comments. This subtraction does not
+remove arbitrary shared-worker head-of-line blocking or guarantee comment
+latency. Do not replay jobs, induce flood or edit old VK posts for acceptance.
+
 ## VK flood admission release, prepared 2026-11-27
 
 Image: `runcoveer/events:vk-flood-admission-20261127`; rollback:
