@@ -16311,7 +16311,7 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
             "AND p.live_url IS NOT NULL AND p.live_url!='' "
             "AND (p.event_id=? OR e.source_vk_post_url IN (p.stored_url,p.live_url))",
             (OWN_VK_TARGET, postponed_url, event_id))).fetchall()
-    if receipts:
+    if receipts and payload.get("publish_date"):
         live_url = receipts[0][0]
         old_ids, live_ids = _vk_owner_and_post_id(postponed_url), _vk_owner_and_post_id(live_url)
         group = str(VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
@@ -16324,8 +16324,9 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
                                  token=VK_SERVICE_TOKEN, token_kind="service", skip_captcha=True)
         items = _vk_wall_get_by_id_items(response)
         item = items[0] if len(items) == 1 else {}
+        if not item or item.get("post_type") != "post" or item.get("is_deleted"):
+            raise RuntimeError("vk_relations_post_missing" if relations else "vk_calendar_public_post_not_found")
         if (item.get("id") != post or item.get("owner_id") != owner
-                or item.get("post_type") != "post" or item.get("is_deleted")
                 or (int(item["postponed_id"]) != int(old_ids[1]) if item.get("postponed_id") is not None
                     else post != int(old_ids[1]) and item.get("date") != payload.get("publish_date"))):
             raise RuntimeError("vk_comment_publication_identity_conflict")
@@ -20714,9 +20715,10 @@ async def _run_due_jobs_once_locked(
                     retry = not (
                         uncertain_cls is not None and isinstance(exc, uncertain_cls)
                     )
-                    if (obj.task == JobTask.vk_calendar_comment
-                            and isinstance(obj.payload, dict) and obj.payload.get("relations")
-                            and isinstance(exc, RuntimeError) and str(exc) == "vk_live_id_ambiguous"):
+                    if (obj.task == JobTask.vk_calendar_comment and isinstance(exc, RuntimeError)
+                            and (str(exc) == "vk_comment_publication_identity_conflict"
+                                 or (isinstance(obj.payload, dict) and obj.payload.get("relations")
+                                     and str(exc) == "vk_live_id_ambiguous"))):
                         retry = False
                     if obj.task == JobTask.static_site_build:
                         static_failure = classify_static_site_failure(exc)

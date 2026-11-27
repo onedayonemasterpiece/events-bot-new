@@ -1,5 +1,5 @@
 """A frozen announcement keeps its physical public target when canonical facts change."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import pytest
@@ -13,10 +13,11 @@ LIVE = 'https://vk.com/wall-231920894_20'
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('via_worker', [False, True])
 @pytest.mark.parametrize('kind', ['calendar', 'related'])
 @pytest.mark.parametrize('conflict', [None, 'id_evidence', 'date', 'postponed_id', 'owner', 'deleted', 'missing', 'postpone', 'receipt',
     'target', 'platform', 'status', 'stored_url', 'canonical_url'])
-async def test_frozen_comment_uses_verified_public_receipt(tmp_path, monkeypatch, kind, conflict):
+async def test_frozen_comment_uses_verified_public_receipt(tmp_path, monkeypatch, kind, conflict, via_worker):
     db = main.Database(str(tmp_path / 'receipt.sqlite'))
     await db.init()
     published_at = int(datetime.now(timezone.utc).timestamp()) - 3600
@@ -97,7 +98,23 @@ async def test_frozen_comment_uses_verified_public_receipt(tmp_path, monkeypatch
                     OLD + '1' if conflict == 'stored_url' else OLD, live,
                     'missing' if conflict == 'status' else 'published'))
             await conn.commit()
-        if conflict not in (None, 'id_evidence'):
+        if via_worker:
+            async with db.get_session() as session:
+                session.add(main.JobOutbox(event_id=1, task=main.JobTask.vk_calendar_comment,
+                    coalesce_key=f'fixture:{kind}', payload=payload,
+                    next_run_at=datetime.now(timezone.utc) - timedelta(seconds=1)))
+                await session.commit()
+            assert await main._run_due_jobs_once(db, None) == 1
+            async with db.get_session() as session:
+                job = (await session.execute(main.select(main.JobOutbox))).scalars().one()
+                definitive = conflict in {'date', 'postponed_id', 'owner', 'receipt', 'canonical_url'}
+                assert job.payload == payload
+                assert job.terminal_reason == ('failed' if definitive else None)
+                assert job.attempts == (1 if conflict and conflict != 'id_evidence' and not definitive else 0)
+                assert job.status == (main.JobStatus.done if conflict in (None, 'id_evidence') else main.JobStatus.error)
+            assert await main._run_due_jobs_once(db, None) == 0
+            assert sum(method == 'wall.createComment' for method, _ in calls) == (conflict in (None, 'id_evidence'))
+        elif conflict not in (None, 'id_evidence'):
             with pytest.raises(RuntimeError):
                 await main.job_vk_calendar_comment(1, db, None, payload)
             assert not any(method == 'wall.createComment' for method, _ in calls)
