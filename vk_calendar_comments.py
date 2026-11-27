@@ -138,6 +138,16 @@ async def ensure_calendar_comment(db, event, post_url, *, stored_url=None):
                 result.raise_for_status()
                 uploaded = await result.json(content_type=None)
             if not uploaded.get("file"):
+                nested = uploaded.get("response")
+                logging.warning(
+                    "vk.calendar_upload_no_file event_id=%s post_id=%s http=%s ics_bytes=%s keys=%s "
+                    "file_present=%s file_type=%s error_top=%s response_present=%s response_type=%s "
+                    "nested_error=%s nested_file_nonempty=%s",
+                    event.id, post, result.status, len(body), len(uploaded), "file" in uploaded,
+                    type(uploaded.get("file")).__name__, "error" in uploaded or "error_code" in uploaded,
+                    "response" in uploaded, type(nested).__name__,
+                    isinstance(nested, dict) and ("error" in nested or "error_code" in nested),
+                    isinstance(nested, dict) and bool(nested.get("file")))
                 raise RuntimeError("VK calendar upload did not return a file")
             saved = await api("docs.save", file=uploaded["file"], title=filename)
             document = saved[0] if isinstance(saved, list) else saved.get("doc", saved)

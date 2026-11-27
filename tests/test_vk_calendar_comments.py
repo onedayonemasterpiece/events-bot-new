@@ -1,4 +1,5 @@
 from datetime import date
+import logging
 
 import pytest
 from unittest.mock import AsyncMock
@@ -7,6 +8,67 @@ import main
 from db import Database
 from models import Event, Setting
 import vk_calendar_comments as comments
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('uploaded,shape', [
+    ({}, 'file_present=False file_type=NoneType error_top=False response_present=False response_type=NoneType nested_error=False nested_file_nonempty=False'),
+    ({'file': ''}, 'file_present=True file_type=str error_top=False response_present=False response_type=NoneType nested_error=False nested_file_nonempty=False'),
+    ({'error': {'message': 'secret-sentinel'}, 'response': {'file': 'secret-ticket'}},
+     'file_present=False file_type=NoneType error_top=True response_present=True response_type=dict nested_error=False nested_file_nonempty=True'),
+])
+async def test_no_file_logs_only_shape_and_preserves_delivery(tmp_path, monkeypatch, caplog, uploaded, shape):
+    db = Database(str(tmp_path / 'upload-shape.sqlite'))
+    await db.init()
+    try:
+        ev = event(title='private-filename')
+        async with db.get_session() as session:
+            session.add(ev)
+            await session.commit()
+        monkeypatch.setattr(main, 'VK_AFISHA_GROUP_ID', '231920894')
+        monkeypatch.setattr(main, '_vk_user_token', lambda: 'secret-token')
+        calls = []
+        async def api(method, params, *args, **kw):
+            calls.append(method)
+            if method == 'docs.getWallUploadServer':
+                return {'response': {'upload_url': 'https://upload.example/secret-url'}}
+            if method == 'docs.save':
+                return {'response': {'doc': {'id': 30, 'owner_id': 20, 'ext': 'ics'}}}
+            if method == 'wall.createComment':
+                return {'response': {'comment_id': 90}}
+            raise AssertionError(method)
+        monkeypatch.setattr(main, '_vk_api', api)
+        class Response:
+            status = 201
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): pass
+            def raise_for_status(self): pass
+            async def json(self, **kw): return uploaded
+        class HTTP:
+            def post(self, *args, **kw): return Response()
+        monkeypatch.setattr(main, 'get_http_session', lambda: HTTP())
+        with caplog.at_level(logging.WARNING):
+            with pytest.raises(RuntimeError, match='^VK calendar upload did not return a file$'):
+                await comments.ensure_calendar_comment(db, ev, ev.source_vk_post_url)
+        assert calls == ['docs.getWallUploadServer']
+        async with db.get_session() as session:
+            assert await session.get(Setting, 'vk_calendar_comment:-231920894:10') is None
+        records = [r for r in caplog.records if 'vk.calendar_upload_no_file' in r.message]
+        assert len(records) == 1
+        message = records[0].message
+        assert 'event_id=1 post_id=10 http=201 ics_bytes=' in message
+        assert f'keys={len(uploaded)} ' in message
+        assert shape in message
+        for secret in ['secret-sentinel', 'secret-ticket', 'secret-token', 'secret-url', 'private-filename', 'BEGIN:VCALENDAR']:
+            assert secret not in message
+        uploaded = {'file': 'valid-fixture-ticket'}
+        caplog.clear()
+        assert await comments.ensure_calendar_comment(db, ev, ev.source_vk_post_url)
+        assert not await comments.ensure_calendar_comment(db, ev, ev.source_vk_post_url)
+        assert calls == ['docs.getWallUploadServer', 'docs.getWallUploadServer', 'docs.save', 'wall.createComment']
+        assert not any('vk.calendar_upload_no_file' in r.message for r in caplog.records)
+    finally:
+        await db.close()
 
 
 @pytest.mark.asyncio
