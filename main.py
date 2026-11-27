@@ -3726,26 +3726,26 @@ async def vk_api(method: str, **params: Any) -> Any:
     if not token:
         raise VKAPIError(None, "VK token not set", method=method)
     redacted_token = redact_token(token)
-    flood_remaining = _vk_actor_flood_remaining(token)
-    if flood_remaining > 0:
-        retry_after = max(1, math.ceil(flood_remaining))
-        logging.debug(
-            "vk.actor=skip actor=%s reason=flood_circuit method=%s retry_after_sec=%s",
-            kind,
-            method,
-            retry_after,
-        )
-        raise VKFloodControlError(
-            method=method,
-            actor=kind,
-            token=redacted_token,
-            retry_after_seconds=retry_after,
-        )
     call_params = params.copy()
     call_params["access_token"] = token
     call_params["v"] = VK_API_VERSION
     async with VK_SEMAPHORE:
         await _vk_throttle()
+        flood_remaining = _vk_actor_flood_remaining(token)
+        if flood_remaining > 0:
+            retry_after = max(1, math.ceil(flood_remaining))
+            logging.debug(
+                "vk.actor=skip actor=%s reason=flood_circuit method=%s retry_after_sec=%s",
+                kind,
+                method,
+                retry_after,
+            )
+            raise VKFloodControlError(
+                method=method,
+                actor=kind,
+                token=redacted_token,
+                retry_after_seconds=retry_after,
+            )
         resp = await http_call(
             f"vk.{method}",
             "GET",
@@ -3753,48 +3753,48 @@ async def vk_api(method: str, **params: Any) -> Any:
             timeout=HTTP_TIMEOUT,
             params=call_params,
         )
-    logging.info("vk.actor=%s method=%s", kind or "unknown", method)
-    data = resp.json()
-    if "error" in data:
-        err = data["error"]
-        logged_params = (
-            {key: "<redacted>" for key in call_params}
-            if private_mcp_log_boundary
-            else redact_params(call_params)
-        )
-        logged_message = (
-            "<redacted-provider-error>"
-            if private_mcp_log_boundary
-            else err.get("error_msg")
-        )
-        logged_token = "<redacted>" if private_mcp_log_boundary else redacted_token
-        logging.error(
-            "VK API error: method=%s code=%s msg=%s params=%s actor=%s token=%s",
-            method,
-            err.get("error_code"),
-            logged_message,
-            logged_params,
-            kind,
-            logged_token,
-        )
-        if err.get("error_code") == 9:
-            blocked_until = _vk_mark_actor_flood(kind or "unknown", token)
-            raise VKFloodControlError(
-                message=(logged_message if private_mcp_log_boundary else err.get("error_msg", "")),
-                method=method,
+        logging.info("vk.actor=%s method=%s", kind or "unknown", method)
+        data = resp.json()
+        if "error" in data:
+            err = data["error"]
+            logged_params = (
+                {key: "<redacted>" for key in call_params}
+                if private_mcp_log_boundary
+                else redact_params(call_params)
+            )
+            logged_message = (
+                "<redacted-provider-error>"
+                if private_mcp_log_boundary
+                else err.get("error_msg")
+            )
+            logged_token = "<redacted>" if private_mcp_log_boundary else redacted_token
+            logging.error(
+                "VK API error: method=%s code=%s msg=%s params=%s actor=%s token=%s",
+                method,
+                err.get("error_code"),
+                logged_message,
+                logged_params,
+                kind,
+                logged_token,
+            )
+            if err.get("error_code") == 9:
+                blocked_until = _vk_mark_actor_flood(kind or "unknown", token)
+                raise VKFloodControlError(
+                    message=(logged_message if private_mcp_log_boundary else err.get("error_msg", "")),
+                    method=method,
+                    actor=kind,
+                    token=logged_token,
+                    retry_after_seconds=max(1, int(blocked_until - _time.time())),
+                )
+            raise VKAPIError(
+                err.get("error_code"),
+                logged_message if private_mcp_log_boundary else err.get("error_msg", ""),
+                None if private_mcp_log_boundary else err.get("captcha_sid"),
+                None if private_mcp_log_boundary else err.get("captcha_img"),
+                method,
                 actor=kind,
                 token=logged_token,
-                retry_after_seconds=max(1, int(blocked_until - _time.time())),
             )
-        raise VKAPIError(
-            err.get("error_code"),
-            logged_message if private_mcp_log_boundary else err.get("error_msg", ""),
-            None if private_mcp_log_boundary else err.get("captcha_sid"),
-            None if private_mcp_log_boundary else err.get("captcha_img"),
-            method,
-            actor=kind,
-            token=logged_token,
-        )
     return data.get("response")
 
 
@@ -4039,17 +4039,6 @@ async def _vk_api(
     fallback_next = False
     flood_retry_delays: list[int] = []
     for idx, (kind, token) in enumerate(tokens):
-        flood_remaining = _vk_actor_flood_remaining(token)
-        if flood_remaining > 0:
-            retry_after = max(1, math.ceil(flood_remaining))
-            flood_retry_delays.append(retry_after)
-            logging.debug(
-                "vk.actor=skip actor=%s reason=flood_circuit method=%s retry_after_sec=%s",
-                kind,
-                method,
-                retry_after,
-            )
-            continue
         call_params = orig_params.copy()
         call_params["access_token"] = token
         call_params["v"] = "5.131"
@@ -4076,8 +4065,22 @@ async def _vk_api(
         for attempt, delay in enumerate(BACKOFF_DELAYS, start=1):
             async with VK_SEMAPHORE:
                 await _vk_throttle()
+                flood_remaining = _vk_actor_flood_remaining(token)
+                if flood_remaining > 0:
+                    retry_after = max(1, math.ceil(flood_remaining))
+                    flood_retry_delays.append(retry_after)
+                    logging.debug(
+                        "vk.actor=skip actor=%s reason=flood_circuit method=%s retry_after_sec=%s",
+                        kind,
+                        method,
+                        retry_after,
+                    )
+                    err = None
+                    break
                 async with span("vk-send"):
                     data = await asyncio.wait_for(_call(), HTTP_TIMEOUT)
+                if data.get("error", {}).get("error_code") == 9:
+                    blocked_until = _vk_mark_actor_flood(kind, token)
             if "error" not in data:
                 if attempt > 1 and last_msg:
                     logging.warning(
@@ -4103,7 +4106,6 @@ async def _vk_api(
             msg_l = msg.lower()
             code = err.get("error_code")
             if code == 9:
-                blocked_until = _vk_mark_actor_flood(kind, token)
                 flood_retry_delays.append(max(1, int(blocked_until - _time.time())))
                 last_err = err
                 last_actor = kind
@@ -4236,7 +4238,6 @@ async def _vk_api(
                 actor=kind,
                 token=redacted_token,
             )
-        break
     if last_err and last_err.get("error_code") == 9:
         raise VKFloodControlError(
             message=last_err.get("error_msg", "Flood control"),
