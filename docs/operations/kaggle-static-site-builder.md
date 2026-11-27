@@ -207,6 +207,10 @@ Rules:
   that a short-lived runner has already committed and make Kaggle report a
   false `invalid token`/busy resource failure.
 - Data export: `site/scripts/export-production-preview-data.py`.
+  The vector lane invokes `--skip-related` and, unless collection semantic
+  compute is requested, returns immediately after `preview-events.json`. It
+  does not build archive, venue, club, registry or festival exports that the
+  vector consumer does not read. The full export keeps those outputs.
 - The full exporter requires the current `festival_calendar_item` catalog in
   core Fly SQLite and writes `site/src/data/festival-timeline.json` with source
   `sqlite-festival-calendar-v1`. Production and secret-candidate gates reject a

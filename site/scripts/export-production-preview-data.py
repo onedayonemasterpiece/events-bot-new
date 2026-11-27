@@ -6703,6 +6703,11 @@ def main() -> int:
     }
     preview_events_path = out_dir / "preview-events.json"
     preview_events_path.write_text(json.dumps(preview, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if args.skip_related and not args.collection_semantic_compute:
+        print(f"Exported {len(events)} events to {out_dir}")
+        print("IDs:", ",".join(str(event["id"]) for event in events))
+        print("Related: skipped")
+        return 0
     event_detail_archive = {
         "build": {
             "generated_at": generated_at,
@@ -6805,11 +6810,6 @@ def main() -> int:
         json.dumps(festival_projection, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    if args.skip_related and not args.collection_semantic_compute:
-        print(f"Exported {len(events)} events to {out_dir}")
-        print("IDs:", ",".join(str(event["id"]) for event in events))
-        print("Related: skipped")
-        return 0
     shared_bge_artifact: dict[str, Any] | None = None
     semantic_result: dict[str, Any] = {
         "status": "disabled",
