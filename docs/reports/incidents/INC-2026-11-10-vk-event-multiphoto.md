@@ -4,6 +4,34 @@
 
 ## Наблюдение и причина
 
+### 27 November: excluded source siblings reopened the raw poster gallery
+
+Fresh event11568/public16301 is a disco at23:00 in BarBastion, but its first
+image advertises a Kino tribute at21:00 in BastionHall. Source packet48449
+contains three correctly parsed children and two posters for the other two
+programmes. The disco draft has no posters and explicitly disallows raw-photo
+fallback. Candidate32802 preserved the empty set. The other children were
+product exclusions, so only one accepted EventSource row remained.
+
+Durable events-bot.log.1 at16:42:19.757 records source_rehydrate for11568:
+two candidates, two added, one source. The recovery guard counted accepted
+canonical events rather than parsed source children, so it fetched both
+foreign posters again without OCR. Gallery review kept one; optional role
+enrichment was deferred by its daily budget. This fix does not alter that
+review policy or its allowance.
+
+Extend only the existing shared_source_urls set with VKSourcePacket URLs whose
+saved parse has multiple drafts. A historically shared source remains shared;
+a later one-child revision cannot justify attaching its raw gallery to an
+older child. Ordinary one-child source recovery and multi-source aggregation
+retain their current path. No new state, provider call, queue or controller.
+Production net+12, budget40. The local distinguishing test fails before for
+three parsed children and one accepted event, while the one-child control passes.
+Root owns isolated after checks, independent source review, main release and
+ordinary new-publication verification; these stages have not completed at this
+entry. Existing16301 is not edited. Evidence: retained task
+20261112T111614Z-similar-events-check/vk16301-source-poster-mismatch-20261127.md.
+
 ### Повтор недоступной галереи, 17 ноября
 
 У событий 10557/11034 неизменные пять poster IDs породили 56 media jobs:
