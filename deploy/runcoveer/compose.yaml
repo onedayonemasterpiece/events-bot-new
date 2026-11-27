@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vk-source-poster-assignment-20261127
+    image: runcoveer/events:vk-calendar-upload-code-20261127
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

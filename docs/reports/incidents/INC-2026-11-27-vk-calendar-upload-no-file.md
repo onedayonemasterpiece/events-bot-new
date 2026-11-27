@@ -54,3 +54,34 @@ Retained evidence: `/home/dev/artifacts/events-bot-new/20261112T111614Z-similar-
 `event11515-errors-after1114-20261127.json`,
 `calendar11515-log-allowlist-20261127.json`,
 `vk16289-calendar-upload-diagnosis-20261127.md`.
+
+
+## Ordinary recurrence and bounded error code, 27 ноября 21:53 UTC
+
+PR1115 deployed the shape warning. Ordinary event11569/public16305 encountered
+HTTP200 with a two-key flat rejection at18:03:45: error_top true, file absent,
+response absent. Calendar172507 recovered through its normal retry at18:14:05;
+one valid659-byte ICS comment16309 arrived24:05 after publication (timing FAIL).
+The application discarded the response code; worker last_error contains a
+static exception and is cleared on success. Numeric codes from other VK API
+calls cannot be attributed to this multipart upload. No cause such as CAPTCHA,
+flood, token or MIME has been established.
+
+The existing warning now retains only exact int0..9999 from error_code,
+error.error_code or scalar error; invalid/absent values become None. This uses
+the same bounded integer privacy principle as the existing VK adapter. Runtime
+net+6 lines, budget8. No description, payload, params, URL, ticket, extra IO,
+retry, queue, state or delivery change. The extended existing offline test
+checks valid numeric forms and rejects string/bool/float/out-of-range values,
+including an invalid explicit top field with a valid scalar fallback. Secret
+sentinels stay absent; the same exception and next successful once-only
+publication are retained. Before:1 FAIL on missing error_code. After:125 PASS
+in74.90s in the existing image with changed files mounted read-only, network
+none and no production DB/env mounts. Native simplicity/privacy SOURCE PASS
+on runtime blob7d63fdf6. Deployment and new live recurrence are still open.
+
+Treat this as a regression guard whenever changing the multipart no-file path:
+run tests/test_vk_calendar_comments.py, tests/test_vk_event_relations.py and
+tests/test_vk_comment_publication_receipt.py; preserve numeric-only logging and
+one-time delivery. Required live evidence is ordinary delivery and, if another
+no-file occurs, its safe warning; do not manufacture a provider failure.

@@ -11,13 +11,24 @@ import vk_calendar_comments as comments
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('uploaded,shape', [
-    ({}, 'file_present=False file_type=NoneType error_top=False response_present=False response_type=NoneType nested_error=False nested_file_nonempty=False'),
-    ({'file': ''}, 'file_present=True file_type=str error_top=False response_present=False response_type=NoneType nested_error=False nested_file_nonempty=False'),
+@pytest.mark.parametrize('uploaded,shape,expected_code', [
+    ({}, 'file_present=False file_type=NoneType error_top=False response_present=False response_type=NoneType nested_error=False nested_file_nonempty=False', None),
+    ({'file': ''}, 'file_present=True file_type=str error_top=False response_present=False response_type=NoneType nested_error=False nested_file_nonempty=False', None),
     ({'error': {'message': 'secret-sentinel'}, 'response': {'file': 'secret-ticket'}},
-     'file_present=False file_type=NoneType error_top=True response_present=True response_type=dict nested_error=False nested_file_nonempty=True'),
+     'file_present=False file_type=NoneType error_top=True response_present=True response_type=dict nested_error=False nested_file_nonempty=True', None),
+    *[(payload, 'error_top=True', expected) for payload, expected in [
+        ({'error_code': 9, 'description': 'secret-sentinel'}, 9),
+        ({'error': 10, 'description': 'secret-sentinel'}, 10),
+        ({'error': {'error_code': 15, 'description': 'secret-sentinel'}}, 15),
+        ({'error_code': 'secret-sentinel'}, None),
+        ({'error_code': True}, None),
+        ({'error_code': 1.5}, None),
+        ({'error_code': -1}, None),
+        ({'error_code': 10000}, None),
+        ({'error_code': 'secret-sentinel', 'error': 9}, None),
+    ]],
 ])
-async def test_no_file_logs_only_shape_and_preserves_delivery(tmp_path, monkeypatch, caplog, uploaded, shape):
+async def test_no_file_logs_only_shape_and_preserves_delivery(tmp_path, monkeypatch, caplog, uploaded, shape, expected_code):
     db = Database(str(tmp_path / 'upload-shape.sqlite'))
     await db.init()
     try:
@@ -59,6 +70,7 @@ async def test_no_file_logs_only_shape_and_preserves_delivery(tmp_path, monkeypa
         assert 'event_id=1 post_id=10 http=201 ics_bytes=' in message
         assert f'keys={len(uploaded)} ' in message
         assert shape in message
+        assert f'error_code={expected_code}' in message
         for secret in ['secret-sentinel', 'secret-ticket', 'secret-token', 'secret-url', 'private-filename', 'BEGIN:VCALENDAR']:
             assert secret not in message
         uploaded = {'file': 'valid-fixture-ticket'}
