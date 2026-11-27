@@ -911,6 +911,58 @@ async def test_hard_single_attempt_configures_new_sdk_without_internal_retries()
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "parts,fallback,expected",
+    [
+        ([{"text": "Узна"}, {"text": "йте"}], None, "Узнайте"),
+        ([{"text": "Мастер"}, {"text": " "}, {"text": "Тиффани"}], None, "Мастер Тиффани"),
+        ([{"text": "Первый."}, {"text": "\n\n"}, {"text": "Второй."}], None, "Первый.\n\nВторой."),
+        ([{"text": "Слово "}, {"text": "и слово"}], None, "Слово и слово"),
+        ([{"text": "hidden", "thought": True}, {"text": '{"description":"Тиффа'}, {"text": 'ни"}'}], None, '{"description":"Тиффани"}'),
+        ([{"text": "hidden", "thought": True}], None, None),
+        ([{"text": " \n "}], None, None),
+        ([{"text": " \n "}], "legacy answer", "legacy answer"),
+    ],
+    ids=["word", "space-part", "paragraph-part", "part-edge-space", "json-and-thought", "thought-only", "blank-only", "blank-fallback"],
+)
+async def test_new_sdk_preserves_visible_text_part_boundaries(parts, fallback, expected):
+    response = SimpleNamespace(
+        candidates=[SimpleNamespace(content=SimpleNamespace(parts=parts), finish_reason="STOP")],
+        text=fallback,
+        usage_metadata={},
+    )
+
+    async def generate_content(**_kwargs):
+        return response
+
+    client = GoogleAIClient()
+    client._genai = None
+    client._genai_new = SimpleNamespace(
+        Client=lambda **_kwargs: SimpleNamespace(
+            aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))
+        )
+    )
+
+    async def call():
+        return await client._call_provider(
+            api_key="test-key", model="gemma-4-31b", prompt="text assembly",
+            generation_config={"temperature": 0}, safety_settings=None,
+            max_output_tokens=64,
+        )
+
+    if expected is None:
+        with pytest.raises(ProviderError) as exc_info:
+            await call()
+        assert exc_info.value.error_type == "empty_response"
+        assert exc_info.value.retryable
+    else:
+        text, _usage = await call()
+        assert text == expected
+        if expected.startswith("{"):
+            assert json.loads(text) == {"description": "Тиффани"}
+
+
+@pytest.mark.asyncio
 async def test_hard_single_attempt_forbids_legacy_sdk_fallback() -> None:
     class _LegacySdk:
         def __init__(self):

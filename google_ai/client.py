@@ -3114,14 +3114,14 @@ class GoogleAIClient:
                             t = getattr(part, "text", None)
                             if t is None and isinstance(part, dict):
                                 t = part.get("text")
-                            if isinstance(t, str) and t.strip():
-                                parts.append(t.strip())
+                            if isinstance(t, str):
+                                parts.append(t)
                     else:
                         t = getattr(content, "text", None)
-                        if isinstance(t, str) and t.strip():
-                            parts.append(t.strip())
-            if parts:
-                return "\n".join(parts).strip()
+                        if isinstance(t, str):
+                            parts.append(t)
+            if assembled_text := "".join(parts).strip():
+                return assembled_text
 
             # Old `google.generativeai`: response.text
             try:
