@@ -1877,6 +1877,21 @@ def create_immutable_projection_snapshot(
         source_connection.close()
         source_connection = None
 
+        # These public read-model indexes serve the exporter's repeated lookups;
+        # source DDL and operational schema never enter the snapshot.
+        for table, columns in (
+            ("eventposter", "event_id, review_status, display_order, id"),
+            ("eventposter", "supabase_url, review_status, event_id"),
+            ("event_source", "event_id, id"),
+            ("event_publication", "event_id, status, platform, target"),
+            ("telegram_post_metric", "source_url, collected_ts DESC"),
+            ("vk_post_metric", "source_url, collected_ts DESC"),
+            ("social_metric_snapshot", "source_url, status, collected_ts DESC"),
+        ):
+            if all(column.split()[0] in table_columns.get(table, []) for column in columns.split(", ")):
+                index = f"projection_{table}_{columns.split(',')[0]}"
+                destination.execute(f'CREATE INDEX "{index}" ON "{table}" ({columns})')
+
         destination.execute("VACUUM")
         quick_check = _quick_check(destination)
         max_event_id, max_event_updated_at = _event_snapshot_facts(destination)

@@ -36,6 +36,16 @@ driver needs `libatomic.so.1` to start even its `install --with-deps` command on
 a fresh `python:3.12-slim` base. Keep this prerequisite in the declared OS
 dependency layer alongside `webp`.
 
+## Public projection query indexes release, prepared 2026-11-27
+
+Image: `runcoveer/events:public-projection-indexes-20261127`; rollback:
+`runcoveer/events:vector-preview-only-20261127`. Use the normal merged-main
+Events-only update. Fixed nonunique indexes belong only to the bounded public
+snapshot after closing its source read; no production DB migration or source
+DDL copy occurs. Preserve exported payloads and equal-timestamp metric history.
+Verify fresh vector completion and ordinary first-publication comments;
+performance measurements and product acceptance are separate from rollout.
+
 ## Vector preview-only release, prepared 2026-11-27
 
 Image: `runcoveer/events:vector-preview-only-20261127`; rollback:

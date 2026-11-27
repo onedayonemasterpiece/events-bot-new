@@ -2132,7 +2132,7 @@ def popularity_signals(
                    comments, shares, collected_ts
             from social_metric_snapshot
             where status='collected' and source_url in ({placeholders})
-            order by collected_ts asc
+            order by collected_ts asc, rowid asc
             """,
             tuple(urls),
         ).fetchall()

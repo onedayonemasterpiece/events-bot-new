@@ -769,3 +769,36 @@ def test_canonical_date_range_enters_related_projection_without_db_rewrite(
         assert con.execute("select date,end_date,time from event where id=1").fetchone()[:] == (
             raw_date, explicit_end, "08:00..17:00",
         )
+
+
+def test_projection_indexes_repeated_export_queries_without_changing_rows(tmp_path: Path) -> None:
+    source = tmp_path / "source.sqlite"
+    _source_database(source)
+    _add_full_exporter_products(source)
+    url = "https://t.me/source/1"
+    with sqlite3.connect(source) as con:
+        for likes, views, shares, comments in ((30, 30, 0, 0), (90, 3000, 7, 10)):
+            con.execute("insert into telegram_post_metric values(?,200,300,?,4,'private')", (url, likes))
+            con.execute("insert into vk_post_metric values(?,200,300,?,4,0)", (url, likes))
+            con.execute("insert into social_metric_snapshot values('telegram','source',?,'6h',?,?,?,?,200,'collected','private')", (url, views, likes, comments, shares))
+    snapshot, _manifest, _metadata = _build_projection(source, tmp_path / "projection")
+    exporter = _load_exporter()
+    queries = [
+        ("select supabase_url from eventposter where event_id=1 and review_status='approved' order by display_order,id", ()),
+        ("select supabase_url,count(distinct event_id) from eventposter where review_status='approved' and supabase_url in (?) group by supabase_url", ("https://cdn.example/one.jpg",)),
+        ("select source_url from event_source where event_id=1 order by id", ()),
+        ("select stored_url,live_url from event_publication where event_id=1 and status='published' order by platform,target", ()),
+        ("select likes,views,forwards from telegram_post_metric where source_url=? order by collected_ts desc limit 1", (url,)),
+        ("select likes,views,reposts from vk_post_metric where source_url=? order by collected_ts desc limit 1", (url,)),
+        ("select likes,views,shares from social_metric_snapshot where source_url=? and status='collected' order by collected_ts desc limit 1", (url,)),
+    ]
+    with sqlite3.connect(source) as live, sqlite3.connect(snapshot) as projected:
+        live.row_factory = projected.row_factory = sqlite3.Row
+        assert exporter.collect_source_records(projected, 1) == exporter.collect_source_records(live, 1)
+        assert exporter.collect_images(projected, 1, "[]", "Концерт") == exporter.collect_images(live, 1, "[]", "Концерт")
+        assert exporter.source_metrics(projected, [url]) == exporter.source_metrics(live, [url])
+        assert exporter.popularity_signals(projected, [url]) == exporter.popularity_signals(live, [url])
+        for query, params in queries:
+            assert [tuple(row) for row in projected.execute(query, params)] == [tuple(row) for row in live.execute(query, params)]
+            plans = [str(row[3]) for row in projected.execute("explain query plan " + query, params)]
+            assert any("SEARCH " in plan for plan in plans), plans
