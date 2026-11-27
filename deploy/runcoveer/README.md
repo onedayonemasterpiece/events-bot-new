@@ -36,6 +36,16 @@ driver needs `libatomic.so.1` to start even its `install --with-deps` command on
 a fresh `python:3.12-slim` base. Keep this prerequisite in the declared OS
 dependency layer alongside `webp`.
 
+## Google text parts release, prepared 2026-11-27
+
+Image: `runcoveer/events:google-text-parts-20261127`; rollback:
+`runcoveer/events:public-projection-indexes-20261127`. Use the normal merged-main
+Events-only update. Visible response parts retain their original whitespace;
+thought filtering, empty-response handling and provider admission stay intact.
+Run the fake-provider client and generated-notebook package tests, then inspect
+the next ordinary generated text. Historical VK posts and comments are not
+rewritten; the old malformed examples do not establish their original cause.
+
 ## Public projection query indexes release, prepared 2026-11-27
 
 Image: `runcoveer/events:public-projection-indexes-20261127`; rollback:

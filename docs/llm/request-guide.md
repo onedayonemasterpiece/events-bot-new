@@ -35,6 +35,11 @@ Provider quotas are scoped by Google Cloud project/model. Different local key
 aliases are not assumed to be independent: unmapped keys share one conservative
 `quota_scope` until an operator-verified key→project inventory permits a split.
 
+Response text preserves the provider's visible text parts in order, including
+whitespace-only parts, without inserting separators. Only the assembled text
+is trimmed; thought parts remain excluded and an empty answer retains the
+existing legacy fallback and retryable `empty_response` handling.
+
 Prompts and few-shot material must be domain-generic. Do not embed names,
 franchises, organizers or narrative facts from a production incident as a
 positive example in a reusable prompt: a later fallback can copy them into an
