@@ -8,10 +8,9 @@
     "subnet_a": {"type":"string"},
     "subnet_b": {"type":"string"},
     "certificate_id": {"type":"string"},
-    "kms_key_id": {"type":"string"},
+    "storage_ca_pem": {"type":"string","description":"Independently verified trust CA chain for storage.yandexcloud.net"},
     "publisher_storage_sa_id": {"type":"string"},
     "restricted_log_group_id": {"type":"string"},
-    "security_group_ids": {"type":"list(string)"},
     "arl_requests_per_minute": {"type":"number","description":"Measured and reviewed request budget, no guessed default"},
     "waf_anomaly_score": {"type":"number","description":"Approved OWASP inbound score, no guessed default"}
   },
@@ -24,10 +23,43 @@
         "default_storage_class": "STANDARD",
         "force_destroy": false,
         "versioning": [{"enabled":true}],
-        "anonymous_access_flags": [{"read":true,"list":false,"config_read":false}],
-        "server_side_encryption_configuration": [{"rule":[{"apply_server_side_encryption_by_default":[{"kms_master_key_id":"${var.kms_key_id}","sse_algorithm":"aws:kms"}]}]}],
+        "anonymous_access_flags": [{"read":true,"list":true,"config_read":false}],
         "policy": "${jsonencode({Version=\"2012-10-17\",Statement=[{Effect=\"Allow\",Principal={CanonicalUser=var.publisher_storage_sa_id},Action=[\"s3:ListBucket\"],Resource=[\"arn:aws:s3:::kenigevents-root-${each.key}\"]},{Effect=\"Allow\",Principal={CanonicalUser=var.publisher_storage_sa_id},Action=[\"s3:GetObject\",\"s3:PutObject\",\"s3:DeleteObject\"],Resource=[\"arn:aws:s3:::kenigevents-root-${each.key}/*\"]}]})}",
         "lifecycle": {"prevent_destroy":true}
+      }
+    },
+    "yandex_vpc_private_endpoint": {
+      "shared": {
+        "name":"kenigevents-storage-pe-candidate",
+        "folder_id":"b1g5tck18cgqtjb7rn3s",
+        "network_id":"${var.network_id}",
+        "object_storage":[{}],
+        "endpoint_address":[{"subnet_id":"${var.subnet_a}"}],
+        "dns_options":[{"private_dns_records_enabled":false}],
+        "lifecycle":{"prevent_destroy":true}
+      }
+    },
+    "yandex_alb_target_group": {
+      "shared": {
+        "name":"kenigevents-storage-pe-target-candidate",
+        "folder_id":"b1g5tck18cgqtjb7rn3s",
+        "target":[{"subnet_id":"${var.subnet_a}","ip_address":"${yandex_vpc_private_endpoint.shared.endpoint_address[0].address}"}]
+      }
+    },
+    "yandex_vpc_security_group": {
+      "root": {
+        "name":"kenigevents-atomic-root-alb",
+        "network_id":"${var.network_id}",
+        "folder_id":"b1g5tck18cgqtjb7rn3s",
+        "ingress":[
+          {"protocol":"TCP","port":80,"v4_cidr_blocks":["0.0.0.0/0"]},
+          {"protocol":"TCP","port":443,"v4_cidr_blocks":["0.0.0.0/0"]},
+          {"protocol":"TCP","port":30080,"v4_cidr_blocks":["198.18.235.0/24","198.18.248.0/24"]}
+        ],
+        "egress":[
+          {"protocol":"TCP","port":80,"v4_cidr_blocks":["0.0.0.0/0"]},
+          {"protocol":"TCP","port":443,"v4_cidr_blocks":["0.0.0.0/0"]}
+        ]
       }
     },
     "yandex_alb_backend_group": {
@@ -43,7 +75,12 @@
       "shared": {
         "name": "kenigevents-atomic-root-shared-routes",
         "folder_id": "b1g5tck18cgqtjb7rn3s",
-        "http_backend": [{"name":"shared-existing","storage_bucket":"kenigevents.ru","weight":100,"port":80}]
+        "http_backend": [{
+          "name":"shared-s3-https",
+          "target_group_ids":["${yandex_alb_target_group.shared.id}"],
+          "weight":100,"port":443,
+          "tls":[{"sni":"storage.yandexcloud.net","validation_context":[{"trusted_ca_bytes":"${var.storage_ca_pem}"}]}]
+        }]
       }
     },
     "yandex_alb_http_router": {"root":{"name":"kenigevents-atomic-root-router","folder_id":"b1g5tck18cgqtjb7rn3s"}},
@@ -92,37 +129,50 @@
           {
             "name": "shared-directory",
             "disable_security_profile": false,
-            "http_route": [
-              {
-                "http_match": [{"http_method":["GET","HEAD"],"path":[{"regex":"^/(?:p|ics|_review|_static|preview-[a-z0-9][a-z0-9._-]*)/(?:.*/)?$"}]}],
-                "http_route_action": [{"backend_group_id":"${yandex_alb_backend_group.shared.id}","regex_rewrite":[{"regex":"^(/(?:.*/)?)$","substitute":"\\1index.html"}]}]
-              }
-            ]
+            "http_route": [{
+              "http_match": [{"http_method":["GET","HEAD","OPTIONS"],"path":[{"regex":"^/(?:p|ics|_review|_static|_astro|preview-[a-z0-9][a-z0-9._-]*)(?:/[^/]+)*/$"}]}],
+              "http_route_action": [{"backend_group_id":"${yandex_alb_backend_group.shared.id}","host_rewrite":"storage.yandexcloud.net","regex_rewrite":[{"regex":"^(/.*)$","substitute":"/kenigevents.ru\\1index.html"}]}]
+            }]
+          },
+          {
+            "name": "shared-slashless",
+            "disable_security_profile": false,
+            "http_route": [{
+              "http_match": [{"http_method":["GET","HEAD","OPTIONS"],"path":[{"regex":"^/(?:_review|_static|preview-[a-z0-9][a-z0-9._-]*)(?:/[^/]+)*/[^/.]+$"}]}],
+              "http_route_action": [{"backend_group_id":"${yandex_alb_backend_group.shared.id}","host_rewrite":"storage.yandexcloud.net","regex_rewrite":[{"regex":"^(/.*)$","substitute":"/kenigevents.ru\\1/index.html"}]}]
+            }]
           },
           {
             "name": "shared-file",
             "disable_security_profile": false,
-            "http_route": [
-              {
-                "http_match": [{"http_method":["GET","HEAD"],"path":[{"regex":"^/(?:p|ics|_review|_static|preview-[a-z0-9][a-z0-9._-]*)/.*$"}]}],
-                "http_route_action": [{"backend_group_id":"${yandex_alb_backend_group.shared.id}"}]
-              }
-            ]
+            "http_route": [{
+              "http_match": [{"http_method":["GET","HEAD","OPTIONS"],"path":[{"regex":"^/(?:p|ics|_review|_static|_astro|preview-[a-z0-9][a-z0-9._-]*)(?:/.*)?$"}]}],
+              "http_route_action": [{"backend_group_id":"${yandex_alb_backend_group.shared.id}","host_rewrite":"storage.yandexcloud.net","regex_rewrite":[{"regex":"^(/.*)$","substitute":"/kenigevents.ru\\1"}]}]
+            }]
           },
           {
             "name": "root-directory",
             "disable_security_profile": false,
-            "http_route": [
-              {
-                "http_match": [{"http_method":["GET","HEAD"],"path":[{"regex":"^/(?:.*/)?$"}]}],
-                "http_route_action": [{"backend_group_id":"${yandex_alb_backend_group.root.id}","regex_rewrite":[{"regex":"^(/(?:.*/)?)$","substitute":"\\1index.html"}]}]
-              }
-            ]
+            "http_route": [{
+              "http_match": [{"http_method":["GET","HEAD","OPTIONS"],"path":[{"regex":"^(/(?:.*/)?)$"}]}],
+              "http_route_action": [{"backend_group_id":"${yandex_alb_backend_group.root.id}","regex_rewrite":[{"regex":"^(/(?:.*/)?)$","substitute":"\\1index.html"}]}]
+            }]
+          },
+          {
+            "name": "root-slashless",
+            "disable_security_profile": false,
+            "http_route": [{
+              "http_match": [{"http_method":["GET","HEAD","OPTIONS"],"path":[{"regex":"^(/(?:[^/]+/)*[^/.]+)$"}]}],
+              "http_route_action": [{"backend_group_id":"${yandex_alb_backend_group.root.id}","regex_rewrite":[{"regex":"^(/.*)$","substitute":"\\1/index.html"}]}]
+            }]
           },
           {
             "name": "root-file",
             "disable_security_profile": false,
-            "http_route": [{"http_match":[{"http_method":["GET","HEAD"],"path":[{"prefix":"/"}]}],"http_route_action":[{"backend_group_id":"${yandex_alb_backend_group.root.id}"}]}]
+            "http_route": [{
+              "http_match": [{"http_method":["GET","HEAD","OPTIONS"],"path":[{"prefix":"/"}]}],
+              "http_route_action": [{"backend_group_id":"${yandex_alb_backend_group.root.id}"}]
+            }]
           }
         ]
       }
@@ -140,7 +190,7 @@
         "name": "kenigevents-atomic-root",
         "folder_id": "b1g5tck18cgqtjb7rn3s",
         "network_id": "${var.network_id}",
-        "security_group_ids": "${var.security_group_ids}",
+        "security_group_ids": ["${yandex_vpc_security_group.root.id}"],
         "allocation_policy": [{"location":[{"zone_id":"${var.zone_a}","subnet_id":"${var.subnet_a}"},{"zone_id":"${var.zone_b}","subnet_id":"${var.subnet_b}"}]}],
         "auto_scale_policy": [{"min_zone_size":2}],
         "listener": [
