@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:comment-slot-drift-20261128
+    image: runcoveer/events:outbox-festival-admission-20261128
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

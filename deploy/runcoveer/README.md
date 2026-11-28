@@ -36,6 +36,17 @@ driver needs `libatomic.so.1` to start even its `install --with-deps` command on
 a fresh `python:3.12-slim` base. Keep this prerequisite in the declared OS
 dependency layer alongside `webp`.
 
+## Outbox festival admission release, prepared 2026-11-28
+
+Image: `runcoveer/events:outbox-festival-admission-20261128`; rollback:
+`runcoveer/events:comment-slot-drift-20261128`. Exact merged-main Events-only
+update. The existing heavy gate is tried before claiming a festival outbox
+job. A busy gate leaves the row unchanged for the existing worker cycle;
+other ready work can proceed. Direct festival create/recreate guards remain.
+Verify ordinary worker progress and festival completion, including concurrent
+imports, without resetting or replaying historical jobs. Other guarded page
+jobs and external upload latency are separate work.
+
 ## Comment frozen publication slot release, prepared 2026-11-28
 
 Image: `runcoveer/events:comment-slot-drift-20261128`; rollback:

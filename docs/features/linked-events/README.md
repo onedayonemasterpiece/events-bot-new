@@ -447,3 +447,7 @@ anchor не добавляется. `strict_verified` означает заве�
 Сборщик сохраняет решения Gemma по запрошенным кандидатам в существующем `gemma_audit_cache`. При частичном ответе штатное продолжение запрашивает только пропущенные ID. Отметка `strict_verified` требует однозначного ответа по каждому кандидату. Тёплая сборка сверяет с этим же списком прежние записи кэша.
 
 Source-avatar medallions retain original source identity rather than the publisher wall identity. Their existing source_owner metadata reaches VK rendering; older string asset paths remain supported. The shared avatar encoder and TG/VK renderers use the same circular, alpha-preserving transform; curated medallion geometry is preserved.
+
+### Фестивальная страница и общий worker
+
+Перед переводом festival_pages в running общий worker использует уже существующий heavy_operation в режиме try. Занятая импортом блокировка оставляет due-задание без изменения status, attempts и времени; worker продолжает другие готовые задачи. Следующий обычный цикл повторно рассматривает его, без нового таймера или retry-состояния. Успешно полученная блокировка удерживается через handler и сохранение результата; внутренний sync_festival_page остаётся reentrant и direct callers сохраняют прежнюю защиту create/recreate. Другие типы задач и существующий интервал worker не меняются. Это не отменяет задержки внутри уже выполняющегося внешнего запроса или другие виды head-of-line blocking.

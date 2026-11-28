@@ -19806,6 +19806,8 @@ async def _run_due_jobs_once_locked(
     force_notify: bool = False,
     max_jobs: int | None = None,
 ) -> int:
+    from heavy_ops import heavy_operation
+
     now = datetime.now(timezone.utc)
     vk_captcha_blocked = await _maybe_auto_recover_vk_captcha_outbox(db, bot)
     # The database has accumulated a few legacy/experimental task strings.
@@ -20148,67 +20150,223 @@ async def _run_due_jobs_once_locked(
     jobs.sort(key=_job_due_sort_key)
     processed = 0
     for job in jobs:
-        async with db.get_session() as session:
-            obj = _normalize_job(await session.get(JobOutbox, job.id))
-            if not obj or obj.status not in (JobStatus.pending, JobStatus.error):
+        async with (
+            heavy_operation(kind="festival_page_sync", trigger="outbox", mode="try")
+            if job.task == JobTask.festival_pages else contextlib.nullcontext(True)
+        ) as admitted:
+            if not admitted:
+                logging.debug("OUTBOX_HEAVY_BUSY job_id=%s task=%s", job.id, job.task.value)
                 continue
-            if obj.target_event_revision:
-                from static_site_release import event_public_revision
-                current_event = await session.get(Event, obj.event_id)
-                if current_event is None or event_public_revision(current_event) != obj.target_event_revision:
-                    obj.status = JobStatus.done
-                    obj.terminal_reason = "superseded"
-                    session.add(obj)
-                    await session.commit()
+            async with db.get_session() as session:
+                obj = _normalize_job(await session.get(JobOutbox, job.id))
+                if not obj or obj.status not in (JobStatus.pending, JobStatus.error):
                     continue
-            ttl = JOB_TTL.get(obj.task, DEFAULT_JOB_TTL)
-            # For deferred tasks, calculate age from when the task was due to run,
-            # not from when it was created. This prevents deferred tasks from
-            # expiring before they have a chance to execute.
-            job_next_run_at = _ensure_utc(obj.next_run_at)
-            if job_next_run_at > obj.updated_at:
-                # Deferred task: age starts from when it became due
-                age = max(0, (now - job_next_run_at).total_seconds())
-            else:
-                # Regular task: age from updated_at
-                age = (now - obj.updated_at).total_seconds()
-            if age > ttl:
-                if obj.task == JobTask.static_site_build and obj.status == JobStatus.pending:
-                    # ADD-BUILD-13: a missed debounced build is catch-up work,
-                    # not disposable TTL noise. Preserve its effect watermark.
-                    obj.updated_at = now
-                    session.add(obj)
-                    await session.commit()
-                    logging.info("STATIC_SITE_PENDING_CATCHUP job_id=%s age=%s", obj.id, int(age))
-                    age = 0
-                if (
-                    obj.event_id is not None
-                    and obj.task in EVENT_PIPELINE_INDEPENDENT_TASKS
-                    and (
-                        obj.status == JobStatus.pending
-                        or (obj.task == JobTask.vk_sync and obj.status == JobStatus.error)
-                    )
-                ):
-                    ev = await session.get(Event, int(obj.event_id))
-                    ev_date = (getattr(ev, "date", None) or "").strip() if ev else ""
-                    ev_status = (getattr(ev, "lifecycle_status", None) or "active").strip()
-                    ev_silent = bool(getattr(ev, "silent", False)) if ev else True
-                    today = now.astimezone(LOCAL_TZ).date().isoformat()
-                    if ev and ev_status == "active" and not ev_silent and (not ev_date or ev_date >= today):
-                        # Catch up valid future work after a worker stall. VK
-                        # transient errors also need this protection: the first
-                        # retry can otherwise expire while media is becoming
-                        # available and permanently lose the announcement.
+                if obj.target_event_revision:
+                    from static_site_release import event_public_revision
+                    current_event = await session.get(Event, obj.event_id)
+                    if current_event is None or event_public_revision(current_event) != obj.target_event_revision:
+                        obj.status = JobStatus.done
+                        obj.terminal_reason = "superseded"
+                        session.add(obj)
+                        await session.commit()
+                        continue
+                ttl = JOB_TTL.get(obj.task, DEFAULT_JOB_TTL)
+                # For deferred tasks, calculate age from when the task was due to run,
+                # not from when it was created. This prevents deferred tasks from
+                # expiring before they have a chance to execute.
+                job_next_run_at = _ensure_utc(obj.next_run_at)
+                if job_next_run_at > obj.updated_at:
+                    # Deferred task: age starts from when it became due
+                    age = max(0, (now - job_next_run_at).total_seconds())
+                else:
+                    # Regular task: age from updated_at
+                    age = (now - obj.updated_at).total_seconds()
+                if age > ttl:
+                    if obj.task == JobTask.static_site_build and obj.status == JobStatus.pending:
+                        # ADD-BUILD-13: a missed debounced build is catch-up work,
+                        # not disposable TTL noise. Preserve its effect watermark.
                         obj.updated_at = now
                         session.add(obj)
                         await session.commit()
-                        logging.info(
-                            "OUTBOX_STALE_PENDING_CATCHUP key=%s age=%s",
-                            obj.coalesce_key or f"{obj.task.value}:{obj.event_id}",
-                            int(age),
-                        )
+                        logging.info("STATIC_SITE_PENDING_CATCHUP job_id=%s age=%s", obj.id, int(age))
                         age = 0
-            if age > ttl:
+                    if (
+                        obj.event_id is not None
+                        and obj.task in EVENT_PIPELINE_INDEPENDENT_TASKS
+                        and (
+                            obj.status == JobStatus.pending
+                            or (obj.task == JobTask.vk_sync and obj.status == JobStatus.error)
+                        )
+                    ):
+                        ev = await session.get(Event, int(obj.event_id))
+                        ev_date = (getattr(ev, "date", None) or "").strip() if ev else ""
+                        ev_status = (getattr(ev, "lifecycle_status", None) or "active").strip()
+                        ev_silent = bool(getattr(ev, "silent", False)) if ev else True
+                        today = now.astimezone(LOCAL_TZ).date().isoformat()
+                        if ev and ev_status == "active" and not ev_silent and (not ev_date or ev_date >= today):
+                            # Catch up valid future work after a worker stall. VK
+                            # transient errors also need this protection: the first
+                            # retry can otherwise expire while media is becoming
+                            # available and permanently lose the announcement.
+                            obj.updated_at = now
+                            session.add(obj)
+                            await session.commit()
+                            logging.info(
+                                "OUTBOX_STALE_PENDING_CATCHUP key=%s age=%s",
+                                obj.coalesce_key or f"{obj.task.value}:{obj.event_id}",
+                                int(age),
+                            )
+                            age = 0
+                if age > ttl:
+                    dep_blockers = await _dependency_blockers_for_job(session, obj)
+                    if dep_blockers and await _defer_job_until_dependency_retry(
+                        session, obj, dep_blockers, now
+                    ):
+                        logging.info(
+                            "RUN skip eid=%s task=%s waiting_for_deps=%s deferred_until=%s",
+                            obj.event_id,
+                            obj.task.value,
+                            ",".join(
+                                f"{key}:{status.value if isinstance(status, JobStatus) else status}"
+                                for key, status, _ in dep_blockers
+                            ),
+                            obj.next_run_at.isoformat() if obj.next_run_at else None,
+                        )
+                        logline(
+                            "RUN",
+                            obj.event_id,
+                            "skip",
+                            job_id=obj.id,
+                            task=obj.task.value,
+                            waiting_for_deps=[
+                                {
+                                    "key": key,
+                                    "status": status.value if isinstance(status, JobStatus) else status,
+                                    "next_run_at": run_at.isoformat() if run_at else None,
+                                }
+                                for key, status, run_at in dep_blockers
+                            ],
+                            deferred_until=obj.next_run_at.isoformat() if obj.next_run_at else None,
+                        )
+                        continue
+                    obj.status = JobStatus.error
+                    obj.last_error = "expired"
+                    obj.updated_at = now
+                    obj.next_run_at = now + timedelta(days=3650)
+                    session.add(obj)
+                    await session.commit()
+                    logging.info(
+                        "OUTBOX_EXPIRED key=%s",
+                        obj.coalesce_key or f"{obj.task.value}:{obj.event_id}",
+                    )
+                    logline(
+                        "RUN",
+                        obj.event_id,
+                        "skip",
+                        job_id=obj.id,
+                        task=obj.task.value,
+                        reason="expired",
+                    )
+                    continue
+                if obj.coalesce_key:
+                    later = await session.execute(
+                        select(JobOutbox.id)
+                            .where(
+                                JobOutbox.coalesce_key == obj.coalesce_key,
+                                JobOutbox.id > obj.id,
+                                JobOutbox.status.in_([JobStatus.pending, JobStatus.running]),
+                            )
+                            .limit(1)
+                    )
+                    later_row = later.first()
+                    active_static_recovery = False
+                    if later_row and obj.task == JobTask.static_site_build:
+                        active_job_result = await session.execute(
+                            sql_text(
+                                """
+                                SELECT active_job_id FROM static_site_build_state
+                                WHERE release_channel='secret_preview'
+                                """
+                            )
+                        )
+                        active_job_id = active_job_result.scalar_one_or_none()
+                        active_static_recovery = bool(
+                            active_job_id and int(active_job_id) == int(obj.id)
+                        )
+                        if active_static_recovery:
+                            logging.info(
+                                "STATIC_SITE_ACTIVE_RECOVERY_PRECEDES_FOLLOWUP "
+                                "active_job_id=%s followup_job_id=%s",
+                                obj.id,
+                                int(later_row[0]),
+                            )
+                    if later_row and not active_static_recovery:
+                        obj.status = JobStatus.error
+                        obj.last_error = "superseded"
+                        obj.updated_at = now
+                        obj.next_run_at = now + timedelta(days=3650)
+                        session.add(obj)
+                        await session.commit()
+                        logging.info(
+                            "OUTBOX_SUPERSEDED key=%s", obj.coalesce_key
+                        )
+                        logline(
+                            "RUN",
+                            obj.event_id,
+                            "skip",
+                            job_id=obj.id,
+                            task=obj.task.value,
+                            reason="superseded",
+                        )
+                        continue
+                if obj.task not in EVENT_PIPELINE_INDEPENDENT_TASKS:
+                    exists_stmt = (
+                        select(
+                            JobOutbox.id,
+                            JobOutbox.task,
+                            JobOutbox.status,
+                            JobOutbox.next_run_at,
+                        )
+                        .where(
+                            JobOutbox.event_id == obj.event_id,
+                            JobOutbox.id < obj.id,
+                            JobOutbox.task.in_(known_job_tasks),
+                            JobOutbox.status.in_([JobStatus.pending, JobStatus.running]),
+                            JobOutbox.next_run_at <= now,
+                        )
+                        .limit(1)
+                    )
+                    # Avoid query-invoked autoflush: with sqlite + concurrent workers this can
+                    # easily trigger "database is locked" on a SELECT that doesn't actually
+                    # require flushing anything.
+                    with session.no_autoflush:
+                        early = (await session.execute(exists_stmt)).first()
+                    if early:
+                        ejob = early[0]
+                        etask = early[1]
+                        estat = early[2]
+                        enext = early[3]
+                        logging.info(
+                            "RUN skip eid=%s task=%s blocked_by id=%s task=%s status=%s next_run_at=%s",
+                            obj.event_id,
+                            obj.task.value,
+                            ejob,
+                            etask.value if isinstance(etask, JobTask) else etask,
+                            estat.value if isinstance(estat, JobStatus) else estat,
+                            enext.isoformat() if enext else None,
+                        )
+                        logline(
+                            "RUN",
+                            obj.event_id,
+                            "skip",
+                            job_id=obj.id,
+                            task=obj.task.value,
+                            blocking_id=ejob,
+                            blocking_task=etask.value if isinstance(etask, JobTask) else etask,
+                            blocking_status=estat.value if isinstance(estat, JobStatus) else estat,
+                            blocking_run_at=enext.isoformat() if enext else None,
+                        )
+                        continue
                 dep_blockers = await _dependency_blockers_for_job(session, obj)
                 if dep_blockers and await _defer_job_until_dependency_retry(
                     session, obj, dep_blockers, now
@@ -20240,111 +20398,15 @@ async def _run_due_jobs_once_locked(
                         deferred_until=obj.next_run_at.isoformat() if obj.next_run_at else None,
                     )
                     continue
-                obj.status = JobStatus.error
-                obj.last_error = "expired"
-                obj.updated_at = now
-                obj.next_run_at = now + timedelta(days=3650)
-                session.add(obj)
-                await session.commit()
-                logging.info(
-                    "OUTBOX_EXPIRED key=%s",
-                    obj.coalesce_key or f"{obj.task.value}:{obj.event_id}",
-                )
-                logline(
-                    "RUN",
-                    obj.event_id,
-                    "skip",
-                    job_id=obj.id,
-                    task=obj.task.value,
-                    reason="expired",
-                )
-                continue
-            if obj.coalesce_key:
-                later = await session.execute(
-                    select(JobOutbox.id)
-                        .where(
-                            JobOutbox.coalesce_key == obj.coalesce_key,
-                            JobOutbox.id > obj.id,
-                            JobOutbox.status.in_([JobStatus.pending, JobStatus.running]),
-                        )
-                        .limit(1)
-                )
-                later_row = later.first()
-                active_static_recovery = False
-                if later_row and obj.task == JobTask.static_site_build:
-                    active_job_result = await session.execute(
-                        sql_text(
-                            """
-                            SELECT active_job_id FROM static_site_build_state
-                            WHERE release_channel='secret_preview'
-                            """
-                        )
-                    )
-                    active_job_id = active_job_result.scalar_one_or_none()
-                    active_static_recovery = bool(
-                        active_job_id and int(active_job_id) == int(obj.id)
-                    )
-                    if active_static_recovery:
-                        logging.info(
-                            "STATIC_SITE_ACTIVE_RECOVERY_PRECEDES_FOLLOWUP "
-                            "active_job_id=%s followup_job_id=%s",
-                            obj.id,
-                            int(later_row[0]),
-                        )
-                if later_row and not active_static_recovery:
-                    obj.status = JobStatus.error
-                    obj.last_error = "superseded"
-                    obj.updated_at = now
-                    obj.next_run_at = now + timedelta(days=3650)
-                    session.add(obj)
-                    await session.commit()
+                if dep_blockers:
                     logging.info(
-                        "OUTBOX_SUPERSEDED key=%s", obj.coalesce_key
-                    )
-                    logline(
-                        "RUN",
-                        obj.event_id,
-                        "skip",
-                        job_id=obj.id,
-                        task=obj.task.value,
-                        reason="superseded",
-                    )
-                    continue
-            if obj.task not in EVENT_PIPELINE_INDEPENDENT_TASKS:
-                exists_stmt = (
-                    select(
-                        JobOutbox.id,
-                        JobOutbox.task,
-                        JobOutbox.status,
-                        JobOutbox.next_run_at,
-                    )
-                    .where(
-                        JobOutbox.event_id == obj.event_id,
-                        JobOutbox.id < obj.id,
-                        JobOutbox.task.in_(known_job_tasks),
-                        JobOutbox.status.in_([JobStatus.pending, JobStatus.running]),
-                        JobOutbox.next_run_at <= now,
-                    )
-                    .limit(1)
-                )
-                # Avoid query-invoked autoflush: with sqlite + concurrent workers this can
-                # easily trigger "database is locked" on a SELECT that doesn't actually
-                # require flushing anything.
-                with session.no_autoflush:
-                    early = (await session.execute(exists_stmt)).first()
-                if early:
-                    ejob = early[0]
-                    etask = early[1]
-                    estat = early[2]
-                    enext = early[3]
-                    logging.info(
-                        "RUN skip eid=%s task=%s blocked_by id=%s task=%s status=%s next_run_at=%s",
+                        "RUN skip eid=%s task=%s blocked_by_deps=%s",
                         obj.event_id,
                         obj.task.value,
-                        ejob,
-                        etask.value if isinstance(etask, JobTask) else etask,
-                        estat.value if isinstance(estat, JobStatus) else estat,
-                        enext.isoformat() if enext else None,
+                        ",".join(
+                            f"{key}:{status.value if isinstance(status, JobStatus) else status}"
+                            for key, status, _ in dep_blockers
+                        ),
                     )
                     logline(
                         "RUN",
@@ -20352,572 +20414,519 @@ async def _run_due_jobs_once_locked(
                         "skip",
                         job_id=obj.id,
                         task=obj.task.value,
-                        blocking_id=ejob,
-                        blocking_task=etask.value if isinstance(etask, JobTask) else etask,
-                        blocking_status=estat.value if isinstance(estat, JobStatus) else estat,
-                        blocking_run_at=enext.isoformat() if enext else None,
+                        blocking_deps=[
+                            {
+                                "key": key,
+                                "status": status.value if isinstance(status, JobStatus) else status,
+                                "next_run_at": run_at.isoformat() if run_at else None,
+                            }
+                            for key, status, run_at in dep_blockers
+                        ],
                     )
                     continue
-            dep_blockers = await _dependency_blockers_for_job(session, obj)
-            if dep_blockers and await _defer_job_until_dependency_retry(
-                session, obj, dep_blockers, now
-            ):
-                logging.info(
-                    "RUN skip eid=%s task=%s waiting_for_deps=%s deferred_until=%s",
-                    obj.event_id,
-                    obj.task.value,
-                    ",".join(
-                        f"{key}:{status.value if isinstance(status, JobStatus) else status}"
-                        for key, status, _ in dep_blockers
-                    ),
-                    obj.next_run_at.isoformat() if obj.next_run_at else None,
-                )
-                logline(
-                    "RUN",
-                    obj.event_id,
-                    "skip",
-                    job_id=obj.id,
-                    task=obj.task.value,
-                    waiting_for_deps=[
-                        {
-                            "key": key,
-                            "status": status.value if isinstance(status, JobStatus) else status,
-                            "next_run_at": run_at.isoformat() if run_at else None,
-                        }
-                        for key, status, run_at in dep_blockers
-                    ],
-                    deferred_until=obj.next_run_at.isoformat() if obj.next_run_at else None,
-                )
-                continue
-            if dep_blockers:
-                logging.info(
-                    "RUN skip eid=%s task=%s blocked_by_deps=%s",
-                    obj.event_id,
-                    obj.task.value,
-                    ",".join(
-                        f"{key}:{status.value if isinstance(status, JobStatus) else status}"
-                        for key, status, _ in dep_blockers
-                    ),
-                )
-                logline(
-                    "RUN",
-                    obj.event_id,
-                    "skip",
-                    job_id=obj.id,
-                    task=obj.task.value,
-                    blocking_deps=[
-                        {
-                            "key": key,
-                            "status": status.value if isinstance(status, JobStatus) else status,
-                            "next_run_at": run_at.isoformat() if run_at else None,
-                        }
-                        for key, status, run_at in dep_blockers
-                    ],
-                )
-                continue
-            if obj.task == JobTask.tg_event_publish:
-                deferred_to = await _defer_tg_event_publish_if_spacing_blocked(
-                    session,
-                    obj,
-                    now=datetime.now(timezone.utc),
-                )
-                if deferred_to:
-                    logline(
-                        "RUN",
-                        obj.event_id,
-                        "skip",
-                        job_id=obj.id,
-                        task=obj.task.value,
-                        reason="tg_spacing",
-                        next_run_at=deferred_to.isoformat(),
+                if obj.task == JobTask.tg_event_publish:
+                    deferred_to = await _defer_tg_event_publish_if_spacing_blocked(
+                        session,
+                        obj,
+                        now=datetime.now(timezone.utc),
                     )
-                    continue
-            if obj.task == JobTask.tg_premium_emoji_edit:
-                deferred_to = await _defer_tg_premium_emoji_edit_if_spacing_blocked(
-                    session,
-                    obj,
-                    now=datetime.now(timezone.utc),
-                )
-                if deferred_to:
-                    logline(
-                        "RUN",
-                        obj.event_id,
-                        "skip",
-                        job_id=obj.id,
-                        task=obj.task.value,
-                        reason="tg_premium_spacing",
-                        next_run_at=deferred_to.isoformat(),
-                    )
-                    continue
-            claimed_at = datetime.now(timezone.utc)
-            if obj.task == JobTask.static_site_build:
-                # Compare-and-swap the durable owner.  Another Fly process may
-                # have selected the same due row before either process wrote;
-                # only one is allowed to cross into the effectful handler.
-                # Keep the scalar before rollback. SQLAlchemy expires ORM
-                # instances on transaction boundaries, and reading ``obj.id``
-                # after a lost CAS can otherwise attempt async IO outside a
-                # greenlet, taking the whole outbox/health loop down.
-                claim_job_id = int(obj.id)
-                claim_result = await session.execute(
-                    update(JobOutbox)
-                    .where(
-                        JobOutbox.id == claim_job_id,
-                        JobOutbox.status.in_([JobStatus.pending, JobStatus.error]),
-                        ~select(JobOutbox.id)
-                        .where(
-                            JobOutbox.task == JobTask.static_site_build,
-                            JobOutbox.status == JobStatus.running,
-                            JobOutbox.id != obj.id,
+                    if deferred_to:
+                        logline(
+                            "RUN",
+                            obj.event_id,
+                            "skip",
+                            job_id=obj.id,
+                            task=obj.task.value,
+                            reason="tg_spacing",
+                            next_run_at=deferred_to.isoformat(),
                         )
-                        .exists(),
+                        continue
+                if obj.task == JobTask.tg_premium_emoji_edit:
+                    deferred_to = await _defer_tg_premium_emoji_edit_if_spacing_blocked(
+                        session,
+                        obj,
+                        now=datetime.now(timezone.utc),
                     )
-                    .values(status=JobStatus.running, updated_at=claimed_at)
-                    .execution_options(synchronize_session=False)
-                )
-                if claim_result.rowcount != 1:
-                    await session.rollback()
-                    retry_at = claimed_at + timedelta(
-                        seconds=_static_site_claim_retry_seconds()
-                    )
-                    deferred = await session.execute(
+                    if deferred_to:
+                        logline(
+                            "RUN",
+                            obj.event_id,
+                            "skip",
+                            job_id=obj.id,
+                            task=obj.task.value,
+                            reason="tg_premium_spacing",
+                            next_run_at=deferred_to.isoformat(),
+                        )
+                        continue
+                claimed_at = datetime.now(timezone.utc)
+                if obj.task == JobTask.static_site_build:
+                    # Compare-and-swap the durable owner.  Another Fly process may
+                    # have selected the same due row before either process wrote;
+                    # only one is allowed to cross into the effectful handler.
+                    # Keep the scalar before rollback. SQLAlchemy expires ORM
+                    # instances on transaction boundaries, and reading ``obj.id``
+                    # after a lost CAS can otherwise attempt async IO outside a
+                    # greenlet, taking the whole outbox/health loop down.
+                    claim_job_id = int(obj.id)
+                    claim_result = await session.execute(
                         update(JobOutbox)
                         .where(
                             JobOutbox.id == claim_job_id,
                             JobOutbox.status.in_([JobStatus.pending, JobStatus.error]),
+                            ~select(JobOutbox.id)
+                            .where(
+                                JobOutbox.task == JobTask.static_site_build,
+                                JobOutbox.status == JobStatus.running,
+                                JobOutbox.id != obj.id,
+                            )
+                            .exists(),
                         )
-                        .values(
-                            next_run_at=retry_at,
-                            updated_at=claimed_at,
-                            last_error="waiting_for_static_site_owner",
-                        )
+                        .values(status=JobStatus.running, updated_at=claimed_at)
                         .execution_options(synchronize_session=False)
                     )
+                    if claim_result.rowcount != 1:
+                        await session.rollback()
+                        retry_at = claimed_at + timedelta(
+                            seconds=_static_site_claim_retry_seconds()
+                        )
+                        deferred = await session.execute(
+                            update(JobOutbox)
+                            .where(
+                                JobOutbox.id == claim_job_id,
+                                JobOutbox.status.in_([JobStatus.pending, JobStatus.error]),
+                            )
+                            .values(
+                                next_run_at=retry_at,
+                                updated_at=claimed_at,
+                                last_error="waiting_for_static_site_owner",
+                            )
+                            .execution_options(synchronize_session=False)
+                        )
+                        await session.commit()
+                        logging.info(
+                            "STATIC_SITE_CLAIM_LOST job_id=%s deferred=%s retry_at=%s",
+                            claim_job_id,
+                            deferred.rowcount == 1,
+                            retry_at.isoformat(),
+                        )
+                        continue
                     await session.commit()
-                    logging.info(
-                        "STATIC_SITE_CLAIM_LOST job_id=%s deferred=%s retry_at=%s",
-                        claim_job_id,
-                        deferred.rowcount == 1,
-                        retry_at.isoformat(),
-                    )
-                    continue
-                await session.commit()
-                obj.status = JobStatus.running
-                obj.updated_at = claimed_at
-            else:
-                obj.status = JobStatus.running
-                obj.updated_at = claimed_at
-                session.add(obj)
-                await session.commit()
-        run_id = uuid.uuid4().hex
-        attempt = job.attempts + 1
-        job_key = obj.coalesce_key or f"{obj.task.value}:{obj.event_id}"
-        logging.info(
-            "RUN pick key=%s owner_eid=%s started_at=%s attempts=%d",
-            job_key,
-            obj.event_id,
-            obj.updated_at.isoformat(),
-            attempt,
-        )
-        logline(
-            "RUN",
-            obj.event_id,
-            "start",
-            job_id=obj.id,
-            task=obj.task.value,
-            key=job_key,
-        )
-        start = _time.perf_counter()
-        changed = True
-        handler = JOB_HANDLERS.get(obj.task.value)
-        pause = False
-        static_failure = None
-        static_deferred = False
-        job_deferred_at = None
-        vk_flood_retry_at: datetime | None = None
-        missing_event_media = False
-        if not handler:
-            status = JobStatus.done
-            err = None
-            changed = False
-            link = None
-            took_ms = (_time.perf_counter() - start) * 1000
+                    obj.status = JobStatus.running
+                    obj.updated_at = claimed_at
+                else:
+                    obj.status = JobStatus.running
+                    obj.updated_at = claimed_at
+                    session.add(obj)
+                    await session.commit()
+            run_id = uuid.uuid4().hex
+            attempt = job.attempts + 1
+            job_key = obj.coalesce_key or f"{obj.task.value}:{obj.event_id}"
+            logging.info(
+                "RUN pick key=%s owner_eid=%s started_at=%s attempts=%d",
+                job_key,
+                obj.event_id,
+                obj.updated_at.isoformat(),
+                attempt,
+            )
             logline(
                 "RUN",
                 obj.event_id,
-                "done",
+                "start",
                 job_id=obj.id,
                 task=obj.task.value,
-                result="nochange",
+                key=job_key,
             )
-        else:
-            try:
-                runtime_limit = float(JOB_MAX_RUNTIME.get(obj.task, DEFAULT_JOB_MAX_RUNTIME))
-                from private_events_mcp.publication_status import SURFACES
-                receipt_field = next((field for task, field in SURFACES.values() if task == obj.task.value), None)
-                async with db.get_session() as receipt_session:
-                    receipt_event = await receipt_session.get(Event, obj.event_id)
-                    receipt_had_publication = bool(receipt_field and receipt_event and getattr(receipt_event, receipt_field, None))
-
-                async def _call_handler() -> object:
-                    from private_events_mcp.publication_status import publication_job_is_current
-                    if not await publication_job_is_current(db, obj):
-                        return False
-                    if isinstance(obj.payload, dict) and obj.payload.get('publication_kind') in {'lifecycle_notice','lifecycle_reconcile'}:
-                        from private_events_mcp.lifecycle_publication import run_lifecycle_publication
-                        return await run_lifecycle_publication(db, obj, bot)
-                    if obj.task == JobTask.vk_calendar_comment:
-                        return await handler(obj.event_id, db, bot, obj.payload)
-                    if obj.task == JobTask.ics_publish:
-                        prog = (
-                            ics_progress.get(job.event_id)
-                            if isinstance(ics_progress, dict)
-                            else ics_progress
-                        )
-                        return await handler(obj.event_id, db, bot, prog)
-                    if obj.task == JobTask.festival_pages:
-                        fest_prog = (
-                            fest_progress.get(job.event_id)
-                            if isinstance(fest_progress, dict)
-                            else fest_progress
-                        )
-                        return await handler(obj.event_id, db, bot, fest_prog)
-                    return await handler(obj.event_id, db, bot)
-
-                async with span(
-                    "event_pipeline", step=obj.task.value, event_id=obj.event_id
-                ):
-                    res = await asyncio.wait_for(
-                        _call_handler(),
-                        timeout=max(0.1, runtime_limit),
-                    )
-                if obj.task == JobTask.vk_calendar_comment and isinstance(res, datetime):
-                    job_deferred_at = res
-                from private_events_mcp.publication_status import record_worker_receipt
-                receipt_link = await _job_result_link(obj.task, obj.event_id, db)
-                if job_deferred_at is None and not (isinstance(obj.payload, dict) and obj.payload.get('publication_kind')):
-                    await record_worker_receipt(db, obj, changed=res is not False, url=receipt_link, had_publication=receipt_had_publication)
-                rebuild = isinstance(res, str) and res == "rebuild"
-                changed = res if isinstance(res, bool) else True
-                link = await _job_result_link(obj.task, obj.event_id, db)
-                if rebuild and link:
-                    link += " (forced rebuild)"
-                status = JobStatus.pending if job_deferred_at is not None else JobStatus.done
+            start = _time.perf_counter()
+            changed = True
+            handler = JOB_HANDLERS.get(obj.task.value)
+            pause = False
+            static_failure = None
+            static_deferred = False
+            job_deferred_at = None
+            vk_flood_retry_at: datetime | None = None
+            missing_event_media = False
+            if not handler:
+                status = JobStatus.done
                 err = None
+                changed = False
+                link = None
                 took_ms = (_time.perf_counter() - start) * 1000
-                short = link or ("ok" if changed else "nochange")
                 logline(
                     "RUN",
                     obj.event_id,
                     "done",
                     job_id=obj.id,
                     task=obj.task.value,
-                    # The immutable review URL is a bearer secret. Deliver it
-                    # through the notifier, but never copy it into runtime
-                    # logs; the durable resolver remains the single source.
-                    result_url=(None if obj.task == JobTask.static_site_build else link),
-                    result=(
-                        "current_review_ready"
-                        if obj.task == JobTask.static_site_build and link
-                        else ("changed" if changed else "nochange")
-                    ),
+                    result="nochange",
                 )
-            except StaticSiteSingleFlightDeferred as exc:
-                took_ms = (_time.perf_counter() - start) * 1000
-                pause = False
-                err = str(exc)
-                status = JobStatus.pending
-                retry = False
-                static_deferred = True
-                link = None
-                changed = False
-                logline(
-                    "RUN",
-                    obj.event_id,
-                    "deferred",
-                    job_id=obj.id,
-                    task=obj.task.value,
-                    reason="static_site_single_flight",
-                )
-            except EventVectorSyncDeferred as exc:
-                took_ms = (_time.perf_counter() - start) * 1000
-                pause = False
-                err = str(exc)
-                status = JobStatus.pending
-                retry = False
-                job_deferred_at = exc.retry_at
-                link = None
-                changed = False
-                logline(
-                    "RUN",
-                    obj.event_id,
-                    "deferred",
-                    job_id=obj.id,
-                    task=obj.task.value,
-                    reason="static_site_release_guard",
-                )
-            except asyncio.TimeoutError:  # pragma: no cover - depends on slow/external handlers
-                took_ms = (_time.perf_counter() - start) * 1000
-                pause = False
-                err = f"timeout ({runtime_limit:.0f}s)"
-                status = JobStatus.error
-                retry = True
-                if obj.task == JobTask.static_site_build:
-                    static_failure = classify_static_site_failure(TimeoutError(err))
-                link = None
-                logline(
-                    "RUN",
-                    obj.event_id,
-                    "error",
-                    job_id=obj.id,
-                    task=obj.task.value,
-                    exc="timeout",
-                )
-                logging.error(
-                    "job %s timed out task=%s event_id=%s limit_sec=%.1f",
-                    job.id,
-                    obj.task.value,
-                    obj.event_id,
-                    runtime_limit,
-                )
-            except Exception as exc:  # pragma: no cover - log and backoff
-                took_ms = (_time.perf_counter() - start) * 1000
-                pause = False
-                if isinstance(exc, VKAPIError):
-                    if isinstance(exc, VKFloodControlError):
-                        retry_seconds = max(1, int(exc.retry_after_seconds))
-                        jitter = (
-                            int(job.id) % (VK_FLOOD_OUTBOX_JITTER_SECONDS + 1)
-                            if VK_FLOOD_OUTBOX_JITTER_SECONDS
-                            else 0
-                        )
-                        vk_flood_retry_at = datetime.now(timezone.utc) + timedelta(
-                            seconds=retry_seconds + jitter
-                        )
-                        err = (
-                            f"vk_flood_wait:{int(vk_flood_retry_at.timestamp())}:"
-                            f"{exc.actor or 'unknown'}:{exc.method or 'unknown'}"
-                        )
-                        status = JobStatus.error
-                        retry = True
-                    elif exc.code == 14:
-                        err = f"captcha_wait:{int(datetime.now(timezone.utc).timestamp())}"
-                        status = JobStatus.paused
-                        pause = True
-                        retry = False
-                        global _vk_captcha_key
-                        _vk_captcha_key = job_key
-                        logline(
-                            "VK",
-                            obj.event_id,
-                            "paused captcha",
-                            group=f"@{VK_AFISHA_GROUP_ID}" if VK_AFISHA_GROUP_ID else None,
-                        )
-                    elif exc.code in {15, 213, 214} and any(
-                        marker in (exc.message or "").lower()
-                        for marker in (
-                            "edit time expired",
-                            "post or comment deleted",
-                            "post not found",
-                            "already deleted",
-                        )
+            else:
+                try:
+                    runtime_limit = float(JOB_MAX_RUNTIME.get(obj.task, DEFAULT_JOB_MAX_RUNTIME))
+                    from private_events_mcp.publication_status import SURFACES
+                    receipt_field = next((field for task, field in SURFACES.values() if task == obj.task.value), None)
+                    async with db.get_session() as receipt_session:
+                        receipt_event = await receipt_session.get(Event, obj.event_id)
+                        receipt_had_publication = bool(receipt_field and receipt_event and getattr(receipt_event, receipt_field, None))
+
+                    async def _call_handler() -> object:
+                        from private_events_mcp.publication_status import publication_job_is_current
+                        if not await publication_job_is_current(db, obj):
+                            return False
+                        if isinstance(obj.payload, dict) and obj.payload.get('publication_kind') in {'lifecycle_notice','lifecycle_reconcile'}:
+                            from private_events_mcp.lifecycle_publication import run_lifecycle_publication
+                            return await run_lifecycle_publication(db, obj, bot)
+                        if obj.task == JobTask.vk_calendar_comment:
+                            return await handler(obj.event_id, db, bot, obj.payload)
+                        if obj.task == JobTask.ics_publish:
+                            prog = (
+                                ics_progress.get(job.event_id)
+                                if isinstance(ics_progress, dict)
+                                else ics_progress
+                            )
+                            return await handler(obj.event_id, db, bot, prog)
+                        if obj.task == JobTask.festival_pages:
+                            fest_prog = (
+                                fest_progress.get(job.event_id)
+                                if isinstance(fest_progress, dict)
+                                else fest_progress
+                            )
+                            return await handler(obj.event_id, db, bot, fest_prog)
+                        return await handler(obj.event_id, db, bot)
+
+                    async with span(
+                        "event_pipeline", step=obj.task.value, event_id=obj.event_id
                     ):
-                        err = (
-                            f"permanent VK publication error: "
-                            f"{exc.code}/{exc.message} ({exc.method})"
+                        res = await asyncio.wait_for(
+                            _call_handler(),
+                            timeout=max(0.1, runtime_limit),
                         )
-                        status = JobStatus.paused
-                        retry = False
-                    else:
-                        prefix = (
-                            "ошибка публикации VK"
-                            if exc.method and exc.method.startswith("wall.")
-                            else "ошибка VK"
-                        )
-                        err = f"{prefix}: {exc.code}/{exc.message} ({exc.method})"
-                        status = JobStatus.error
-                        retry = not isinstance(exc, VKPermissionError)
-                else:
-                    err = str(exc) or repr(exc) or exc.__class__.__name__
-                    status = JobStatus.error
-                    uncertain_cls = globals().get("TelegramEventPublishUncertainSendError")
-                    retry = not (
-                        uncertain_cls is not None and isinstance(exc, uncertain_cls)
-                    )
-                    if (obj.task == JobTask.vk_calendar_comment and isinstance(exc, RuntimeError)
-                            and (str(exc) == "vk_comment_publication_identity_conflict"
-                                 or (isinstance(obj.payload, dict) and obj.payload.get("relations")
-                                     and str(exc) == "vk_live_id_ambiguous"))):
-                        retry = False
-                    if obj.task == JobTask.static_site_build:
-                        static_failure = classify_static_site_failure(exc)
-                        retry = static_failure.retryable
-                missing_event_media = _is_missing_event_media(obj.task, err)
-                if missing_event_media:
+                    if obj.task == JobTask.vk_calendar_comment and isinstance(res, datetime):
+                        job_deferred_at = res
+                    from private_events_mcp.publication_status import record_worker_receipt
+                    receipt_link = await _job_result_link(obj.task, obj.event_id, db)
+                    if job_deferred_at is None and not (isinstance(obj.payload, dict) and obj.payload.get('publication_kind')):
+                        await record_worker_receipt(db, obj, changed=res is not False, url=receipt_link, had_publication=receipt_had_publication)
+                    rebuild = isinstance(res, str) and res == "rebuild"
+                    changed = res if isinstance(res, bool) else True
+                    link = await _job_result_link(obj.task, obj.event_id, db)
+                    if rebuild and link:
+                        link += " (forced rebuild)"
+                    status = JobStatus.pending if job_deferred_at is not None else JobStatus.done
+                    err = None
+                    took_ms = (_time.perf_counter() - start) * 1000
+                    short = link or ("ok" if changed else "nochange")
                     logline(
-                        "RUN", obj.event_id, "deferred", job_id=obj.id,
-                        task=obj.task.value, reason=err,
-                    )
-                else:
-                    logline(
-                        "RUN", obj.event_id, "error", job_id=obj.id,
+                        "RUN",
+                        obj.event_id,
+                        "done",
+                        job_id=obj.id,
                         task=obj.task.value,
-                        exc=(err.splitlines()[0] if err.splitlines() else "error"),
+                        # The immutable review URL is a bearer secret. Deliver it
+                        # through the notifier, but never copy it into runtime
+                        # logs; the durable resolver remains the single source.
+                        result_url=(None if obj.task == JobTask.static_site_build else link),
+                        result=(
+                            "current_review_ready"
+                            if obj.task == JobTask.static_site_build and link
+                            else ("changed" if changed else "nochange")
+                        ),
                     )
-                if isinstance(exc, VKFloodControlError):
-                    logging.info(
-                        "job %s deferred by VK flood circuit task=%s retry_at=%s",
+                except StaticSiteSingleFlightDeferred as exc:
+                    took_ms = (_time.perf_counter() - start) * 1000
+                    pause = False
+                    err = str(exc)
+                    status = JobStatus.pending
+                    retry = False
+                    static_deferred = True
+                    link = None
+                    changed = False
+                    logline(
+                        "RUN",
+                        obj.event_id,
+                        "deferred",
+                        job_id=obj.id,
+                        task=obj.task.value,
+                        reason="static_site_single_flight",
+                    )
+                except EventVectorSyncDeferred as exc:
+                    took_ms = (_time.perf_counter() - start) * 1000
+                    pause = False
+                    err = str(exc)
+                    status = JobStatus.pending
+                    retry = False
+                    job_deferred_at = exc.retry_at
+                    link = None
+                    changed = False
+                    logline(
+                        "RUN",
+                        obj.event_id,
+                        "deferred",
+                        job_id=obj.id,
+                        task=obj.task.value,
+                        reason="static_site_release_guard",
+                    )
+                except asyncio.TimeoutError:  # pragma: no cover - depends on slow/external handlers
+                    took_ms = (_time.perf_counter() - start) * 1000
+                    pause = False
+                    err = f"timeout ({runtime_limit:.0f}s)"
+                    status = JobStatus.error
+                    retry = True
+                    if obj.task == JobTask.static_site_build:
+                        static_failure = classify_static_site_failure(TimeoutError(err))
+                    link = None
+                    logline(
+                        "RUN",
+                        obj.event_id,
+                        "error",
+                        job_id=obj.id,
+                        task=obj.task.value,
+                        exc="timeout",
+                    )
+                    logging.error(
+                        "job %s timed out task=%s event_id=%s limit_sec=%.1f",
                         job.id,
                         obj.task.value,
-                        vk_flood_retry_at.isoformat() if vk_flood_retry_at else None,
+                        obj.event_id,
+                        runtime_limit,
                     )
-                elif missing_event_media:
-                    logging.info(
-                        "job %s waiting for event media task=%s event_id=%s reason=%s",
-                        job.id, obj.task.value, obj.event_id, err,
-                    )
-                else:
-                    logging.exception("job %s failed", job.id)
-                link = None
-        logging.info(
-            "RUN done key=%s status=%s duration_ms=%.0f",
-            job_key,
-            "ok" if status == JobStatus.done else "fail",
-            took_ms,
-        )
-        text = None
-        async with db.get_session() as session:
-            obj = await session.get(JobOutbox, obj.id)
-            send = True
-            if obj:
-                prev = obj.last_result
-                if obj.terminal_reason == 'outcome_unknown':
-                    status = JobStatus.paused
+                except Exception as exc:  # pragma: no cover - log and backoff
+                    took_ms = (_time.perf_counter() - start) * 1000
                     pause = False
-                    retry = False
-                if pause and obj.task in VK_JOB_TASKS:
-                    payload = dict(obj.payload) if isinstance(obj.payload, dict) else {}
-                    payload["captcha_attempts"] = int(payload.get("captcha_attempts") or 0) + 1
-                    obj.payload = payload
-                    if payload["captcha_attempts"] >= CAPTCHA_MAX_ATTEMPTS:
-                        obj.terminal_reason = "failed"
-                        logging.warning(
-                            "VK_CAPTCHA_TERMINAL job_id=%s task=%s event_id=%s captcha_attempts=%s limit=%s",
-                            obj.id, obj.task.value, obj.event_id, payload["captcha_attempts"], CAPTCHA_MAX_ATTEMPTS,
-                        )
-                obj.status = status
-                obj.last_error = err
-                obj.updated_at = datetime.now(timezone.utc)
-                if static_deferred:
-                    # Preserve the exact follow-up payload and retry after the
-                    # current server/remote lease has had time to advance.
-                    obj.next_run_at = datetime.now(timezone.utc) + timedelta(minutes=5)
-                    send = False
-                elif job_deferred_at is not None:
-                    retry_at = job_deferred_at
-                    if retry_at.tzinfo is None:
-                        retry_at = retry_at.replace(tzinfo=timezone.utc)
-                    obj.next_run_at = max(
-                        retry_at.astimezone(timezone.utc),
-                        datetime.now(timezone.utc) + timedelta(seconds=30),
-                    )
-                    send = False
-                elif status == JobStatus.done:
-                    cur_res = (
-                        "current_review_ready"
-                        if obj.task == JobTask.static_site_build and link
-                        else (link if link else ("ok" if changed else "nochange"))
-                    )
-                    if cur_res == prev and not force_notify:
-                        send = False
-                    obj.last_result = cur_res
-                    obj.next_run_at = datetime.now(timezone.utc)
-                elif missing_event_media:
-                    # Missing or unreachable source media is a product state,
-                    # not a transient 30s/1h transport failure. Never publish
-                    # text-only and never spin through the ordinary backoff.
-                    event = (
-                        await session.get(Event, int(obj.event_id))
-                        if obj.event_id else None
-                    )
-                    obj.attempts += 1
-                    if (
-                        event is None
-                        or str(getattr(event, "lifecycle_status", "active") or "active")
-                        != "active"
-                        or bool(getattr(event, "silent", False))
-                        or _event_has_ended_before_today(event)
-                    ):
-                        obj.next_run_at = datetime.now(timezone.utc) + timedelta(
-                            days=3650
-                        )
-                    else:
-                        obj.next_run_at = _next_missing_event_media_check(
-                            datetime.now(timezone.utc)
-                        )
-                    # An interactive event pipeline still gets its one status
-                    # update; the background worker has no progress context.
-                    send = obj.event_id in _EVENT_PROGRESS
-                else:
-                    if obj.task == JobTask.static_site_build:
-                        disposition = static_failure or classify_static_site_failure(
-                            RuntimeError(err or "static_site_build_failed")
-                        )
-                        next_attempt = obj.attempts + 1
-                        retry = bool(
-                            retry
-                            and disposition.retryable
-                            and next_attempt < static_site_max_attempts()
-                        )
-                        payload = dict(obj.payload or {})
-                        payload["failure"] = {
-                            "class": disposition.failure_class,
-                            "retryable": disposition.retryable,
-                            "message": (err or "static_site_build_failed")[:1000],
-                            "failed_at": static_site_iso_utc(),
-                            "attempt": next_attempt,
-                            "max_attempts": static_site_max_attempts(),
-                        }
-                        obj.payload = payload
-                        obj.attempts = next_attempt
-                    if retry:
-                        if obj.task != JobTask.static_site_build:
-                            obj.attempts += 1
-                        if vk_flood_retry_at is not None:
-                            obj.next_run_at = vk_flood_retry_at
-                            # The circuit log/metric is the single incident
-                            # signal; one notification per queued publication
-                            # would create another avoidable storm.
-                            send = False
+                    if isinstance(exc, VKAPIError):
+                        if isinstance(exc, VKFloodControlError):
+                            retry_seconds = max(1, int(exc.retry_after_seconds))
+                            jitter = (
+                                int(job.id) % (VK_FLOOD_OUTBOX_JITTER_SECONDS + 1)
+                                if VK_FLOOD_OUTBOX_JITTER_SECONDS
+                                else 0
+                            )
+                            vk_flood_retry_at = datetime.now(timezone.utc) + timedelta(
+                                seconds=retry_seconds + jitter
+                            )
+                            err = (
+                                f"vk_flood_wait:{int(vk_flood_retry_at.timestamp())}:"
+                                f"{exc.actor or 'unknown'}:{exc.method or 'unknown'}"
+                            )
+                            status = JobStatus.error
+                            retry = True
+                        elif exc.code == 14:
+                            err = f"captcha_wait:{int(datetime.now(timezone.utc).timestamp())}"
+                            status = JobStatus.paused
+                            pause = True
+                            retry = False
+                            global _vk_captcha_key
+                            _vk_captcha_key = job_key
+                            logline(
+                                "VK",
+                                obj.event_id,
+                                "paused captcha",
+                                group=f"@{VK_AFISHA_GROUP_ID}" if VK_AFISHA_GROUP_ID else None,
+                            )
+                        elif exc.code in {15, 213, 214} and any(
+                            marker in (exc.message or "").lower()
+                            for marker in (
+                                "edit time expired",
+                                "post or comment deleted",
+                                "post not found",
+                                "already deleted",
+                            )
+                        ):
+                            err = (
+                                f"permanent VK publication error: "
+                                f"{exc.code}/{exc.message} ({exc.method})"
+                            )
+                            status = JobStatus.paused
+                            retry = False
                         else:
-                            delay = BACKOFF_SCHEDULE[
-                                min(obj.attempts - 1, len(BACKOFF_SCHEDULE) - 1)
-                            ]
-                            obj.next_run_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
+                            prefix = (
+                                "ошибка публикации VK"
+                                if exc.method and exc.method.startswith("wall.")
+                                else "ошибка VK"
+                            )
+                            err = f"{prefix}: {exc.code}/{exc.message} ({exc.method})"
+                            status = JobStatus.error
+                            retry = not isinstance(exc, VKPermissionError)
                     else:
-                        if not pause and obj.terminal_reason != "outcome_unknown":
+                        err = str(exc) or repr(exc) or exc.__class__.__name__
+                        status = JobStatus.error
+                        uncertain_cls = globals().get("TelegramEventPublishUncertainSendError")
+                        retry = not (
+                            uncertain_cls is not None and isinstance(exc, uncertain_cls)
+                        )
+                        if (obj.task == JobTask.vk_calendar_comment and isinstance(exc, RuntimeError)
+                                and (str(exc) == "vk_comment_publication_identity_conflict"
+                                     or (isinstance(obj.payload, dict) and obj.payload.get("relations")
+                                         and str(exc) == "vk_live_id_ambiguous"))):
+                            retry = False
+                        if obj.task == JobTask.static_site_build:
+                            static_failure = classify_static_site_failure(exc)
+                            retry = static_failure.retryable
+                    missing_event_media = _is_missing_event_media(obj.task, err)
+                    if missing_event_media:
+                        logline(
+                            "RUN", obj.event_id, "deferred", job_id=obj.id,
+                            task=obj.task.value, reason=err,
+                        )
+                    else:
+                        logline(
+                            "RUN", obj.event_id, "error", job_id=obj.id,
+                            task=obj.task.value,
+                            exc=(err.splitlines()[0] if err.splitlines() else "error"),
+                        )
+                    if isinstance(exc, VKFloodControlError):
+                        logging.info(
+                            "job %s deferred by VK flood circuit task=%s retry_at=%s",
+                            job.id,
+                            obj.task.value,
+                            vk_flood_retry_at.isoformat() if vk_flood_retry_at else None,
+                        )
+                    elif missing_event_media:
+                        logging.info(
+                            "job %s waiting for event media task=%s event_id=%s reason=%s",
+                            job.id, obj.task.value, obj.event_id, err,
+                        )
+                    else:
+                        logging.exception("job %s failed", job.id)
+                    link = None
+            logging.info(
+                "RUN done key=%s status=%s duration_ms=%.0f",
+                job_key,
+                "ok" if status == JobStatus.done else "fail",
+                took_ms,
+            )
+            text = None
+            async with db.get_session() as session:
+                obj = await session.get(JobOutbox, obj.id)
+                send = True
+                if obj:
+                    prev = obj.last_result
+                    if obj.terminal_reason == 'outcome_unknown':
+                        status = JobStatus.paused
+                        pause = False
+                        retry = False
+                    if pause and obj.task in VK_JOB_TASKS:
+                        payload = dict(obj.payload) if isinstance(obj.payload, dict) else {}
+                        payload["captcha_attempts"] = int(payload.get("captcha_attempts") or 0) + 1
+                        obj.payload = payload
+                        if payload["captcha_attempts"] >= CAPTCHA_MAX_ATTEMPTS:
                             obj.terminal_reason = "failed"
-                        obj.next_run_at = datetime.now(timezone.utc) + timedelta(days=3650)
-                session.add(obj)
-                await session.commit()
-            if notify and send:
-                await notify(job.task, job.event_id, status, changed, link, err)
-            if job.coalesce_key:
-                for eid in _EVENT_PROGRESS_KEYS.get(job.coalesce_key, set()):
-                    if eid == job.event_id:
-                        continue
-                    ctx = _EVENT_PROGRESS.get(eid)
-                    if not ctx:
-                        continue
-                    try:
-                        await ctx.updater(job.task, eid, status, changed, link, err)
-                    except Exception:
-                        logging.exception("progress callback error eid=%s", eid)
-        processed += 1
-        if pause:
-            await vk_captcha_pause_outbox(db, marker=err)
-        if max_jobs is not None and processed >= max_jobs:
-            break
+                            logging.warning(
+                                "VK_CAPTCHA_TERMINAL job_id=%s task=%s event_id=%s captcha_attempts=%s limit=%s",
+                                obj.id, obj.task.value, obj.event_id, payload["captcha_attempts"], CAPTCHA_MAX_ATTEMPTS,
+                            )
+                    obj.status = status
+                    obj.last_error = err
+                    obj.updated_at = datetime.now(timezone.utc)
+                    if static_deferred:
+                        # Preserve the exact follow-up payload and retry after the
+                        # current server/remote lease has had time to advance.
+                        obj.next_run_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+                        send = False
+                    elif job_deferred_at is not None:
+                        retry_at = job_deferred_at
+                        if retry_at.tzinfo is None:
+                            retry_at = retry_at.replace(tzinfo=timezone.utc)
+                        obj.next_run_at = max(
+                            retry_at.astimezone(timezone.utc),
+                            datetime.now(timezone.utc) + timedelta(seconds=30),
+                        )
+                        send = False
+                    elif status == JobStatus.done:
+                        cur_res = (
+                            "current_review_ready"
+                            if obj.task == JobTask.static_site_build and link
+                            else (link if link else ("ok" if changed else "nochange"))
+                        )
+                        if cur_res == prev and not force_notify:
+                            send = False
+                        obj.last_result = cur_res
+                        obj.next_run_at = datetime.now(timezone.utc)
+                    elif missing_event_media:
+                        # Missing or unreachable source media is a product state,
+                        # not a transient 30s/1h transport failure. Never publish
+                        # text-only and never spin through the ordinary backoff.
+                        event = (
+                            await session.get(Event, int(obj.event_id))
+                            if obj.event_id else None
+                        )
+                        obj.attempts += 1
+                        if (
+                            event is None
+                            or str(getattr(event, "lifecycle_status", "active") or "active")
+                            != "active"
+                            or bool(getattr(event, "silent", False))
+                            or _event_has_ended_before_today(event)
+                        ):
+                            obj.next_run_at = datetime.now(timezone.utc) + timedelta(
+                                days=3650
+                            )
+                        else:
+                            obj.next_run_at = _next_missing_event_media_check(
+                                datetime.now(timezone.utc)
+                            )
+                        # An interactive event pipeline still gets its one status
+                        # update; the background worker has no progress context.
+                        send = obj.event_id in _EVENT_PROGRESS
+                    else:
+                        if obj.task == JobTask.static_site_build:
+                            disposition = static_failure or classify_static_site_failure(
+                                RuntimeError(err or "static_site_build_failed")
+                            )
+                            next_attempt = obj.attempts + 1
+                            retry = bool(
+                                retry
+                                and disposition.retryable
+                                and next_attempt < static_site_max_attempts()
+                            )
+                            payload = dict(obj.payload or {})
+                            payload["failure"] = {
+                                "class": disposition.failure_class,
+                                "retryable": disposition.retryable,
+                                "message": (err or "static_site_build_failed")[:1000],
+                                "failed_at": static_site_iso_utc(),
+                                "attempt": next_attempt,
+                                "max_attempts": static_site_max_attempts(),
+                            }
+                            obj.payload = payload
+                            obj.attempts = next_attempt
+                        if retry:
+                            if obj.task != JobTask.static_site_build:
+                                obj.attempts += 1
+                            if vk_flood_retry_at is not None:
+                                obj.next_run_at = vk_flood_retry_at
+                                # The circuit log/metric is the single incident
+                                # signal; one notification per queued publication
+                                # would create another avoidable storm.
+                                send = False
+                            else:
+                                delay = BACKOFF_SCHEDULE[
+                                    min(obj.attempts - 1, len(BACKOFF_SCHEDULE) - 1)
+                                ]
+                                obj.next_run_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
+                        else:
+                            if not pause and obj.terminal_reason != "outcome_unknown":
+                                obj.terminal_reason = "failed"
+                            obj.next_run_at = datetime.now(timezone.utc) + timedelta(days=3650)
+                    session.add(obj)
+                    await session.commit()
+                if notify and send:
+                    await notify(job.task, job.event_id, status, changed, link, err)
+                if job.coalesce_key:
+                    for eid in _EVENT_PROGRESS_KEYS.get(job.coalesce_key, set()):
+                        if eid == job.event_id:
+                            continue
+                        ctx = _EVENT_PROGRESS.get(eid)
+                        if not ctx:
+                            continue
+                        try:
+                            await ctx.updater(job.task, eid, status, changed, link, err)
+                        except Exception:
+                            logging.exception("progress callback error eid=%s", eid)
+            processed += 1
+            if pause:
+                await vk_captcha_pause_outbox(db, marker=err)
+            if max_jobs is not None and processed >= max_jobs:
+                break
     return processed
 
 
