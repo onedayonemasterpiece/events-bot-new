@@ -279,3 +279,58 @@ async def test_receipt_url_conflict_precedes_provider_read(tmp_path, monkeypatch
         api.assert_not_called()
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('kind', ['calendar', 'related'])
+@pytest.mark.parametrize('canonical_live', [False, True])
+@pytest.mark.parametrize('delay,minute_aligned,duplicate,accepted', [
+    (1, True, False, True), (2, True, False, True), (59, True, False, True),
+    (-1, True, False, False), (60, True, False, False), (600, True, False, False),
+    (1, False, False, False), (0, False, False, True), (1, True, True, False),
+])
+async def test_frozen_slot_accepts_ordinary_vk_publication_clock_drift(
+    tmp_path, monkeypatch, kind, canonical_live, delay, minute_aligned, duplicate, accepted
+):
+    db = main.Database(str(tmp_path / 'actual-clock.sqlite'))
+    await db.init()
+    planned = int(datetime.now(timezone.utc).timestamp()) // 60 * 60 - 3600
+    if not minute_aligned: planned += 17
+    selection = {'dates': [], 'related': [{'id': 2, 'title': 'Frozen peer'}]}
+    payload = {'post_url': OLD, 'publish_date': planned}
+    if kind == 'related': payload['relations'] = selection
+    title = '🎤 Концерт группы «Мельница»'
+    original = {'id': 20, 'owner_id': -231920894, 'date': planned + delay,
+                'post_type': 'post', 'text': title + '\n📅 7 мая 19:00\nПОХОЖИЕ СОБЫТИЯ'}
+    rival = {**original, 'id': 30, 'date': planned + 600}
+    async def api(method, params, *args, **kwargs):
+        if method == 'wall.get':
+            items = [rival, original]
+            if duplicate: items.append({**original, 'id': 40})
+            return {'response': {'items': items}}
+        if method == 'wall.getById': return {'response': [original] if params['posts'] == '-231920894_20' else []}
+        raise AssertionError(method)
+    send_calendar, send_related = AsyncMock(return_value=True), AsyncMock(return_value=True)
+    monkeypatch.setattr(main, '_vk_api', api)
+    monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '231920894')
+    monkeypatch.setattr(calendar, 'ensure_calendar_comment', send_calendar)
+    monkeypatch.setattr(related, 'ensure_comment', send_related)
+    try:
+        async with db.get_session() as session:
+            session.add(main.Event(id=1, title=title, description='', source_text='',
+                date='2099-05-07', time='19:00', location_name='Hall',
+                source_vk_post_url=LIVE if canonical_live else OLD))
+            await session.commit()
+        if not accepted:
+            with pytest.raises(RuntimeError, match='post_not_found|post_missing'):
+                await main.job_vk_calendar_comment(1, db, None, payload)
+            send_calendar.assert_not_called()
+            send_related.assert_not_called()
+            return
+        assert await main.job_vk_calendar_comment(1, db, None, payload)
+        sent = send_related if kind == 'related' else send_calendar
+        assert sent.call_args.args[2] == LIVE
+        if kind == 'related': assert sent.call_args.args[3] is selection
+        else: assert sent.call_args.kwargs['stored_url'] == OLD
+    finally:
+        await db.close()

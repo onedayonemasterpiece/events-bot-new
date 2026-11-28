@@ -16317,6 +16317,12 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
         if not old_ids or not group or int(old_ids[0]) != -int(group):
             raise RuntimeError("vk_comment_publication_identity_conflict")
         owner, old_post = map(int, old_ids)
+        planned = int(payload["publish_date"])
+        slot_end = planned + (60 if planned % 60 == 0 else 1)
+
+        def same_slot(timestamp):
+            return type(timestamp) is int and planned <= timestamp < slot_end
+
         if receipts:
             live_url = receipts[0][0]
             live_ids = _vk_owner_and_post_id(live_url)
@@ -16338,9 +16344,9 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
                 publish_event, publish_group = await _prepare_same_day_linked_publish_event(db, event)
                 if any(row.source_vk_post_url != event.source_vk_post_url for row in publish_group):
                     publish_event = event
-                # The slot is frozen at wall.post; canonical event headers can change afterwards.
+                # Normal slots reserve a minute; VK can publish seconds after its start.
                 matches = [row for row in items if row.get("postponed_id") is None
-                           and int(row.get("id") or 0) > old_post and row.get("date") == payload["publish_date"]
+                           and int(row.get("id") or 0) > old_post and same_slot(row.get("date"))
                            and next((line.strip() for line in str(row.get("text") or "").splitlines()
                                      if line.strip()), "") == publish_event.title.strip()]
             item = matches[0] if len(matches) == 1 else {}
@@ -16351,7 +16357,7 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
         if (event.source_vk_post_url not in (postponed_url, live_url)
                 or item.get("id") != post or item.get("owner_id") != owner
                 or (int(item["postponed_id"]) != old_post if item.get("postponed_id") is not None
-                    else post != old_post and item.get("date") != payload.get("publish_date"))):
+                    else post != old_post and not same_slot(item.get("date")))):
             raise RuntimeError("vk_comment_publication_identity_conflict")
         public_due = datetime.fromtimestamp(int(item["date"]) + delay, timezone.utc)
         if public_due > datetime.now(timezone.utc):
