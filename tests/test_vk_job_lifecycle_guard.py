@@ -138,6 +138,62 @@ async def test_initial_image_post_waits_for_shared_relations_before_any_provider
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('unverified', [False, True])
+@pytest.mark.parametrize('date,time,end_date,expected', [
+    ('2026-11-28', '13:00', None, 'done'),
+    ('2026-11-27', '13:00', '2026-11-27', 'done'),
+    ('2026-11-29', '13:00', None, 'pending'),
+    ('2026-11-27', '13:00', '2026-11-29', 'pending'),
+])
+async def test_actual_vk_job_expires_before_related_wait(
+    db, monkeypatch, date, time, end_date, expected, unverified
+):
+    import json
+    from datetime import datetime, timezone, timedelta
+    from sqlalchemy import select
+    from vk_event_relations import graph_path
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            value = cls(2026, 11, 28, 13, 10, tzinfo=main.LOCAL_TZ)
+            return value.astimezone(tz) if tz else value.replace(tzinfo=None)
+
+    monkeypatch.setattr(main, 'datetime', Clock)
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_VERIFY', '1')
+    event = await save_event(db, photo_urls=['source-poster'])
+    async with db.get_session() as session:
+        stored = await session.get(Event, event.id)
+        stored.date, stored.time, stored.end_date = date, time, end_date
+        stored.end_date_is_inferred = False
+        session.add(stored)
+        job = main.JobOutbox(event_id=event.id, task=main.JobTask.vk_sync,
+            next_run_at=Clock.now(timezone.utc) - timedelta(seconds=1))
+        session.add(job)
+        await session.commit()
+        await session.refresh(job)
+        jid = job.id
+    if unverified:
+        path = graph_path(db)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({'related': {str(event.id): {'strict_verified': False}}}))
+    calls = forbidden_calls(monkeypatch)
+    monkeypatch.setitem(main.JOB_HANDLERS, 'vk_sync', main.job_sync_vk_source_post)
+    await main._run_due_jobs_once(db, None, max_jobs=1)
+    async with db.get_session() as session:
+        result = await session.get(main.JobOutbox, jid)
+        assert result.status.value == expected
+        assert result.attempts == 0
+        assert result.last_error == ('vk_initial_waiting_related' if expected == 'pending' else None)
+        assert len((await session.execute(select(main.JobOutbox))).scalars().all()) == 1
+        stored = await session.get(Event, event.id)
+        assert stored.source_vk_post_url is None and stored.vk_source_hash is None
+    for call in calls:
+        call.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_initial_related_wait_keeps_same_outbox_pending_then_completes(db, monkeypatch):
     from datetime import datetime, timezone, timedelta
     from sqlalchemy import select
@@ -321,9 +377,9 @@ async def test_verified_empty_anchor_can_continue_initial_publication(db, monkey
     event = await save_event(db, photo_urls=['source-poster'])
     graph_path(db).write_text(json.dumps({'related': {str(event.id): {'pure_related': [], 'strict_verified': True}}}))
     monkeypatch.setitem(main.vk_group_blocked, 'wall.post', 0)
-    def reached_publication(_event):
+    async def reached_publication(_db, _event):
         raise AssertionError('verified empty anchor passed the wait')
-    monkeypatch.setattr(main, '_event_has_ended_before_today', reached_publication)
+    monkeypatch.setattr(main, '_should_skip_ticket_giveaway_publication', reached_publication)
     with pytest.raises(AssertionError, match='verified empty anchor passed the wait'):
         await main.job_sync_vk_source_post(event.id, db, None)
 

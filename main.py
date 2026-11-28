@@ -23972,16 +23972,6 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
     if _event_has_managed_vk_post(ev):
         logging.info("vk.automatic_existing_post_skipped event_id=%s url=%s", event_id, ev.source_vk_post_url)
         return False
-    if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only" and ev.photo_urls and not ev.vk_source_hash:
-        from vk_event_relations import graph_path
-        path = graph_path(db)
-        graph = json.loads(path.read_text())["related"] if path.is_file() else {}
-        if str(ev.id) not in graph or (_env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY")
-                                      and not graph[str(ev.id)].get("strict_verified")):
-            logging.info("vk.initial_waiting_related event_id=%s", event_id)
-            raise StaticSiteSingleFlightDeferred("vk_initial_waiting_related")
-    if vk_group_blocked.get("wall.post", 0.0) > _time.time() and not _vk_user_token():
-        raise VKPermissionError(None, "permission error")
     if _event_has_ended_before_today(ev):
         logging.info(
             "job_sync_vk_source_post: skip past event_id=%s date=%s end_date=%s",
@@ -23998,6 +23988,16 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
             getattr(ev, "time", None),
         )
         return False
+    if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only" and ev.photo_urls and not ev.vk_source_hash:
+        from vk_event_relations import graph_path
+        path = graph_path(db)
+        graph = json.loads(path.read_text())["related"] if path.is_file() else {}
+        if str(ev.id) not in graph or (_env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY")
+                                      and not graph[str(ev.id)].get("strict_verified")):
+            logging.info("vk.initial_waiting_related event_id=%s", event_id)
+            raise StaticSiteSingleFlightDeferred("vk_initial_waiting_related")
+    if vk_group_blocked.get("wall.post", 0.0) > _time.time() and not _vk_user_token():
+        raise VKPermissionError(None, "permission error")
     if await _should_skip_ticket_giveaway_publication(db, ev):
         logging.info(
             "job_sync_vk_source_post: skip ticket giveaway event_id=%s because a non-giveaway alternative exists",
