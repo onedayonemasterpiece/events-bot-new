@@ -36,6 +36,16 @@ driver needs `libatomic.so.1` to start even its `install --with-deps` command on
 a fresh `python:3.12-slim` base. Keep this prerequisite in the declared OS
 dependency layer alongside `webp`.
 
+## Date-only VK deadline release, prepared 2026-11-28
+
+Image: `runcoveer/events:date-only-vk-deadline-20261128`; rollback:
+`runcoveer/events:outbox-festival-admission-20261128`. Exact merged-main
+Events-only update. The existing publication guard bounds date-only slots to
+next local midnight after the canonical date or trusted last day; public CTA
+creation supplies that same deadline. Timed start cutoffs remain exact.
+Check ordinary new reservations and worker progress without replaying or
+editing historical VK posts. A rejected unusable slot is not delivered content.
+
 ## Outbox festival admission release, prepared 2026-11-28
 
 Image: `runcoveer/events:outbox-festival-admission-20261128`; rollback:
