@@ -114,3 +114,11 @@ Operator review of the 2026-05-16 `/digest` surfaced five user-visible location 
 ## Prevention
 
 The prose guard is now applied uniformly to both the extracted `location_name` and any free-text inference candidate. A `terkatalk` default removes the most common trigger for the prose fallback on this source. The known-venue grounding check stops the LLM from copying a known venue name when the source text contains no evidence for that venue.
+
+### 2026-11-28 address validation placement
+
+Recovered free-text addresses are still checked for prose, before address
+normalization strips prefixes such as `ул.`. The normalized house fraction
+`Мира 9/11` is not classified again as a date. The final venue/person/prose and
+unpaired-address guards remain; subsequent address assignments come only from
+normalization, the curated reference or the already checked input snapshot.
