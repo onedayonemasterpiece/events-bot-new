@@ -1,7 +1,7 @@
-import { buildEventDetailRelatedManifest, getEventById, getEvents } from '../../../lib/events';
+import { buildEventDetailRelatedManifest, getEventById, getEventDetailEvents } from '../../../lib/events';
 
 export function getStaticPaths() {
-  return getEvents().map((event) => ({ params: { eventId: String(event.id) } }));
+  return getEventDetailEvents().map((event) => ({ params: { eventId: String(event.id) } }));
 }
 
 export function GET({ params }: { params: { eventId?: string } }) {

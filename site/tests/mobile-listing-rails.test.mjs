@@ -130,7 +130,7 @@ test('desktop date context occupies the existing discovery plane and is rail-loc
     read('src/components/listings/DateListingSurface.astro'),
     read('src/styles/design-system.css'),
   ]);
-  assert.match(dateSurface, /dateContext=\{\{ date: mobileDate, weekday: mobileWeekday \}\}/u);
+  assert.match(dateSurface, /dateContext=\{kind === 'today' \? undefined : \{ date: mobileDate, weekday: mobileWeekday \}\}/u);
   assert.match(rail, /data-listing-rail-date-context aria-hidden="true"[\s\S]*<strong>\{dateContext\.date\}<\/strong>[\s\S]*<small>\{dateContext\.weekday\}<\/small>/u);
   assert.ok(rail.indexOf('data-listing-rail-date-context') < rail.indexOf('<ListingControls'));
   assert.match(rail, /const pinned = desktop\.matches && scrollY > 0 && Math\.abs\(railBox\.top - headerBottom\) <= 1/u);

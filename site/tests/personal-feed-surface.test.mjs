@@ -39,7 +39,7 @@ test('personal feed keeps listing hydration hidden and exposes a bounded event-d
   assert.match(source, /!isEventDetail && <button[^>]*data-personal-feed-load-more/u);
   assert.match(source, /data-personal-feed-mode=\{isEventDetail \? 'pending' : undefined\}/u);
   assert.match(source, /aria-live="polite"/u);
-  assert.match(source, /hidden=\{!isEventDetail\}/u);
+  assert.match(source, /hidden=\{!isEventDetail && !isForMe\}/u);
   assert.match(source, /Шесть разных событий без бесконечной ленты/u);
   assert.match(source, /data-personal-feed-all-events[^>]*href=\{siteHomeHref\(\)\}>Все анонсы/u);
   assert.match(source, /data-personal-feed-mode="pending"/u);
@@ -89,7 +89,7 @@ test('event-detail continuation uses six diverse cards with an honest non-person
   assert.match(layout, /readRecentContinuationIds\(\)/u);
   assert.match(layout, /recordRecentContinuation\(personalFeedCurrentEventId\(section\), ranked\)/u);
   assert.match(layout, /KenigEventsSelectEventContinuation/u);
-  assert.match(layout, /current_event_id: personalFeedCurrentEventId\(section\)/u);
+  assert.match(layout, /currentEventId: personalFeedCurrentEventId\(section\)/u);
   assert.match(layout, /section\.dataset\.personalFeedMode = isPersonal \? 'personal' : 'popular_fallback'/u);
   assert.match(layout, /title\.textContent = isPersonal \? 'По вашим интересам' : 'Ещё события'/u);
   assert.match(layout, /if \(loadMore\) loadMore\.hidden = isEventDetail/u);

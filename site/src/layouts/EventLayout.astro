@@ -1490,6 +1490,19 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           background:transparent;
           box-shadow:none;
         }
+        body.hero-chrome-immersive .site-header {
+          position:absolute;
+          inset:0 0 auto;
+          height:0;
+          min-height:0;
+          border:0;
+          background:transparent;
+          box-shadow:none;
+        }
+        body.hero-chrome-immersive .site-header__inner {
+          height:auto;
+          min-height:0;
+        }
         body[data-home-floating-nav="true"] .site-header__inner {
           height:auto;
           min-height:0;
@@ -2656,7 +2669,6 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         const discoveryStores = new WeakMap();
         const servedListByFeed = new WeakMap();
         let shareCalloutTimer = 0;
-        let pendingConsentAction = null;
         let personalFeedRequest = null;
         const personalFeedMemoryCache = new Map();
 
@@ -3070,42 +3082,12 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           return writeJson(PROFILE_KEY, compactPersonalizationProfile(profile));
         }
 
-        function ensureProfileAfterConsent(seed) {
+        function ensureLocalProfile(seed) {
           const existing = readProfile();
           if (isCompatibleProfile(existing)) return existing;
           const profile = createEmptyProfile(seed);
           saveProfile(profile);
           return profile;
-        }
-
-        function consentBanner() {
-          let banner = document.querySelector('[data-personalization-consent]');
-          if (banner) return banner;
-          banner = document.createElement('div');
-          banner.className = 'personalization-consent';
-          banner.dataset.personalizationConsent = 'true';
-          banner.setAttribute('role', 'dialog');
-          banner.setAttribute('aria-live', 'polite');
-          banner.innerHTML = `<p><strong>Настроить рекомендации?</strong> Лайки и отметки «не интересно» сохранятся только в этом браузере и помогут убрать неподходящее.</p><div class="personalization-consent__actions"><button type="button" class="secondary-button" data-personalization-consent-dismiss>Пока нет</button><button type="button" class="cta-button" data-personalization-consent-accept>ОК</button></div>`;
-          document.body.appendChild(banner);
-          banner.querySelector('[data-personalization-consent-dismiss]')?.addEventListener('click', () => {
-            pendingConsentAction = null;
-            banner.classList.remove('is-visible');
-          });
-          banner.querySelector('[data-personalization-consent-accept]')?.addEventListener('click', async () => {
-            ensureProfileAfterConsent();
-            banner.classList.remove('is-visible');
-            const action = pendingConsentAction;
-            pendingConsentAction = null;
-            await applyFeedbackState();
-            if (typeof action === 'function') setTimeout(action, 0);
-          });
-          return banner;
-        }
-
-        function requestConsent(action) {
-          pendingConsentAction = action || null;
-          consentBanner().classList.add('is-visible');
         }
 
         function mapScore(map, key) {
@@ -3679,7 +3661,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
 
         async function getPersonalFeedManifest(section, { force = false } = {}) {
           const profile = readProfile();
-          const allowsPopularFallback = section?.dataset.listingContext === 'event-detail';
+          const allowsPopularFallback = ['event-detail', 'for-me'].includes(section?.dataset.listingContext);
           if (!personalFeedProfileIsReady(profile) && !allowsPopularFallback) return null;
           if (!force) {
             const cached = readPersonalFeedCache(profile, section);
@@ -3864,7 +3846,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const discoveryFeed = document.querySelector('[data-discovery-feed]');
           const currentId = asId(discoveryFeed?.dataset.currentEventId);
           if (currentId) ids.add(currentId);
-          section?.querySelectorAll('[data-event-card]').forEach((card) => {
+          if (section?.dataset.listingContext !== 'for-me') section?.querySelectorAll('[data-event-card]').forEach((card) => {
             const id = asId(card.dataset.eventId);
             if (id) ids.add(id);
           });
@@ -3876,7 +3858,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const slot = section.querySelector('[data-personal-feed-slot]');
           const loadMore = section.querySelector('[data-personal-feed-load-more]');
           if (!store || !slot || !personalFeedSectionCanHydrate(section)) return 0;
-          const end = Math.min(store.items.length, store.rendered + PERSONAL_FEED_CHUNK_SIZE);
+          const chunkSize = section.dataset.listingContext === 'for-me' && store.rendered === 0 && personalFeedUsesDesktopRows() ? 12 : PERSONAL_FEED_CHUNK_SIZE;
+          const end = Math.min(store.items.length, store.rendered + chunkSize);
           const chunk = store.items.slice(store.rendered, end);
           let appended = 0;
           let nextRendered = end;
@@ -3951,13 +3934,14 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const title = section.querySelector('[data-personal-feed-title]');
           const explanation = section.querySelector('[data-personal-feed-explanation]');
           const isEventDetail = section.dataset.listingContext === 'event-detail';
+          const isForMe = section.dataset.listingContext === 'for-me';
           const isPersonal = personalFeedProfileIsReady(profile);
           if (!slot || !manifest) {
             if (isEventDetail) {
               section.hidden = false;
               section.dataset.personalFeedMode = 'unavailable';
               if (status) status.textContent = 'Подборка временно недоступна — можно перейти ко всем анонсам.';
-            } else {
+            } else if (!isForMe) {
               section.hidden = true;
             }
             personalFeedStores.delete(section);
@@ -3996,12 +3980,19 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
               section.hidden = false;
               section.dataset.personalFeedMode = 'unavailable';
               if (status) status.textContent = 'Других подходящих событий пока нет — откройте все анонсы.';
+            } else if (isForMe) {
+              slot.replaceChildren();
+              if (status) { status.hidden = false; status.textContent = 'Подходящих событий пока нет.'; }
             } else {
               section.hidden = true;
             }
             personalFeedStores.delete(section);
             return;
           }
+          // Preserve the server-rendered For Me cards if the existing card renderer is unavailable.
+          if (isForMe && (personalFeedUsesDesktopRows()
+            ? typeof window.KenigEventsPackRelatedCardRows !== 'function'
+            : typeof window.KenigEventsResolveMobileEventCardMedia !== 'function')) return;
           slot.innerHTML = '';
           personalFeedStores.set(section, { items: ranked, ranked, rendered: 0, profile, manifest });
           section.hidden = false;
@@ -4066,7 +4057,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
 
         function initializePersonalFeedObservers() {
           const sections = Array.from(document.querySelectorAll('[data-personal-feed-section]'));
-          sections.forEach((section) => startPersonalFeedHydration(section));
+          sections.forEach((section) => startPersonalFeedHydration(section, { eager: section.dataset.listingContext === 'for-me' }));
           const desktopOnlySections = sections.filter((section) => section.dataset.personalFeedDesktopOnly === 'true');
           personalFeedDesktopMedia?.addEventListener?.('change', (event) => {
             if (!event.matches) return;
@@ -4796,11 +4787,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           if (!eventId) return;
           const card = button.closest('[data-event-card]');
           const { store } = await controllerForCard(card);
-          const profile = activeProfile(store?.manifest);
-          if (!profile) {
-            requestConsent(() => handleFeedbackButton(button));
-            return;
-          }
+          const profile = activeProfile(store?.manifest) || ensureLocalProfile();
+          if (!isCompatibleProfile(profile, store?.manifest?.feature_schema_version, store?.manifest?.taxonomy_version)) return;
           const candidate = store ? candidateById(store, eventId) : null;
           const current = eventState(profile, eventId);
           const title = button.dataset.eventTitle || scope?.dataset.eventTitle || '';
@@ -5949,7 +5937,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         hydrateListingFilterFooterGuard();
         updatePersonalizationResetStatus();
         hydrateCalendarActions();
-        initializePersonalFeedObservers();
+        document.addEventListener('DOMContentLoaded', initializePersonalFeedObservers, { once: true });
         hydrateHeroParallax();
         hydrateDesktopEventReading();
         hydrateHeroGallery();

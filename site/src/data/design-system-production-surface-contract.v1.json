@@ -113,7 +113,7 @@
     },
     {
       "id": "shell.header-navigation-footer",
-      "label": "Desktop/mobile header, menus, primary navigation, bottom navigation and footer",
+      "label": "Desktop/mobile header, immersive detail navigation, single Home island, bottom navigation and footer",
       "layer": "product-component",
       "required": true,
       "source_files": [
@@ -202,7 +202,7 @@
     },
     {
       "id": "exhibitions",
-      "label": "Exhibitions listing, personal surface and exhibition rows",
+      "label": "Exhibitions listing, personal surface, exhibition rows and 8px deck/frame radius",
       "layer": "product-pattern",
       "required": true,
       "source_files": [
@@ -241,10 +241,11 @@
     },
     {
       "id": "personalization.for-me",
-      "label": "For-me feed, interest profile and personal filtering",
+      "label": "For-me immediate feed, participant-only interest profile and personal filtering",
       "layer": "product-pattern",
       "required": true,
       "source_files": [
+        "site/src/pages/dlya-menya/index.astro",
         "site/src/components/PersonalFeedSlot.astro",
         "site/src/components/InterestProfile.astro",
         "site/src/components/ListingPersonalFilter.astro"
