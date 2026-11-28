@@ -1408,3 +1408,46 @@ async def test_durable_owner_admission_past_foreign_pre_handoff_orphan(
             assert owner.status == main.JobStatus.running, observed
     finally:
         await db.engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stale_status", ["pending", "error", "followup"])
+async def test_static_site_rearm_clears_terminal_failure(tmp_path, monkeypatch, stale_status):
+    """A rearmed static request must be selectable by the ordinary worker."""
+    monkeypatch.setenv("STATIC_SITE_BUILD_PROFILE", "production-candidate")
+    db = Database(str(tmp_path / "rearm.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async def request(reason):
+        return await main.enqueue_job(
+            db, 0, JobTask.static_site_build,
+            payload=make_request_payload(reason=reason, event_ids=[], trigger="operator_request"),
+            coalesce_key="static_site_build:prod", next_run_at=now,
+        )
+    try:
+        assert await request("initial") == "new"
+        with sqlite3.connect(db.path) as conn:
+            first = conn.execute("SELECT id FROM joboutbox WHERE task='static_site_build'").fetchone()[0]
+            if stale_status == "followup":
+                conn.execute("UPDATE joboutbox SET status='running' WHERE id=?", (first,))
+            else:
+                conn.execute("UPDATE joboutbox SET status=?, terminal_reason='failed' WHERE id=?", (stale_status, first))
+        if stale_status == "followup":
+            assert await request("followup") == "merged"
+            with sqlite3.connect(db.path) as conn:
+                first = conn.execute("SELECT id FROM joboutbox WHERE task='static_site_build' AND status='pending'").fetchone()[0]
+                conn.execute("UPDATE joboutbox SET terminal_reason='failed' WHERE id=?", (first,))
+        await request("fresh ordinary request")
+        with sqlite3.connect(db.path) as conn:
+            row = conn.execute("SELECT status, terminal_reason FROM joboutbox WHERE id=?", (first,)).fetchone()
+            assert row == ("pending", None)
+        if stale_status != "followup":
+            calls = []
+            async def handle(*args):
+                calls.append(args[0])
+                return False
+            monkeypatch.setitem(main.JOB_HANDLERS, JobTask.static_site_build.value, handle)
+            assert await main._run_due_jobs_once(db, None, allowed_tasks={JobTask.static_site_build}, max_jobs=1) == 1
+            assert calls == [0]
+    finally:
+        await db.close()
