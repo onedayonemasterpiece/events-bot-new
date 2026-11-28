@@ -30,7 +30,7 @@ test('Today leaves its desktop date context to the existing time rail, Tomorrow/
 
 test('immersive desktop detail does not reserve a second navigation header', async () => {
   const layout = await read('src/layouts/EventLayout.astro');
-  assert.match(layout, /body\.hero-chrome-immersive \.site-header \{\s*position:absolute;\s*inset:0 0 auto;\s*height:0;/u);
+  assert.match(layout, /body\.hero-chrome-immersive \.site-header \{\s*position:absolute;\s*inset:0 0 auto;\s*height:auto;\s*min-height:0;\s*border:0;\s*background:transparent;/u);
 });
 
 test('single Home island wraps at intermediate widths without cloning the DOM', async () => {
