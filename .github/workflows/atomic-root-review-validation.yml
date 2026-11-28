@@ -1,0 +1,26 @@
+name: Atomic root review validation (isolated branch only)
+on:
+  push:
+    branches: [chatgpt/atomic-root-plan-20261128]
+    paths:
+      - 'infra/yandex/static-site-atomic-root/**'
+      - '.github/workflows/atomic-root-review-validation.yml'
+permissions:
+  contents: read
+jobs:
+  provider-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: infra/yandex/static-site-atomic-root
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: 1.12.2
+          terraform_wrapper: false
+      - run: python -m json.tool main.tf.json >/dev/null
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate -no-color
+      - run: sha256sum main.tf.json .terraform.lock.hcl
