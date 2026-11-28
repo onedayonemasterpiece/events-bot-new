@@ -4493,8 +4493,10 @@ def maybe_apply_gemma_audit(
     max_anchors: int,
     changed_event_ids: set[int] | None = None,
     anchor_ids: set[int] | None = None,
+    audit_priority_ids: set[int] | None = None,
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
     changed_event_ids = set(changed_event_ids or set())
+    audit_priority_ids = set(audit_priority_ids or set())
     lite_rescue_model = "models/gemini-3.5-flash-lite"
     meta = {
         "enabled": enabled,
@@ -4553,16 +4555,19 @@ def maybe_apply_gemma_audit(
     attempted_anchors = 0
     audit_order = sorted(
         events,
-        key=lambda event: (int(event["id"]) in changed_event_ids, int(event["id"])),
+        key=lambda event: (int(event["id"]) in audit_priority_ids,
+                           int(event["id"]) in changed_event_ids, int(event["id"])),
         reverse=True,
     ) if max_anchors > 0 else events
-    if max_anchors > 0 and anchor_ids is not None:
+    if max_anchors > 0 and (anchor_ids is not None or audit_priority_ids):
         previous_attempts = (cache.get("gemma_verification") or {}).get("attempts") or []
         if previous_attempts:
             last_anchor_id = int(previous_attempts[-1]["anchor_event_id"])
-            boundary = next((index + 1 for index, event in enumerate(audit_order)
+            priority_end = len(audit_order) if anchor_ids is not None else sum(
+                int(event["id"]) in audit_priority_ids for event in audit_order)
+            boundary = next((index + 1 for index, event in enumerate(audit_order[:priority_end])
                              if int(event["id"]) == last_anchor_id), 0)
-            audit_order = audit_order[boundary:] + audit_order[:boundary]
+            audit_order = audit_order[boundary:priority_end] + audit_order[:boundary] + audit_order[priority_end:]
     for anchor in audit_order:
         if anchor_ids is not None and int(anchor["id"]) not in anchor_ids:
             continue
@@ -4907,6 +4912,7 @@ def build_related(
     *,
     current_date: str,
     anchor_ids: set[int] | None = None,
+    audit_priority_ids: set[int] | None = None,
     related_mode: str = "sparse",
     cache_path: Path | None = None,
     gemma_verify: bool = False,
@@ -5116,6 +5122,7 @@ def build_related(
             cache=cache,
             max_anchors=gemma_max_anchors,
             changed_event_ids=set(),
+            audit_priority_ids=audit_priority_ids,
         )
     else:
         salt = hashlib.sha1(json.dumps({"ids": event_ids, "fp": fingerprints}, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:12]
@@ -5164,6 +5171,7 @@ def build_related(
             cache=cache,
             max_anchors=gemma_max_anchors,
             changed_event_ids=changed_event_ids,
+            audit_priority_ids=audit_priority_ids,
         )
     log_stage("gemma_audit_complete", **gemma_meta)
     raw_chains_for_cache = raw_chains_for_cache or copy.deepcopy(chains)
@@ -6461,6 +6469,7 @@ def main() -> int:
     parser.add_argument("--focus-date-from", default=os.getenv("STATIC_SITE_FOCUS_DATE_FROM", ""), help="Prioritize one-day events starting on/after this date before the normal future fill")
     parser.add_argument("--focus-date-to", default=os.getenv("STATIC_SITE_FOCUS_DATE_TO", ""), help="Prioritize one-day events starting on/before this date before the normal future fill")
     parser.add_argument("--related-anchor-ids", default=None, help="Selected related anchors; empty selects changed anchors only")
+    parser.add_argument("--related-audit-priority-ids", default="", help="First publication audit order; does not scope the graph")
     parser.add_argument("--include-ids", default=",".join(map(str, CONTROL_EVENT_IDS)))
     parser.add_argument("--related-cache", default="", help="Persistent JSON cache for event_sparse_related_chain_v1")
     parser.add_argument("--related-mode", choices=["sparse", "pgvector", "bge"], default=os.getenv("STATIC_SITE_RELATED_MODE", "sparse"))
@@ -6948,6 +6957,7 @@ def main() -> int:
         current_date=effective_date,
         anchor_ids=({int(value) for value in args.related_anchor_ids.split(",") if value.strip()}
                     if args.related_anchor_ids is not None else None),
+        audit_priority_ids={int(value) for value in args.related_audit_priority_ids.split(",") if value.strip()},
         related_mode=args.related_mode,
         cache_path=related_cache,
         gemma_verify=bool(args.gemma_related_verify),

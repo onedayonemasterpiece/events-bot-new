@@ -660,6 +660,8 @@ def export_preview_data_if_configured(config: dict) -> None:
         ])
     if config.get('profile') == 'related-only' and semantic_cache['mode'] == 'warm':
         cmd.extend(['--related-anchor-ids', ','.join(map(str, config.get('related_anchor_ids') or []))])
+    elif config.get('profile') == 'production-candidate' and config.get('related_anchor_ids'):
+        cmd.extend(['--related-audit-priority-ids', ','.join(map(str, config['related_anchor_ids']))])
     if config.get('gemma_related_verify'):
         cmd.append('--gemma-related-verify')
     status_event('alive', phase='export', status='alive', progress={'phase': 'export', 'progress_percent': 18, 'progress_label': 'экспорт событий и related v2'})
