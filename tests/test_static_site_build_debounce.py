@@ -452,7 +452,9 @@ async def test_requeue_preserves_remote_handoff_for_exact_active_claim(tmp_path)
 
 
 @pytest.mark.asyncio
-async def test_smart_update_does_not_debounce_exact_pending_remote_recovery(tmp_path):
+@pytest.mark.parametrize('profile', ['related-only', 'production-candidate'])
+async def test_smart_update_does_not_debounce_exact_pending_remote_recovery(tmp_path, monkeypatch, profile):
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', profile)
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     now = datetime.now(timezone.utc)
@@ -503,13 +505,22 @@ async def test_smart_update_does_not_debounce_exact_pending_remote_recovery(tmp_
         next_run_at=effect_at + timedelta(minutes=15),
     )
 
-    assert action == "merged-rearmed"
     async with db.get_session() as session:
         recovered = await session.get(JobOutbox, job_id)
+        followup = (await session.execute(select(JobOutbox).where(JobOutbox.id != job_id, JobOutbox.task == JobTask.static_site_build))).scalar_one_or_none()
     assert recovered is not None
     assert recovered.payload["remote_handoff"] == recovery_payload["remote_handoff"]
-    assert recovered.payload["event_ids"] == [31, 32]
-    assert _utc(recovered.next_run_at) <= datetime.now(timezone.utc)
+    if profile == "production-candidate":
+        assert action == "merged"
+        assert recovered.payload["event_ids"] == [31]
+        assert followup is not None and followup.payload["event_ids"] == [32]
+        assert followup.status == JobStatus.pending
+        assert _utc(followup.next_run_at) == effect_at + timedelta(minutes=15)
+    else:
+        assert action == "merged-rearmed"
+        assert followup is None
+        assert recovered.payload["event_ids"] == [31, 32]
+        assert _utc(recovered.next_run_at) <= datetime.now(timezone.utc)
     await db.close()
 
 

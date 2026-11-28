@@ -1299,7 +1299,7 @@ def test_static_site_kernel_retains_loaded_media_and_keyboard_browser_evidence()
         / "scripts"
         / "run_static_site_builder_kaggle.py"
     ).read_text(encoding="utf-8")
-    assert "{'production_root', 'secret_candidate', 'browser_evidence'}" in runner_source
+    assert "{'production_root', 'secret_candidate', 'browser_evidence', 'related'}" in runner_source
 
 
 def test_add_build_11_astro_asset_template_resolves_to_exact_build() -> None:

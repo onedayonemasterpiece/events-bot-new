@@ -778,12 +778,13 @@ def test_add_build_01_payload_union_is_bounded_and_keeps_latest_effect() -> None
     assert len(merged["target_watermark"]) == 64
 
 
-def test_static_site_debounce_is_strict_trailing_and_trigger_local(
+def test_static_site_debounce_is_bounded_and_trigger_local(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import main
 
     now = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setenv("STATIC_SITE_BUILD_PROFILE", "production-candidate")
     monkeypatch.setenv("STATIC_SITE_MAX_DEBOUNCE_SECONDS", "1800")
     trailing = main._static_site_coalesced_next_run(
         old_next=now + timedelta(minutes=14),
@@ -801,7 +802,7 @@ def test_static_site_debounce_is_strict_trailing_and_trigger_local(
         now=now,
         incoming_immediate=False,
     )
-    assert trailing == now + timedelta(minutes=15)
+    assert trailing == now + timedelta(minutes=5)
 
     historical_operator_is_not_immediate = main._static_site_coalesced_next_run(
         old_next=now,
@@ -990,13 +991,17 @@ def test_production_candidate_result_requires_exact_template_and_noindex_checks(
         ("production_root", "production-root.tar.gz"),
         ("secret_candidate", "secret-candidate.tar.gz"),
         ("browser_evidence", "browser-evidence.tar.gz"),
+        ("related", "event_related.json"),
     ):
         path = output / filename
-        with tarfile.open(path, "w:gz") as bundle:
-            payload = b"checked"
-            info = tarfile.TarInfo(name=f"{kind}.txt")
-            info.size = len(payload)
-            bundle.addfile(info, io.BytesIO(payload))
+        if kind == "related":
+            path.write_text(json.dumps({"related": {"42": {"strict_verified": True}}}))
+        else:
+            with tarfile.open(path, "w:gz") as bundle:
+                payload = b"checked"
+                info = tarfile.TarInfo(name=f"{kind}.txt")
+                info.size = len(payload)
+                bundle.addfile(info, io.BytesIO(payload))
         artifacts.append(
             {
                 "kind": kind,
