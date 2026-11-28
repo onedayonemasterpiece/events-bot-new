@@ -608,3 +608,11 @@ This source-channel badge is a **static event-detail-page surface only**. Source
 and aggregator identities are not event attributes and must never be included
 in Telegram `@kldevents` graphical-medallion strips. Telegram may still show
 source-grounded organizer, venue, festival, program and Pushkin-card marks.
+
+### Tretyakovka raster fallback parity (2026-11-28)
+
+The shared `tretyakovka-kaliningrad.png` and lossless WebP are 512px transparent
+raster exports of the canonical same-stem SVG. Preserve its circular cream field,
+gold ring and T mark; never flatten the export onto an opaque square. VK/TG use
+the PNG fallback while the site uses the SVG. Changes apply to newly rendered
+cards; already published VK posts/comments are not rewritten.
