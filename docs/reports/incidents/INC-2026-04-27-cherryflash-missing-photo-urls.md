@@ -147,3 +147,14 @@ The 2026-04-27 scheduled CherryFlash slot repeatedly started local sessions but 
 
 - Poster eligibility is now both selection-time and persistence-time guarded.
 - This incident record is an active regression contract for future CherryFlash selection/render changes.
+
+### 2026-11-28 media ownership correction
+
+Video selection no longer fetches and persists raw source photos. That duplicate
+recovery assigned a quiz results table to another child of the same carrier
+despite its saved empty media assignment. Missing renderable media is delegated
+to the existing durable `event_media_review` owner, preserving future defers;
+the candidate is skipped until a later selection can read its persisted gallery.
+A SQLite lock during enqueue skips only that candidate. This supersedes the
+selection-time raw-fetch/persistence/retry checks above; gallery durability and
+no-photo exclusion remain required. Other open incident checks are unchanged.

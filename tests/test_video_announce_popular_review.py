@@ -27,6 +27,72 @@ from video_announce import popular_review as popular_review_module
 from handlers import popular_posts_cmd as popular_posts_module
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("deferred", [False, True])
+async def test_missing_video_gallery_delegates_without_raw_source_assignment(
+    tmp_path, monkeypatch, deferred
+):
+    import main
+    from models import EventPoster, JobOutbox, JobStatus, JobTask, VKSourcePacket
+
+    db = Database(str(tmp_path / "video-media-owner.sqlite"))
+    await db.init()
+    source_url = "https://vk.com/wall-181633485_38098"
+    next_run = datetime.now(timezone.utc) + timedelta(days=1)
+    async with db.get_session() as session:
+        event = Event(title="Literature", description="D", source_text="SRC",
+                      date="2026-11-29", time="16:00", location_name="Venue",
+                      source_vk_post_url=source_url, photo_urls=[], photo_count=0)
+        session.add(event)
+        await session.flush()
+        event_id = int(event.id)
+        session.add(EventSource(event_id=event_id, source_type="vk",
+                                source_url=source_url, source_text="SRC"))
+        session.add(VKSourcePacket(
+            owner_id=181633485, post_id=38098, revision=1, source_url=source_url,
+            published_at=1795770000, raw_text="SRC", raw_payload_json="{}",
+            payload_hash="payload", source_revision_hash="revision", status="imported",
+            parse_result_json='{"drafts":[{"poster_media":[],"allow_raw_photo_fallback":false},{"poster_media":[],"allow_raw_photo_fallback":false}]}',
+        ))
+        await session.commit()
+    if deferred:
+        await main.enqueue_job(db, event_id, JobTask.event_media_review, next_run_at=next_run)
+
+    async def forbidden_raw_fetch(*args, **kwargs):
+        pytest.fail("video consumer must not fetch shared carrier photos")
+
+    monkeypatch.setattr(popular_review_module, "_rehydrate_vk_photo_urls", forbidden_raw_fetch, raising=False)
+    try:
+        assert await popular_review_module._ensure_renderable_photo_urls(event, db=db) == []
+        async with db.get_session() as session:
+            jobs = (await session.execute(select(JobOutbox))).scalars().all()
+            assert len(jobs) == 1
+            assert jobs[0].task == JobTask.event_media_review
+            assert jobs[0].status == JobStatus.pending
+            if deferred:
+                assert jobs[0].next_run_at.replace(tzinfo=timezone.utc) == next_run
+            assert (await session.execute(select(EventPoster))).scalars().all() == []
+            fresh = await session.get(Event, event_id)
+            assert fresh.photo_urls == []
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_missing_video_gallery_skips_candidate_when_media_enqueue_is_locked(monkeypatch):
+    import main
+    from sqlalchemy.exc import OperationalError
+
+    async def locked(*args, **kwargs):
+        raise OperationalError("INSERT", {}, Exception("database is locked"))
+
+    monkeypatch.setattr(main, "enqueue_job", locked)
+    event = Event(id=123, title="Missing", description="D", source_text="SRC",
+                  date="2026-11-29", time="16:00", location_name="Venue",
+                  photo_urls=[], photo_count=0)
+    assert await popular_review_module._ensure_renderable_photo_urls(event, db=object()) == []
+
+
 def _freeze_popular_posts_now(monkeypatch, now_utc: datetime) -> None:
     monkeypatch.setattr(
         popular_posts_module,
@@ -136,105 +202,6 @@ def test_popular_review_first_slot_promo_forces_position_one() -> None:
     )
 
     assert [pick.event.id for pick in selected] == [1, 3, 4, 2]
-
-
-@pytest.mark.asyncio
-async def test_vk_rehydration_materializes_source_photo_in_managed_storage(monkeypatch):
-    import poster_media
-    import vk_auto_queue
-    import vk_intake
-
-    raw_url = "https://sun9.example/source.jpg"
-    managed_url = "https://static.kenigevents.ru/p/dh16/aa/poster.webp"
-    downloaded = [(b"jpeg-bytes", "source.jpg")]
-
-    class FetchStatus:
-        ok = True
-        kind = "ok"
-
-    async def fake_fetch(*_args, **_kwargs):
-        return "source", [raw_url], None, {}, FetchStatus()
-
-    async def fake_download(urls):
-        assert urls == [raw_url]
-        return downloaded
-
-    async def fake_process(images, *, need_catbox, need_ocr):
-        assert images == downloaded
-        assert need_catbox is True
-        assert need_ocr is False
-        return [
-            poster_media.PosterMedia(
-                data=b"",
-                name="source.jpg",
-                supabase_url=managed_url,
-            )
-        ], "storage_only"
-
-    monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
-    monkeypatch.setattr(vk_intake, "_download_photo_media", fake_download)
-    monkeypatch.setattr(poster_media, "process_media", fake_process)
-
-    assert await popular_review_module._rehydrate_vk_photo_urls(
-        "https://vk.com/wall-1_2"
-    ) == [managed_url]
-
-
-@pytest.mark.asyncio
-async def test_late_media_rehydration_is_persisted_and_rearms_public_projections(
-    tmp_path, monkeypatch
-):
-    db = Database(str(tmp_path / "db.sqlite"))
-    await db.init()
-    async with db.get_session() as session:
-        event = Event(
-            title="Событие с поздней афишей",
-            description="Description",
-            short_description="Short",
-            search_digest="Digest",
-            source_text="source",
-            date="2026-07-20",
-            time="19:00",
-            location_name="Venue",
-            city="Калининград",
-            source_vk_post_url="https://vk.com/wall-1_2",
-            photo_urls=[],
-            photo_count=0,
-        )
-        session.add(event)
-        await session.commit()
-        await session.refresh(event)
-        event_id = int(event.id)
-
-    managed_url = "https://static.kenigevents.ru/p/dh16/aa/poster.webp"
-    scheduled = []
-
-    async def fake_rehydrate(_source_url):
-        return [managed_url]
-
-    async def fake_schedule(_db, *, event_id):
-        scheduled.append(event_id)
-
-    monkeypatch.setattr(
-        popular_review_module,
-        "_rehydrate_vk_photo_urls",
-        fake_rehydrate,
-    )
-    monkeypatch.setattr(
-        popular_review_module,
-        "_schedule_rehydrated_media_projection_repair",
-        fake_schedule,
-    )
-
-    urls = await popular_review_module._ensure_renderable_photo_urls(event, db=db)
-
-    assert urls == [managed_url]
-    assert scheduled == [event_id]
-    async with db.get_session() as session:
-        fresh = await session.get(Event, event_id)
-        assert fresh.photo_urls == [managed_url]
-        assert fresh.photo_count == 1
-    await db.close()
 
 
 @pytest.mark.asyncio
@@ -749,164 +716,6 @@ async def test_popular_review_raises_instead_of_repeat_fill_when_cooldown_leaves
             now_utc=now_utc,
         )
     await db.close()
-
-
-@pytest.mark.asyncio
-async def test_popular_review_persists_rehydrated_photo_urls(tmp_path, monkeypatch):
-    db = Database(str(tmp_path / "db.sqlite"))
-    await db.init()
-    now_utc = datetime(2026, 4, 27, 7, 0, tzinfo=timezone.utc)
-    _freeze_popular_posts_now(monkeypatch, now_utc)
-
-    async def fake_rehydrate_public_tg_photo_urls(source_post_url: str | None) -> list[str]:
-        if str(source_post_url or "").endswith("/1"):
-            return ["https://example.com/rehydrated.jpg"]
-        return []
-
-    monkeypatch.setattr(
-        popular_review_module,
-        "_rehydrate_public_tg_photo_urls",
-        fake_rehydrate_public_tg_photo_urls,
-    )
-
-    async with db.get_session() as session:
-        source = TelegramSource(username="popular", title="Popular")
-        session.add(source)
-        await session.commit()
-        await session.refresh(source)
-        source_id = int(source.id)
-
-        rehydrated = Event(
-            title="Rehydrated Poster",
-            description="Description",
-            short_description="Short",
-            search_digest="Digest",
-            source_text="source",
-            date="2026-04-30",
-            time="19:00",
-            location_name="Venue",
-            city="Калининград",
-            photo_urls=[],
-            photo_count=0,
-            source_post_url="https://t.me/popular/1",
-        )
-        direct = Event(
-            title="Direct Poster",
-            description="Description",
-            short_description="Short",
-            search_digest="Digest",
-            source_text="source",
-            date="2026-04-30",
-            time="19:00",
-            location_name="Venue",
-            city="Калининград",
-            photo_urls=["https://example.com/direct.jpg"],
-            photo_count=1,
-            source_post_url="https://t.me/popular/2",
-        )
-        missing = Event(
-            title="Missing Poster",
-            description="Description",
-            short_description="Short",
-            search_digest="Digest",
-            source_text="source",
-            date="2026-04-30",
-            time="19:00",
-            location_name="Venue",
-            city="Калининград",
-            photo_urls=[],
-            photo_count=0,
-            source_post_url="https://t.me/popular/3",
-        )
-        session.add_all([rehydrated, direct, missing])
-        await session.commit()
-        for event in (rehydrated, direct, missing):
-            await session.refresh(event)
-
-    await _seed_popular_post(
-        db,
-        event=rehydrated,
-        source_id=source_id,
-        message_id=1,
-        views=300,
-        now_utc=now_utc,
-    )
-    await _seed_popular_post(
-        db,
-        event=direct,
-        source_id=source_id,
-        message_id=2,
-        views=250,
-        now_utc=now_utc,
-    )
-    await _seed_popular_post(
-        db,
-        event=missing,
-        source_id=source_id,
-        message_id=3,
-        views=240,
-        now_utc=now_utc,
-    )
-
-    selection = await build_popular_review_selection(
-        db,
-        max_events=1,
-        min_events=1,
-        anti_repeat_days=7,
-        candidate_limit=10,
-        now_utc=now_utc,
-    )
-
-    assert selection.event_ids == [int(rehydrated.id)]
-    assert int(missing.id) not in selection.event_ids
-
-    async with db.get_session() as session:
-        persisted = await session.get(Event, int(rehydrated.id))
-
-    assert persisted is not None
-    assert persisted.photo_urls == ["https://example.com/rehydrated.jpg"]
-    assert persisted.photo_count == 1
-    await db.close()
-
-
-@pytest.mark.asyncio
-async def test_popular_review_skips_rehydrated_event_when_persist_fails(monkeypatch):
-    async def fake_rehydrate_public_tg_photo_urls(source_post_url: str | None) -> list[str]:
-        return ["https://example.com/rehydrated.jpg"]
-
-    async def fake_persist_rehydrated_photo_urls(*args, **kwargs) -> bool:
-        return False
-
-    monkeypatch.setattr(
-        popular_review_module,
-        "_rehydrate_public_tg_photo_urls",
-        fake_rehydrate_public_tg_photo_urls,
-    )
-    monkeypatch.setattr(
-        popular_review_module,
-        "_persist_rehydrated_photo_urls",
-        fake_persist_rehydrated_photo_urls,
-    )
-
-    event = Event(
-        title="Locked Persist",
-        description="Description",
-        short_description="Short",
-        search_digest="Digest",
-        source_text="source",
-        date="2026-04-30",
-        time="19:00",
-        location_name="Venue",
-        city="Калининград",
-        photo_urls=[],
-        photo_count=0,
-        source_post_url="https://t.me/popular/1",
-    )
-    event.id = 123
-
-    urls = await popular_review_module._ensure_renderable_photo_urls(event, db=object())
-
-    assert urls == []
 
 
 @pytest.mark.asyncio

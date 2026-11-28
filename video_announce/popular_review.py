@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import inspect
 import logging
@@ -49,14 +48,7 @@ RECENT_PUBLISHED_VIDEO_SESSION_STATUSES = {
 }
 
 POPULAR_REVIEW_RENDERABLE_IMAGE_LIMIT = 3
-REHYDRATED_PHOTO_PERSIST_LOCK_DELAYS_SEC: tuple[float, ...] = (
-    0.25,
-    0.5,
-    1.0,
-    2.0,
-    3.0,
-    5.0,
-)
+
 
 
 @dataclass(frozen=True)
@@ -288,280 +280,35 @@ def _renderable_photo_urls(urls: list[str]) -> list[str]:
     ][:POPULAR_REVIEW_RENDERABLE_IMAGE_LIMIT]
 
 
-def _is_sqlite_lock_error(exc: BaseException) -> bool:
-    text = str(exc).lower()
-    return (
-        "database is locked" in text
-        or "database table is locked" in text
-        or "database is busy" in text
-    )
-
-
-async def _rehydrate_public_tg_photo_urls(source_post_url: str | None) -> list[str]:
-    if not source_post_url:
-        return []
-    try:
-        from source_parsing.telegram.handlers import (
-            _fallback_fetch_posters_from_public_tg_page,
-            _parse_tg_source_url,
-        )
-    except Exception:
-        logger.warning(
-            "video_announce.popular_review: failed to import telegram public poster fallback",
-            exc_info=True,
-        )
-        return []
-
-    username, message_id = _parse_tg_source_url(source_post_url)
-    if not username or not message_id:
-        return []
-
-    try:
-        posters = await _fallback_fetch_posters_from_public_tg_page(
-            username=username,
-            message_id=message_id,
-            limit=POPULAR_REVIEW_RENDERABLE_IMAGE_LIMIT,
-        )
-    except Exception:
-        logger.warning(
-            "video_announce.popular_review: telegram poster rehydrate failed url=%s",
-            source_post_url,
-            exc_info=True,
-        )
-        return []
-
-    urls: list[str] = []
-    seen: set[str] = set()
-    for poster in posters or []:
-        candidate = str(
-            getattr(poster, "supabase_url", None)
-            or getattr(poster, "catbox_url", None)
-            or ""
-        ).strip()
-        if not candidate or candidate in seen:
-            continue
-        seen.add(candidate)
-        urls.append(candidate)
-    return _renderable_photo_urls(urls)
-
-
-async def _rehydrate_vk_photo_urls(source_post_url: str | None) -> list[str]:
-    if not source_post_url:
-        return []
-    try:
-        from vk_auto_queue import fetch_vk_post_text_and_photos
-        from vk_intake import _vk_wall_source_ids_from_url
-    except Exception:
-        logger.warning(
-            "video_announce.popular_review: failed to import vk poster fetch helpers",
-            exc_info=True,
-        )
-        return []
-
-    group_id, post_id = _vk_wall_source_ids_from_url(source_post_url)
-    if not group_id or not post_id:
-        return []
-
-    try:
-        _text, photos, _published_at, _metrics, status = await fetch_vk_post_text_and_photos(
-            group_id,
-            post_id,
-            limit=POPULAR_REVIEW_RENDERABLE_IMAGE_LIMIT,
-        )
-    except Exception:
-        logger.warning(
-            "video_announce.popular_review: vk poster rehydrate failed url=%s",
-            source_post_url,
-            exc_info=True,
-        )
-        return []
-
-    if not status.ok:
-        logger.info(
-            "video_announce.popular_review: vk poster rehydrate unavailable url=%s kind=%s",
-            source_post_url,
-            status.kind,
-        )
-        return []
-    raw_urls = _renderable_photo_urls([str(url or "").strip() for url in photos])
-    if not raw_urls:
-        return []
-
-    # VK CDN links are not durable catalog media.  Materialize them through the
-    # normal managed-storage uploader before persisting whenever possible.
-    try:
-        from poster_media import process_media
-        from vk_intake import _download_photo_media
-
-        images = await _download_photo_media(raw_urls)
-        media, _storage_msg = await process_media(
-            images,
-            need_catbox=True,
-            need_ocr=False,
-        )
-        managed = _renderable_photo_urls(
-            [
-                str(item.supabase_url or item.catbox_url or "").strip()
-                for item in media
-            ]
-        )
-        if managed:
-            return managed
-    except Exception:
-        logger.warning(
-            "video_announce.popular_review: managed VK poster materialization failed url=%s",
-            source_post_url,
-            exc_info=True,
-        )
-    return raw_urls
-
-
-async def _persist_rehydrated_photo_urls(
-    db,
-    *,
-    event_id: int | None,
-    photo_urls: list[str],
-) -> bool:
-    if event_id is None or not photo_urls:
-        return False
-
-    last_lock_error: OperationalError | None = None
-    for attempt in range(len(REHYDRATED_PHOTO_PERSIST_LOCK_DELAYS_SEC) + 1):
-        try:
-            async with db.get_session() as session:
-                fresh = await session.get(Event, int(event_id))
-                if fresh is None:
-                    return False
-                from event_media import ingest_event_media_urls
-
-                await ingest_event_media_urls(
-                    session,
-                    int(event_id),
-                    photo_urls,
-                    source="video_announce_rehydrate",
-                )
-                await session.commit()
-            return True
-        except OperationalError as exc:
-            if not _is_sqlite_lock_error(exc):
-                raise
-            last_lock_error = exc
-            if attempt >= len(REHYDRATED_PHOTO_PERSIST_LOCK_DELAYS_SEC):
-                break
-            delay = REHYDRATED_PHOTO_PERSIST_LOCK_DELAYS_SEC[attempt]
-            logger.warning(
-                "video_announce.popular_review: sqlite locked while persisting rehydrated poster urls "
-                "event_id=%s attempt=%s retry_in=%.2fs",
-                event_id,
-                attempt + 1,
-                delay,
-            )
-            await asyncio.sleep(delay)
-
-    logger.warning(
-        "video_announce.popular_review: skipped rehydrated poster urls after sqlite lock retries "
-        "event_id=%s count=%s error=%s",
-        event_id,
-        len(photo_urls),
-        last_lock_error,
-    )
-    return False
-
-
-async def _schedule_rehydrated_media_projection_repair(db, *, event_id: int | None) -> None:
-    """Rebuild public projections after durable media rehydration.
-
-    Persisting ``event.photo_urls`` without rearming publication left existing
-    Telegram and VK posts text-only.  The ordinary scheduler already knows how
-    to replace a Telegram text post with a photo post and how to edit VK; use it
-    instead of a video-pipeline-specific publication path.
-    """
-
-    if event_id is None:
-        return
-    try:
-        from main import schedule_event_update_tasks
-
-        async with db.get_session() as session:
-            event = await session.get(Event, int(event_id))
-        if event is None:
-            return
-        results = await schedule_event_update_tasks(db, event)
-        logger.info(
-            "video_announce.popular_review: scheduled media projection repair event_id=%s tasks=%s",
-            event_id,
-            sorted(str(getattr(task, "value", task)) for task in results),
-        )
-    except Exception:
-        logger.warning(
-            "video_announce.popular_review: failed to schedule media projection repair event_id=%s",
-            event_id,
-            exc_info=True,
-        )
-
-
 async def _ensure_renderable_photo_urls(ev: Event, *, db=None) -> list[str]:
     direct_urls = _renderable_photo_urls(_event_photo_urls(ev))
     if direct_urls:
         return direct_urls
 
-    source_urls: list[str] = []
-    for raw in (
-        getattr(ev, "source_post_url", None),
-        getattr(ev, "source_vk_post_url", None),
-    ):
-        source_url = str(raw or "").strip()
-        if source_url and source_url not in source_urls:
-            source_urls.append(source_url)
+    event_id = getattr(ev, "id", None)
+    if db is not None and event_id is not None:
+        # The media owner preserves child assignments and existing quota defer.
+        # Video selection consumes its gallery on the next ordinary selection.
+        from main import enqueue_job
+        from models import JobTask
 
-    for source_url in source_urls:
-        low = source_url.lower()
-        if "t.me/" in low or "telegram.me/" in low:
-            refreshed = await _rehydrate_public_tg_photo_urls(source_url)
-        elif "vk.com/wall" in low:
-            refreshed = await _rehydrate_vk_photo_urls(source_url)
-        else:
-            refreshed = []
-        if refreshed:
-            approved_urls = list(refreshed)
-            if db is not None:
-                persisted = await _persist_rehydrated_photo_urls(
-                    db,
-                    event_id=getattr(ev, "id", None),
-                    photo_urls=refreshed,
-                )
-                if not persisted:
-                    logger.warning(
-                        "video_announce.popular_review: rehydrated poster urls are not durable; "
-                        "skipping event_id=%s source=%s count=%s",
-                        getattr(ev, "id", None),
-                        source_url,
-                        len(refreshed),
-                    )
-                    return []
-                from event_media import get_event_gallery_urls
-
-                async with db.get_session() as session:
-                    approved_urls = await get_event_gallery_urls(
-                        session,
-                        int(getattr(ev, "id", 0) or 0),
-                        legacy_fallback=False,
-                    )
-                if not approved_urls:
-                    return []
-                await _schedule_rehydrated_media_projection_repair(
-                    db,
-                    event_id=getattr(ev, "id", None),
-                )
-            ev.photo_urls = list(approved_urls)
-            ev.photo_count = len(approved_urls)
-            logger.info(
-                "video_announce.popular_review: rehydrated poster urls event_id=%s source=%s count=%s",
-                getattr(ev, "id", None),
-                source_url,
-                len(refreshed),
+        try:
+            await enqueue_job(db, int(event_id), JobTask.event_media_review)
+        except OperationalError as exc:
+            text = str(exc).lower()
+            if not any(message in text for message in (
+                "database is locked", "database table is locked", "database is busy",
+            )):
+                raise
+            logger.warning(
+                "video_announce.popular_review: media owner enqueue locked event_id=%s",
+                event_id,
             )
-            return approved_urls
+            return []
+        logger.info(
+            "video_announce.popular_review: awaiting media owner event_id=%s",
+            event_id,
+        )
     return []
 
 
