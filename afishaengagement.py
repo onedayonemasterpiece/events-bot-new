@@ -4968,6 +4968,7 @@ async def maybe_publish_shadow_debug_copy(
     edit_vk_post_fn: Callable[..., Awaitable[bool | None]] | None = None,
     existing_vk_post_url: str | None = None,
     public_only: bool = False,
+    public_publish_date: int | None = None,
     shadow_only: bool = False,
     now_utc: datetime | None = None,
     source_publish_url: str | None = None,
@@ -5363,7 +5364,7 @@ async def maybe_publish_shadow_debug_copy(
                 raise RuntimeError("upload_vk_photo_returned_empty")
             generated_attachments.append(attachment)
         outgoing_message = message.rstrip()
-        scheduled_ts: int | None = None
+        scheduled_ts: int | None = public_publish_date if publish_mode == "public" else None
         schedule_meta: dict[str, Any] = {}
         if publish_mode == "shadow":
             outgoing_message = (

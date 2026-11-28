@@ -7420,6 +7420,7 @@ async def sync_vk_source_post(
     ics_url: str | None = None,
     append_text: bool = True,
     relations: dict | None = None,
+    publish_date: int | None = None,
 ) -> str | None:
     """Create or update VK source post for an event."""
     target_group_id = VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID
@@ -7478,6 +7479,7 @@ async def sync_vk_source_post(
                 edit_vk_post_fn=edit_vk_post,
                 existing_vk_post_url=existing_url,
                 public_only=public_only,
+                public_publish_date=publish_date if public_only else None,
                 shadow_only=shadow_only,
                 source_publish_url=publish_source_url,
                 source_event_id=int(event.id) if event.id is not None else None,
@@ -7780,6 +7782,7 @@ async def sync_vk_source_post(
                 source_event_id=int(event.id) if event.id is not None else None,
                 location_marker=location_marker,
                 latest_publish_ts=_event_publication_start_deadline_ts(event),
+                publish_date=publish_date,
             )
         if url:
             logging.info("sync_vk_source_post created %s", url)

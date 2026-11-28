@@ -125,3 +125,28 @@ state or provider call was added. Pixel check: corners alpha0, alpha range0–25
 PNG and lossless WebP RGBA identical. Offline actual-frozen card preview passed root and independent visual review.
 Merge, deployment and a new actual public-card check have not run yet; old VK
 posts and comments remain untouched. Retained evidence: tretyakov-fallback-pixels-20261128.json.
+
+### 2026-11-28: peers expire before a postponed post publishes
+
+Actual16445 for11531 published28Nov18:40UTC with peers10399/10841 starting
+28Nov17:00UTC. The card and related payload were prepared27Nov04:44UTC.
+At preparation those events were future; the slot was reserved after selection.
+Their semantic identity is not inferred from title alone. The old square badge
+on this card was also uploaded before1133; it is not an AFTER1133 render.
+
+The normal create job now reserves the existing slot once before presentation,
+uses existing canonical date/start eligibility with that reference time, and
+forwards the same slot through public CTA/plain posting. No vector/model rule,
+queue, provider call, historical edit or comment re-selection was added.
+Production net+14/budget30. Distinguishing controlled-clock case includes one
+peer expiring before the slot and another still future. Baseline selects both;
+the corrected path must keep only the future peer and reserve once. Public
+CTA fallback must reuse an explicit slot. Tests/review/release are recorded
+separately; this entry does not claim deployment or new-public acceptance.
+Treat as regression guard when selecting peers before scheduling media.
+
+Offline verification: valid controlled-clock BEFORE fails on an expired peer;
+AFTER/regression130 PASS,4 known CAPTCHA priority cases deselected. Final
+missing-image/selection/real-gallery boundaries3 PASS. Independent SOURCE and
+simplicity PASS after carrying the timestamp through the real public CTA adapter.
+No model/provider call was run. Release and new-public acceptance not started.

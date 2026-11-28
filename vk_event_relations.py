@@ -21,7 +21,7 @@ def graph_path(db):
     return Path(db.path).with_name('static_site_event_related.json')
 
 
-async def presentation(db, event):
+async def presentation(db, event, *, now=None):
     import main
     if not event.photo_urls:
         return {'dates': [], 'related': []}
@@ -39,8 +39,8 @@ async def presentation(db, event):
             Event.identity_status != 'merged', Event.merged_into_event_id.is_(None),
         ))).scalars().all()
     rows = {row.id: row for row in rows if row.id != event.id
-            and not main._event_has_ended_before_today(row)
-            and not main._event_start_has_passed_for_publication(row)}
+            and not main._event_has_ended_before_today(row, now=now)
+            and not main._event_start_has_passed_for_publication(row, now=now)}
     dates = sorted((rows[i] for i in linked_ids if i in rows),
                    key=lambda row: (row.date, row.time or '', row.id))
     peer_urls = {row.id: row.source_vk_post_url or ''

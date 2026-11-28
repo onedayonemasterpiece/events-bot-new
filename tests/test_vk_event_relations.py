@@ -563,8 +563,8 @@ async def test_related_selection_keeps_distinct_canonical_programmes(tmp_path, m
 async def test_11077_does_not_refill_linked_zhenitba_dates(tmp_path, monkeypatch):
     db = main.Database(str(tmp_path / '11077-selection.sqlite'))
     await db.init()
-    monkeypatch.setattr(main, '_event_has_ended_before_today', lambda event: False)
-    monkeypatch.setattr(main, '_event_start_has_passed_for_publication', lambda event: False)
+    monkeypatch.setattr(main, '_event_has_ended_before_today', lambda event, **kwargs: False)
+    monkeypatch.setattr(main, '_event_start_has_passed_for_publication', lambda event, **kwargs: False)
     async def public(method, params, *args, **kwargs):
         assert method == 'wall.getById'
         return {'response': [{'owner_id': -231920894, 'id': int(pair.split('_')[1]), 'post_type': 'post'}
