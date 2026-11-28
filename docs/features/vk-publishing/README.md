@@ -280,3 +280,7 @@ early, the handler returns the existing publication-plus-three-minute minimum
 before linked-publication preparation or any VK identity recovery. The producer
 keeps its existing random 3–20 minute due time. Legacy payloads without the
 timestamp retain their existing behavior; no migration or historical scan runs.
+
+### Просроченная первая публикация и ожидание похожих
+
+`job_sync_vk_source_post` читает текущее событие и применяет существующие проверки прошедшей даты и начала до ожидания related JSON и проверки VK-доступа. Просроченное неопубликованное событие завершает своё outbox-задание без публикации и записи `vk_source_hash`. Будущее событие и подтверждённый продолжающийся многодневный период по-прежнему ждут готового strict anchor; отсутствие рекомендаций в проверенном anchor допустимо. Существующие посты и комментарии этот путь не редактирует.
