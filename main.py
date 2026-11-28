@@ -15477,7 +15477,12 @@ async def _enqueue_static_site_build_atomic(
             if active_state and active_state["active_job_id"]
             else None
         )
-        if running is not None:
+        if running is None and os.getenv("STATIC_SITE_BUILD_PROFILE") == "production-candidate":
+            running = next((row for row in rows if int(row["id"]) == active_job_id), None)
+            if running is not None:
+                # A deferred remote owner has immutable inputs; new effects belong to its follow-up.
+                pending = next((row for row in rows if int(row["id"]) != active_job_id and row["status"] == "pending"), None)
+        if running is not None and running["status"] == "running":
             updated_at = _sqlite_parse_datetime(running["updated_at"])
             stale_after = int(JOB_MAX_RUNTIME.get(JobTask.static_site_build, 14400))
             if (now - updated_at).total_seconds() > stale_after:
@@ -26099,7 +26104,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         raise StaticSiteSingleFlightDeferred(f"static_site_capacity_deferred:{exc}") from exc
     snapshot_source = db.path
     if (
-        os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only"
+        os.getenv("STATIC_SITE_BUILD_PROFILE") in {"related-only", "production-candidate"}
         and os.getenv("STATIC_SITE_RELATED_MODE") == "pgvector"
     ):
         snapshot_source, request_payload = await asyncio.to_thread(
@@ -26473,7 +26478,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             ),
             semantic_cache_mode=semantic_cache_mode,
         )
-        if profile == "related-only":
+        if profile == "related-only" or not force_rebuild:
             cmd.append("--no-wait")
         logging.info(
             "static_site_build: launching Kaggle builder owner_event_id=%s build_id=%s limit=%s related_mode=%s semantic_cache_mode=%s sync_pgvector=%s gemma_verify=%s",
@@ -26509,7 +26514,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             raise StaticSiteRetryableError(
                 f"static-site Kaggle builder failed code={code}: " + "\n".join(tail[-20:])
             )
-        if profile == "related-only":
+        if profile == "related-only" or not force_rebuild:
             raise StaticSiteSingleFlightDeferred(f"static_site_remote_submitted:{run_id}")
         output_dir = static_site_output_root() / f"output-{build_id}"
         completed = await _finish_static_site_candidate(

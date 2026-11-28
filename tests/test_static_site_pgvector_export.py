@@ -194,7 +194,7 @@ def test_pgvector_cache_is_invalidated_by_related_corpus_revision() -> None:
         }
         meta_out = kwargs.get("graph_meta_out")
         if meta_out is not None:
-            meta_out.update({"policy": "test"})
+            meta_out.update({"policy": "test", "event_count": len(items)})
         return chains
 
     exporter.build_pgvector_related_chain = fake_build

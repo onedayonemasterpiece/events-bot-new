@@ -873,7 +873,12 @@ Repeated media or a new calculation cannot jump ahead of an older ready
 carousel; an older ready calculation likewise progresses during imports.
 Existing fresh Telegram/confirmed public repair lanes keep their precedence,
 ordinary media/backfill retain their own ordering, and dependency/rate/CAPTCHA
-checks are unchanged. The production-candidate profile uses the same ready-work ordering.
+checks are unchanged. The production-candidate profile uses the same ready-work ordering. Normal full
+builds use the existing asynchronous remote handoff and adoption path. The
+completed vector projection is also the full build input; the next completed
+projection enqueues the ordinary coalesced candidate, including effects that
+arrived after the current snapshot. A pending remote owner retains immutable
+inputs; subsequent effects stay in its pending follow-up.
 
 ### Related data survive an application release
 

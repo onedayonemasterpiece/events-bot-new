@@ -8,13 +8,14 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_related_remote_wait_releases_worker_and_reuses_handoff(tmp_path, monkeypatch):
+@pytest.mark.parametrize('profile', ['related-only', 'production-candidate'])
+async def test_related_remote_wait_releases_worker_and_reuses_handoff(tmp_path, monkeypatch, profile):
     import main
     from unittest.mock import AsyncMock
     db = main.Database(str(tmp_path / 'live.sqlite'))
     await db.init()
     monkeypatch.setenv('ENABLE_STATIC_SITE_KAGGLE_BUILDER', '1')
-    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', profile)
     monkeypatch.setenv('STATIC_SITE_RELATED_MODE', 'sparse')
     monkeypatch.setenv('STATIC_SITE_SNAPSHOT_DIR', str(tmp_path / 'snapshots'))
     monkeypatch.setenv('STATIC_SITE_RELATED_CACHE', str(tmp_path / 'cache.json'))
@@ -66,7 +67,8 @@ async def test_related_remote_wait_releases_worker_and_reuses_handoff(tmp_path, 
 
 
 @pytest.mark.asyncio
-async def test_related_uses_completed_vector_snapshot_while_ingest_advances(tmp_path, monkeypatch):
+@pytest.mark.parametrize('profile', ['related-only', 'production-candidate'])
+async def test_related_uses_completed_vector_snapshot_while_ingest_advances(tmp_path, monkeypatch, profile):
     import event_vector_sync as vectors
     import main
     from static_site_release import related_projection_input, validate_vector_barrier
@@ -75,7 +77,7 @@ async def test_related_uses_completed_vector_snapshot_while_ingest_advances(tmp_
     await db.init()
     monkeypatch.setenv('ENABLE_EVENT_VECTOR_SYNC', '1')
     monkeypatch.setenv('ENABLE_STATIC_SITE_KAGGLE_BUILDER', '1')
-    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', profile)
     receipt_path = tmp_path / 'vector-receipt.json'
     monkeypatch.setenv('EVENT_VECTOR_SYNC_RECEIPT_PATH', str(receipt_path))
     try:
