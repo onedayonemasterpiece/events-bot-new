@@ -65,8 +65,13 @@ async def test_early_related_job_keeps_same_job_pending_until_publication(tmp_pa
     published_at = int(datetime.now(timezone.utc).timestamp()) + publication_offset
     monkeypatch.setattr(relations.random, 'randint', lambda a, b: b)
     calls = []
+    monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '1')
     async def api(method, params, *args, **kwargs):
         calls.append(method)
+        if method == 'wall.get':
+            assert known_publication and params['filter'] == 'owner'
+            return {'response': {'items': [{'id': 10, 'owner_id': -1, 'date': published_at,
+                'post_type': 'post', 'text': 'Event\nПОХОЖИЕ СОБЫТИЯ\nPeer'}]}}
         if method == 'wall.getById':
             return {'response': [{'id': 10, 'date': published_at,
                                   'text': 'Event\nПОХОЖИЕ СОБЫТИЯ\nPeer'}]}
@@ -115,7 +120,7 @@ async def test_early_related_job_keeps_same_job_pending_until_publication(tmp_pa
         async with db.get_session() as session:
             assert (await session.get(main.JobOutbox, job.id)).status == main.JobStatus.done
         assert calls.count('wall.createComment') == 1
-        assert len(recover_calls) == (1 if known_publication else 2)
+        assert len(recover_calls) == (0 if known_publication else 2)
         assert await main._run_due_jobs_once(db, None) == 0
     finally:
         await db.close()

@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:source-medallion-owner-20261127
+    image: runcoveer/events:comment-frozen-slot-20261128
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
