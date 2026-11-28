@@ -38,7 +38,7 @@ dependency layer alongside `webp`.
 
 ## Comment frozen publication slot release, prepared 2026-11-28
 
-Image: `runcoveer/events:comment-frozen-slot-20261128`; rollback:
+Image: `runcoveer/events:comment-slot-drift-20261128`; rollback:
 `runcoveer/events:source-medallion-owner-20261127`. Exact merged-main Events-only
 update. Without a published receipt, both one-shot comment kinds resolve the
 original publication from its saved slot instead of mutable event date/time.
