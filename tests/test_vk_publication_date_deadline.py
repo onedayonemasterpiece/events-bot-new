@@ -103,3 +103,45 @@ async def test_public_cta_and_plain_fallback_share_publication_window(monkeypatc
     assert len(calls) == 1
     assert bool(result) is accepted
     assert api.await_count == int(accepted)
+
+
+@pytest.mark.asyncio
+async def test_rejected_date_only_slot_keeps_initial_publication_unwritten(tmp_path, monkeypatch):
+    from db import Database
+    import vk_event_relations
+
+    monkeypatch.setenv('DB_INIT_SKIP_VK_SOURCES_SEED', '1')
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'default')
+    _, api = configure(monkeypatch, slot=ts(30, 7, 20))
+    monkeypatch.setitem(main.vk_group_blocked, 'wall.post', 0.0)
+    monkeypatch.setattr(main, '_should_skip_ticket_giveaway_publication', AsyncMock(return_value=False))
+    monkeypatch.setattr(vk_event_relations, 'presentation', AsyncMock(return_value={}))
+    comment = AsyncMock()
+    site = AsyncMock()
+    monkeypatch.setattr(vk_event_relations, 'ensure_comment', comment)
+    monkeypatch.setattr(main, '_enqueue_static_site_after_vk_publication', site)
+
+    async def sync(current, *args, **kwargs):
+        return await main.post_to_vk('231920894', 'Workshop', source_event_id=current.id,
+            latest_publish_ts=main._event_publication_start_deadline_ts(current))
+
+    monkeypatch.setattr(main, 'sync_vk_source_post', sync)
+    db = Database(str(tmp_path / 'events.sqlite'))
+    try:
+        await db.init()
+        current = event()
+        async with db.get_session() as session:
+            session.add(current)
+            await session.commit()
+        result = await main.job_sync_vk_source_post(current.id, db, None)
+        async with db.get_session() as session:
+            saved = await session.get(main.Event, current.id)
+            assert saved.vk_source_hash is None
+            assert saved.source_vk_post_url is None
+            assert not list((await session.execute(main.select(main.JobOutbox))).scalars())
+        assert result is False
+        api.assert_not_awaited()
+        comment.assert_not_awaited()
+        site.assert_not_awaited()
+    finally:
+        await db.close()

@@ -24054,6 +24054,8 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         relations=relations,
         append_text=not replace_existing_text,
     )
+    if not vk_url:
+        return False
     event_for_notice, partner_user = await _persist_vk_source_post_result(
         event_id,
         db,
