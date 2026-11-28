@@ -16320,7 +16320,8 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
         if receipts:
             live_url = receipts[0][0]
             live_ids = _vk_owner_and_post_id(live_url)
-            if len(receipts) != 1 or not live_ids or old_ids[0] != live_ids[0]:
+            if (len(receipts) != 1 or not live_ids or old_ids[0] != live_ids[0]
+                    or event.source_vk_post_url not in (postponed_url, live_url)):
                 raise RuntimeError("vk_comment_publication_identity_conflict")
             post = int(live_ids[1])
             response = await _vk_api("wall.getById", {"posts": f"{owner}_{post}"}, db, bot,
@@ -16334,10 +16335,14 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
                      if row.get("owner_id") == owner and row.get("post_type") == "post" and not row.get("is_deleted")]
             matches = [row for row in items if int(row.get("postponed_id") or row.get("id") or 0) == old_post]
             if not matches:
+                publish_event, publish_group = await _prepare_same_day_linked_publish_event(db, event)
+                if any(row.source_vk_post_url != event.source_vk_post_url for row in publish_group):
+                    publish_event = event
                 # The slot is frozen at wall.post; canonical event headers can change afterwards.
                 matches = [row for row in items if row.get("postponed_id") is None
                            and int(row.get("id") or 0) > old_post and row.get("date") == payload["publish_date"]
-                           and str(row.get("text") or "").splitlines()[:1] == [event.title.strip()]]
+                           and next((line.strip() for line in str(row.get("text") or "").splitlines()
+                                     if line.strip()), "") == publish_event.title.strip()]
             item = matches[0] if len(matches) == 1 else {}
             post = int(item.get("id") or 0)
             live_url = f"https://vk.com/wall{owner}_{post}"
