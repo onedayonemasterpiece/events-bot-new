@@ -1585,6 +1585,7 @@ class GoogleAIClient:
         fallback_models: Optional[list[str]] = None,
         *,
         allow_model_fallback: bool = True,
+        provider_timeout_seconds: Optional[float] = None,
         max_provider_attempts: Optional[int] = None,
         attempt_observer: Optional[Callable[[dict[str, Any]], None]] = None,
         use_provider_count_tokens: bool = False,
@@ -1604,6 +1605,8 @@ class GoogleAIClient:
             fallback_models: Optional per-call model fallback chain.
             allow_model_fallback: Per-call opt-out from every model fallback.
                 The shared limiter and project-scoped key allocation still apply.
+            provider_timeout_seconds: Positive per-call cap; a stricter configured
+                provider timeout still applies. Does not mutate this shared client.
             max_provider_attempts: Optional ceiling on physical sends across
                 retries, key rotation and model fallback for this logical call.
             attempt_observer: Optional synchronous hook called after the shared
@@ -1698,6 +1701,7 @@ class GoogleAIClient:
                         max_output_tokens=max_output_tokens,
                         candidate_key_ids=attempt_candidate_key_ids,
                         attempt_observer=attempt_observer,
+                        provider_timeout_seconds=provider_timeout_seconds,
                     )
                     usage.model = limit_model
                     return response_text, usage
@@ -2092,6 +2096,7 @@ class GoogleAIClient:
         max_output_tokens: Optional[int],
         candidate_key_ids: Optional[list[str]],
         attempt_observer: Optional[Callable[[dict[str, Any]], None]] = None,
+        provider_timeout_seconds: Optional[float] = None,
     ) -> tuple[str, UsageInfo]:
         """Single attempt to generate content."""
         
@@ -2162,6 +2167,7 @@ class GoogleAIClient:
                     generation_config=generation_config,
                     safety_settings=safety_settings,
                     max_output_tokens=max_output_tokens,
+                    provider_timeout_seconds=provider_timeout_seconds,
                 )
             
             duration_ms = int((_monotonic() - start_time) * 1000)
@@ -2896,6 +2902,7 @@ class GoogleAIClient:
         generation_config: Optional[dict],
         safety_settings: Optional[list],
         max_output_tokens: Optional[int],
+        provider_timeout_seconds: Optional[float] = None,
     ) -> tuple[str, UsageInfo]:
         """Call Google AI provider."""
         # Build generation config
@@ -3005,6 +3012,8 @@ class GoogleAIClient:
         # say, 70s — observed on label ``telegraph_render_remove_logistics``
         # on 2026-05-08, INC-2026-05-08.
         timeout_sec = float(self.provider_timeout_seconds or 0.0)
+        if provider_timeout_seconds is not None and provider_timeout_seconds > 0:
+            timeout_sec = min(timeout_sec, provider_timeout_seconds) if timeout_sec > 0 else provider_timeout_seconds
         if timeout_sec > 0:
             try:
                 response = await asyncio.wait_for(

@@ -9778,6 +9778,10 @@ async def _ask_gemma_json_unbounded(
     client = _get_gemma_client()
     model_chain = _smart_update_model_chain(label)
     model = model_chain[0]
+    provider_options = (
+        {"provider_timeout_seconds": float(SMART_UPDATE_GEMMA_JSON_WALL_CLOCK_SEC) / 2}
+        if label == "dedup_adjudicator" and len(model_chain) > 1 else {}
+    )
     schema_text = json.dumps(schema, ensure_ascii=False)
     full_prompt = (
         f"{prompt}\n\n"
@@ -9895,6 +9899,7 @@ async def _ask_gemma_json_unbounded(
                             max_output_tokens=max_tokens,
                             fallback_models=model_chain[1:],
                             max_provider_attempts=2,
+                            **provider_options,
                         )
                         record_physical_send({"requested_model": model})
                         record_usage(_usage)
@@ -9940,6 +9945,7 @@ async def _ask_gemma_json_unbounded(
                             fallback_models=model_chain[1:],
                             allow_model_fallback=not single_primary_send,
                             max_provider_attempts=1 if single_primary_send else 2,
+                            **provider_options,
                         )
                         record_physical_send({"requested_model": model})
                         record_usage(_usage)
@@ -10015,6 +10021,7 @@ async def _ask_gemma_json_unbounded(
                             max_output_tokens=max_tokens,
                             fallback_models=model_chain[1:],
                             max_provider_attempts=2,
+                            **provider_options,
                         )
                         break
                     except Exception as exc:

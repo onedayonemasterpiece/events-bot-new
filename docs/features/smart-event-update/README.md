@@ -33,6 +33,16 @@ RunCoveer clears the September emergency preference so facts/writer calls start
 with the configured 3.1 Lite and its existing 3.5 Lite sibling. Gemma-only stages
 retain their stage policy. No identity retry worker is enabled.
 
+For `dedup_adjudicator` with a configured fallback tail, each provider call uses
+half of the existing JSON stage wall-clock cap (45 seconds with the default
+90-second stage cap). A stricter configured provider timeout wins. This cap is
+request-local; concurrent callers keep the shared client's timeout. Native,
+prompt and JSON-fix calls use the same cap. The existing two-attempt gateway
+budget, outer deadline and cancellation remain unchanged: timeout gives the
+existing fallback a chance, but does not guarantee its completion. Permanent
+provider failure or an ungrounded verdict retains the durable identity retry;
+no retry consumer or historical replay is enabled.
+
 ## P0 automatic identity and source-decision contract
 
 Telegram candidates with an inferred location but no retained extracted venue,
