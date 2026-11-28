@@ -28,20 +28,17 @@ test('Today leaves its desktop date context to the existing time rail, Tomorrow/
   assert.match(await read('src/components/listings/DateListingSurface.astro'), /dateContext=\{kind === 'today' \? undefined : \{ date: mobileDate, weekday: mobileWeekday \}\}/u);
 });
 
-test('immersive desktop detail does not reserve a second navigation header', async () => {
-  const layout = await read('src/layouts/EventLayout.astro');
-  assert.match(layout, /body\.hero-chrome-immersive \.site-header \{\s*position:absolute;\s*inset:0 0 auto;\s*height:auto;\s*min-height:0;\s*border:0;\s*background:transparent;/u);
-});
-
 test('single Home island wraps at intermediate widths without cloning the DOM', async () => {
   const nav = await read('src/components/HomeQuickNav.astro');
   assert.match(nav, /display: flex;\s*flex-wrap: wrap;/u);
   assert.equal((nav.match(/<nav class="home-quick-nav"/gu) || []).length, 1);
 });
 
-test('detail immersive header is not overridden by the desktop clean skin', async () => {
+test('accepted desktop detail retains the sticky header geometry', async () => {
   const detail = await read('src/components/DesktopEventPage.astro');
-  assert.match(detail, /desktop-clean-event-page:not\(\.hero-chrome-immersive\) \.site-header/u);
+  assert.match(detail, /desktop-clean-event-page \.site-header\) \{ position:sticky;/u);
+  const layout = await read('src/layouts/EventLayout.astro');
+  assert.match(layout, /\.site-header__inner \{[\s\S]*?height: 56px;\s*min-height: 56px;/u);
 });
 
 test('archive detail pages receive the same existing JSON route as current details', async () => {
