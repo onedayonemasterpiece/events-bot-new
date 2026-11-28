@@ -109,7 +109,7 @@ The approved guide renderer uses its existing asset resolver for fonts and icon 
   - CherryFlash keeps the one-run unique dataset naming pattern, but dataset upload is now explicitly two-step: `CreateDataset` first bootstraps the unique slug with a tiny marker file, then `CreateDatasetVersion` uploads the full runtime bundle; this avoids Kaggle `CreateDataset` fragility on the mounted CherryFlash payload while preserving the same per-run dataset isolation contract used in production flows.
   - CherryFlash runtime prefetch must fail fast on unstable poster hosts such as `files.catbox.moe`: remote poster prefetch is a best-effort acceleration step, not a mandatory gate before Kaggle upload, so dead Catbox URLs must not burn multiple 20-second retries before the run can even reach Kaggle.
   - the selection manifest must preserve `poster_candidates`, not only a derived `poster_file` basename: if launcher-side prefetch could not materialize a local poster into `assets/posters/`, the Kaggle intro runtime must still be able to resolve the same event artwork from the original remote candidate list instead of crashing on a synthetic missing local filename.
-  - CherryFlash selection itself must be renderability-aware before dataset upload: an event may enter the runtime bundle only if it already has at least one non-`files.catbox.moe` poster URL or if a source-specific rehydrate recovers one (`t.me` public-page poster fallback or production `VK wall.getById` poster fetch); catbox-only events that still have no renderable poster after that rehydrate must be dropped from selection instead of being pushed into Kaggle with a guaranteed missing `assets/posters/*` dependency.
+  - CherryFlash selection itself must be renderability-aware before dataset upload: an event may enter the runtime bundle only if it already has at least one non-`files.catbox.moe` poster URL. Missing renderable media is delegated to the existing durable `event_media_review` owner and the candidate is skipped in this selection; after that worker persists an approved gallery, a later ordinary selection may use it. The video consumer never fetches raw carrier photos or assigns them to a child event.
 - canonical local launch path for live runs:
   - `scripts/run_cherryflash_live.py`
   - this runner must start CherryFlash through the same scheduled scenario path as production (`_run_scheduled_popular_review` -> `VideoAnnounceScenario.run_popular_review_pipeline()`), keep the event loop alive until a terminal session status, and must not bypass the scenario by pushing Kaggle notebooks manually.
@@ -200,7 +200,7 @@ This delta records the latest mismatch found after reviewing the broken CherryFl
   - current implementation status: code path exists, but the user has not yet confirmed it on a full live run.
 - The canon now also requires a renderability gate before CherryFlash bundle upload:
   - selection may reuse existing direct poster URLs as-is;
-  - if the stored event media is catbox-only, CherryFlash may only keep that event after source-specific rehydrate finds a non-catbox poster;
+  - if the stored event media is catbox-only, CherryFlash skips that candidate and delegates missing renderable media to the existing `event_media_review` job;
   - approved reuse paths are the existing public Telegram poster fallback and the production `VK wall.getById` poster fetcher, not a new CherryFlash-only downloader.
 
 ### Needs clarification
@@ -864,8 +864,8 @@ This section captures the latest intro-direction request as an explicit delta to
   - selection traces should continue to show whether a chosen event was `fresh` rather than a hidden fallback repeat.
 - Poster eligibility must be durable before render handoff:
   - candidates with no renderable `photo_urls` must be skipped before session launch;
-  - if selection rehydrates poster URLs from a Telegram/VK source post, those URLs must be written back to the event row before session items and `payload.json` are built, because the render path reloads events from SQLite.
-  - if SQLite is temporarily locked while writing rehydrated poster URLs, CherryFlash must retry for a bounded window and then skip only that candidate if the repair still cannot be made durable; the whole popularity run must not crash on one locked poster write.
+  - the media worker must persist approved poster URLs before a later selection includes the event, because the render path reloads events from SQLite. Video selection itself does not mutate the gallery.
+  - if SQLite is temporarily locked while enqueuing the existing media job, skip only that candidate; the whole popularity run must not crash and no separate retry loop is added. Existing future media defers must not be shortened.
 - Viewer-facing success and local session status must not drift silently:
   - a CherryFlash run that already reached successful Kaggle/story completion must not stay locally marked as pre-handoff `FAILED`;
   - incident triage on this surface must use both prod sqlite and Kaggle output evidence, because the remote render may outlive a brief runtime recovery race.
@@ -931,7 +931,7 @@ This section captures the latest intro-direction request as an explicit delta to
   - the current Kaggle preproduction entrypoint must remain compatible with Kaggle's bundled `moviepy` layout, because the approval clip assembly happens inside `scripts/render_mobilefeed_intro_scene1_approval.py` in the remote runtime;
   - CherryFlash runtime payloads may carry viewer-facing formatted dates inside the selection manifest, so intro/scene loaders must accept either ISO dates or preformatted date strings and must not crash on already-rendered copies such as `3 мая`;
   - the launcher/runtime path must tolerate mixed ORM + `raw_conn()` access on the same SQLite DB during live popularity selection; if SQLite temporarily refuses `PRAGMA journal_mode=...` with `database is locked`, CherryFlash should continue rather than abort before the session is even created;
-  - rehydrated poster persistence must also tolerate transient SQLite locks: retry, require a durable event-row write before selecting the candidate, and skip the candidate rather than selecting an event that will reload as no-photo in `payload.json`;
+  - missing poster recovery belongs to the durable media worker; selection skips the candidate until its gallery exists and isolates a SQLite lock during enqueue from other candidates;
   - canonical kernel ref for the current preproduction route: `zigomaro/cherryflash`;
   - the existing `CrumpleVideo` runtime remains separate and must not be used as the CherryFlash render/notebook home.
 - Current working refinement track for approval:
