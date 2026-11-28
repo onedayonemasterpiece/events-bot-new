@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:dedup-per-call-timeout-20261128
+    image: runcoveer/events:full-candidate-builder-20261128
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
