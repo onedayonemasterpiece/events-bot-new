@@ -15528,7 +15528,7 @@ async def _enqueue_static_site_build_atomic(
                     incoming_immediate=immediate,
                 )
                 await connection.execute(
-                    "UPDATE joboutbox SET payload=?, next_run_at=?, updated_at=?, attempts=0, last_error=NULL WHERE id=? AND status='pending'",
+                    "UPDATE joboutbox SET payload=?, next_run_at=?, updated_at=?, attempts=0, last_error=NULL, terminal_reason=NULL WHERE id=? AND status='pending'",
                     (
                         json.dumps(merged, ensure_ascii=False) if merged is not None else None,
                         _sqlite_datetime(target), _sqlite_datetime(now), int(pending["id"]),
@@ -15579,7 +15579,7 @@ async def _enqueue_static_site_build_atomic(
                 )
             )
             await connection.execute(
-                "UPDATE joboutbox SET payload=?, next_run_at=?, updated_at=?, attempts=0, last_error=NULL WHERE id=? AND status='pending'",
+                "UPDATE joboutbox SET payload=?, next_run_at=?, updated_at=?, attempts=0, last_error=NULL, terminal_reason=NULL WHERE id=? AND status='pending'",
                 (
                     json.dumps(merged, ensure_ascii=False) if merged is not None else None,
                     _sqlite_datetime(target), _sqlite_datetime(now), int(pending["id"]),
@@ -15622,7 +15622,7 @@ async def _enqueue_static_site_build_atomic(
             await connection.execute(
                 """
                 UPDATE joboutbox SET event_id=?, payload=?, status='pending', attempts=0,
-                    last_error=NULL, updated_at=?, next_run_at=? WHERE id=?
+                    last_error=NULL, terminal_reason=NULL, updated_at=?, next_run_at=? WHERE id=?
                 """,
                 (
                     event_id, requeued_payload, _sqlite_datetime(now),

@@ -198,3 +198,25 @@ A present sent header is authoritative; failure to match it cannot fall back to
 a new canonical title. Existing slot/owner/unique matching remains. No fuzzy
 match, semantic model, second queue or duplicate sent-title copy is introduced.
 Legacy payloads keep their existing behavior and are not backfilled.
+
+
+### 2026-11-28: rearmed related build retains a terminal marker
+
+Production1136 vector13761 completed19:58:03UTC with a complete matching
+projection. Its normal enqueue rearmed static172504 as pending/due, reset
+attempts and error, but retained terminal_reason=failed. The common picker
+correctly excludes terminal rows, so no build began and JSON remained19:23.
+No other build was running and the active claim was empty.
+
+Root cause is the atomic static enqueue path: its three UPDATE statements
+omitted the terminal field while generic enqueue already cleared it. The
+existing requeue/pending merge/pending successor assignments now also set
+terminal_reason=NULL, with zero net production lines. This changes the normal
+new-request transition, not old queue rows through manual reset/replay. Running
+payload/handoff, claims, debounce and daily idempotence are unchanged.
+
+Offline BEFORE3FAIL reproduces the blocked field in all three paths. AFTER
+checks ordinary enqueue followed by the real picker executes its handler once
+and leaves the running owner payload intact. SOURCE/simplicity PASS. The next
+natural vector request and resulting fresh JSON must be read after rollout;
+unit tests and release alone do not close this freshness regression.
