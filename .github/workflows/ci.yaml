@@ -264,6 +264,7 @@ jobs:
           tests/test_static_site_projection_snapshot.py
           tests/test_event_identity.py
           tests/test_static_site_release.py
+          tests/test_static_site_atomic_root.py
           tests/test_static_site_build_debounce.py
           tests/test_smart_event_update_location_aliases.py
           tests/test_location_reference_bastion.py
