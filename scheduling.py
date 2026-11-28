@@ -5772,6 +5772,23 @@ def startup(
     else:
         logging.info("SCHED skipping exhibition_duplicate_audit (ENABLE_EXHIBITION_DUPLICATE_AUDIT!=1)")
 
+    if _env_enabled("ENABLE_EVENT_AGE_BGE_ASSESSMENT", default=False):
+        _register_job(
+            "event_age_bge_outbox",
+            _job_wrapper(
+                "event_age_bge_outbox",
+                resolve("run_event_age_bge_outbox", None),
+                notify_skip=_notify_admin_skip,
+            ),
+            "interval",
+            id="event_age_bge_outbox",
+            seconds=30,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+
     if _env_enabled("ENABLE_EVENT_VECTOR_SYNC", default=False):
         from event_vector_sync import run_event_vector_sync
 

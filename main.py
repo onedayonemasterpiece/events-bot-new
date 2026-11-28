@@ -19787,6 +19787,10 @@ async def _run_due_jobs_once(
     force_notify: bool = False,
     max_jobs: int | None = None,
 ) -> int:
+    allowed_tasks = set(JobTask) if allowed_tasks is None else set(allowed_tasks)
+    allowed_tasks.discard(JobTask.event_age_bge_assessment)
+    if not allowed_tasks:
+        return 0
     async with _get_run_due_jobs_lock():
         return await _run_due_jobs_once_locked(
             db,
@@ -19799,6 +19803,14 @@ async def _run_due_jobs_once(
             force_notify=force_notify,
             max_jobs=max_jobs,
         )
+
+
+async def run_event_age_bge_outbox(db: Database, bot: Bot, *, run_id: str | None = None) -> int:
+    """Await the existing age job without holding the comment dispatch lock."""
+    return await _run_due_jobs_once_locked(
+        db, bot, notify=_notify_event_progress,
+        allowed_tasks={JobTask.event_age_bge_assessment}, max_jobs=1,
+    )
 
 
 async def _run_due_jobs_once_locked(
@@ -20519,6 +20531,29 @@ async def _run_due_jobs_once_locked(
                     await session.commit()
                     obj.status = JobStatus.running
                     obj.updated_at = claimed_at
+                elif obj.task == JobTask.event_age_bge_assessment:
+                    claim_job_id = int(obj.id)
+                    claim_result = await session.execute(
+                        update(JobOutbox)
+                        .where(
+                            JobOutbox.id == claim_job_id,
+                            JobOutbox.status.in_([JobStatus.pending, JobStatus.error]),
+                            JobOutbox.terminal_reason.is_(None),
+                            JobOutbox.next_run_at <= claimed_at,
+                            ~select(JobOutbox.id).where(
+                                JobOutbox.task == JobTask.event_age_bge_assessment,
+                                JobOutbox.status == JobStatus.running,
+                            ).exists(),
+                        )
+                        .values(status=JobStatus.running, updated_at=claimed_at)
+                        .execution_options(synchronize_session=False)
+                    )
+                    if claim_result.rowcount != 1:
+                        await session.rollback()
+                        continue
+                    await session.commit()
+                    obj.status = JobStatus.running
+                    obj.updated_at = claimed_at
                 else:
                     obj.status = JobStatus.running
                     obj.updated_at = claimed_at
@@ -21062,22 +21097,23 @@ async def _watch_nav_jobs(db: Database, bot: Bot) -> None:
              logging.debug("NAV_WATCHDOG key=%s blocked_by=%s", job.coalesce_key, ", ".join(blockers))
 
 
+async def _notify_event_progress(
+    task: JobTask,
+    eid: int,
+    status: JobStatus,
+    changed: bool,
+    link: str | None,
+    err: str | None,
+) -> None:
+    ctx = _EVENT_PROGRESS.get(eid)
+    if ctx:
+        await ctx.updater(task, eid, status, changed, link, err)
+
+
 async def job_outbox_worker(db: Database, bot: Bot, interval: float = 2.0):
     last_log = 0.0
     while True:
         try:
-            async def notifier(
-                task: JobTask,
-                eid: int,
-                status: JobStatus,
-                changed: bool,
-                link: str | None,
-                err: str | None,
-            ) -> None:
-                ctx = _EVENT_PROGRESS.get(eid)
-                if ctx:
-                    await ctx.updater(task, eid, status, changed, link, err)
-
             ics_map = {
                 eid: ctx.ics_progress
                 for eid, ctx in _EVENT_PROGRESS.items()
@@ -21091,7 +21127,7 @@ async def job_outbox_worker(db: Database, bot: Bot, interval: float = 2.0):
             await _run_due_jobs_once(
                 db,
                 bot,
-                notifier,
+                _notify_event_progress,
                 None,
                 ics_map if ics_map else None,
                 fest_map if fest_map else None,
@@ -23458,6 +23494,7 @@ async def publish_event_progress(
                 await session.execute(
                     select(func.min(JobOutbox.next_run_at)).where(
                         JobOutbox.event_id == event.id,
+                        JobOutbox.task != JobTask.event_age_bge_assessment,
                         JobOutbox.status.in_([JobStatus.pending, JobStatus.error]),
                     )
                 )
