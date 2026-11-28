@@ -3,6 +3,47 @@ from types import SimpleNamespace
 import pytest
 
 
+@pytest.mark.parametrize("address", ["пр. Мира 9/11", "ул. Мира 9/11", "проспект Мира 9/11"])
+def test_tg_candidate_preserves_grounded_fractional_address_in_digest(address):
+    from source_parsing.telegram.handlers import _build_candidate
+
+    source = SimpleNamespace(default_location=None, default_ticket_link=None, trust_level=None)
+    text = (
+        "✔️ Лекция о мигрени\n"
+        "16 ноября в 18:00\n"
+        "Место: арт-пространство «Сигнал» (ул. Леонова, 22)\n\n"
+        "✔️ «Этажи истории». Авторская экскурсия\n"
+        "29 ноября в 12:00\n"
+        "Экскурсия по зданию бывшего Прусского государственного архива.\n"
+        f"Адрес: {address}\n"
+    )
+    message = {
+        "source_username": "culture_digest",
+        "message_id": 8747,
+        "message_date": "2026-11-14T19:00:00+00:00",
+        "text": text,
+        "posters": [],
+    }
+    event = {
+        "title": "«Этажи истории». Авторская экскурсия",
+        "date": "2026-11-29",
+        "time": "12:00",
+        "location_name": "бывший Прусский государственный архив",
+        "location_address": address,
+        "city": "Калининград",
+        "source_text": text,
+        "raw_excerpt": "«Этажи истории». Авторская экскурсия 29 ноября в 12:00.",
+    }
+
+    candidate = _build_candidate(source, message, event)
+
+    assert candidate.location_name == event["location_name"]
+    from location_reference import normalize_address_key
+
+    assert candidate.location_address
+    assert normalize_address_key(candidate.location_address) == normalize_address_key(address)
+
+
 def test_tg_build_candidate_ocr_only_phone_contact_beats_group_author_fallback():
     from source_parsing.telegram.handlers import _build_candidate
 
@@ -54,7 +95,8 @@ def test_tg_build_candidate_ocr_only_phone_contact_beats_group_author_fallback()
 
 
 @pytest.mark.asyncio
-async def test_tg_build_candidate_replaces_unsupported_extracted_location_from_poster_ocr():
+@pytest.mark.parametrize("raw_excerpt", [None, "Весенний Экодвор в Фридландских воротах"])
+async def test_tg_build_candidate_replaces_unsupported_extracted_location_from_poster_ocr(raw_excerpt):
     from source_parsing.telegram.handlers import _build_candidate
 
     src = SimpleNamespace(default_location=None, default_ticket_link=None, trust_level=None)
@@ -87,7 +129,10 @@ async def test_tg_build_candidate_replaces_unsupported_extracted_location_from_p
         ],
     }
 
-    cand = _build_candidate(src, message, message["events"][0])
+    event = dict(message["events"][0])
+    if raw_excerpt:
+        event["raw_excerpt"] = raw_excerpt
+    cand = _build_candidate(src, message, event)
 
     assert (cand.location_name or "").casefold() != "фридландские ворота"
     assert "железнодорож" in (cand.location_name or "").casefold()

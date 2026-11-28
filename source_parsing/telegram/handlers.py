@@ -2998,7 +2998,7 @@ def _filter_schedule_source_text(text: str, *, event_date: str | None, event_tit
 _DATE_TITLE_PREFIX_RE = re.compile(r"^\s*\d{1,2}[./]\d{1,2}(?:[./](?:19|20)\d{2})?\s*(?:[|—–-]\s*)?", re.U)
 _BAD_TITLE_RE = re.compile(r"^\s*[\W_]*\(?\s*\d*\s*(?:мест[ао]?)?\s*\)?\s*[\W_]*$", re.I | re.U)
 _ADDRESS_HINT_RE = re.compile(
-    r"(?i)\b(ул\.?|улица|пр-т|проспект|пл\.|площад|пер\.|переулок|наб\.|набереж|шоссе|бульвар|дом)\b"
+    r"(?i)\b(ул\.?|улица|пр\.?|пр-т|проспект|пл\.|площад|пер\.|переулок|наб\.|набереж|шоссе|бульвар|дом)\b"
 )
 _LOCATION_VENUE_CUE_RE = re.compile(
     r"(?iu)\b(?:театр\w*|музе[йяе]|галере[яи]|кино(?:театр|зал)|дк\b|дом\s+культур\w*|"
@@ -3505,7 +3505,10 @@ def _looks_like_location_prose_fragment(value: str | None) -> bool:
         return True
     if re.search(r"[:]\s*$", compact) and len(words) <= 3 and not _ADDRESS_HINT_RE.search(compact):
         return True
-    if "|" in compact or re.search(r"\b\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?\b", compact):
+    if "|" in compact or (
+        re.search(r"\b\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?\b", compact)
+        and not _ADDRESS_HINT_RE.search(compact)
+    ):
         return True
     if re.fullmatch(r"\d{4}\s*\([^)]{3,40}\)", compact):
         return True
@@ -4822,6 +4825,15 @@ def _build_candidate(
             )
         )
     )
+    probe_parts = [str(message_text_s or event_source_text or "").strip()]
+    for item in (assigned_posters_payload or posters_payload or message_posters_payload or [])[:3]:
+        if not isinstance(item, dict):
+            continue
+        for key in ("ocr_text", "ocr_title"):
+            chunk = str(item.get(key) or "").strip()
+            if chunk:
+                probe_parts.append(chunk)
+    probe_text = "\n".join(part for part in probe_parts if part).strip()
     if (
         extracted_location
         and source.default_location
@@ -4893,15 +4905,6 @@ def _build_candidate(
                     location_address = None
                 location_overridden_by_default = bool(location_name is None)
     elif extracted_location:
-        probe_parts = [str(message_text_s or event_source_text or "").strip()]
-        for item in (assigned_posters_payload or posters_payload or message_posters_payload or [])[:3]:
-            if not isinstance(item, dict):
-                continue
-            for key in ("ocr_text", "ocr_title"):
-                chunk = str(item.get(key) or "").strip()
-                if chunk:
-                    probe_parts.append(chunk)
-        probe_text = "\n".join(part for part in probe_parts if part).strip()
         grounded_loc = inferred_loc or poster_loc
         grounded_addr = inferred_addr or poster_addr
         if (
@@ -4910,7 +4913,23 @@ def _build_candidate(
             and not _location_is_sibling_event_title(grounded_loc, message)
             and not _location_matches(extracted_location, grounded_loc)
             and _location_is_grounded_in_text(grounded_loc, probe_text)
-            and not _location_is_grounded_in_text(extracted_location, probe_text)
+            and not (
+                _location_is_grounded_in_text(extracted_location, probe_text)
+                or (
+                    _address_grounded_in_text(extracted_location_address, probe_text)
+                    and (
+                        match_known_venue(extracted_location, city=extracted_city) is None
+                        or _location_payloads_share_known_venue(
+                            left_name=extracted_location,
+                            left_address=None,
+                            left_city=extracted_city,
+                            right_name=extracted_location,
+                            right_address=extracted_location_address,
+                            right_city=extracted_city,
+                        )
+                    )
+                )
+            )
         ):
             logger.warning(
                 "telegram: replaced unsupported extracted location source=%s message_id=%s title=%r extracted=%r grounded=%r",
@@ -4928,15 +4947,6 @@ def _build_candidate(
         # boundary to seed the source default. If the post itself has an
         # explicit offsite address/venue line, fail toward that event-local
         # evidence instead of silently publishing the source default.
-        probe_parts = [str(message_text_s or event_source_text or "").strip()]
-        for item in (assigned_posters_payload or posters_payload or message_posters_payload or [])[:3]:
-            if not isinstance(item, dict):
-                continue
-            for key in ("ocr_text", "ocr_title"):
-                chunk = str(item.get(key) or "").strip()
-                if chunk:
-                    probe_parts.append(chunk)
-        probe_text = "\n".join(part for part in probe_parts if part).strip()
         grounded_loc = inferred_loc or poster_loc
         grounded_addr = inferred_addr or poster_addr
         if (
@@ -4993,6 +5003,16 @@ def _build_candidate(
             city = default_city
     else:
         city = extracted_city or "Калининград"
+    # Validate recovered address before normalization removes address prefixes.
+    if location_address and _looks_like_location_prose_fragment(location_address):
+        logger.warning(
+            "telegram: dropping prose location_address after recovery source=%s message_id=%s title=%r address=%r",
+            username,
+            message_id,
+            title,
+            location_address,
+        )
+        location_address = None
     if location_address:
         location_address = strip_city_from_address(location_address, city)
 
@@ -5070,15 +5090,6 @@ def _build_candidate(
                 location_name,
             )
             location_name = None
-            location_address = None
-        if location_address and _looks_like_location_prose_fragment(location_address):
-            logger.warning(
-                "telegram: dropping prose location_address after recovery source=%s message_id=%s title=%r address=%r",
-                username,
-                message_id,
-                title,
-                location_address,
-            )
             location_address = None
         if (
             not location_name

@@ -103,3 +103,13 @@ Customer-visible Telegraph event pages were published with the wrong gate venue 
 - The venue layer now requires explicit gate-family grounding instead of generic `ворота` collapsing.
 - The fact layer now rejects unsupported sensitive claims before fact-first rebuild.
 - The incident record itself becomes a mandatory regression contract for future gate-location or linked-source import changes.
+
+### 2026-11-28 explicit address preservation
+
+The original source/OCR correction remains required. A controlled archive-tour
+case exposed valid `Мира 9/11` being discarded as a date and an inflected venue
+being replaced by a neighbouring digest venue. Address support now respects
+the existing curated name/address identity; it cannot protect a wrong known
+name with another venue's address. The original Ecodvor OCR control and an
+added false `raw_excerpt` control retain source-owned grounding. This does not
+establish the missing historical extraction answer or repair wrong primary data.
