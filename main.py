@@ -16319,6 +16319,13 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
         owner, old_post = map(int, old_ids)
         planned = int(payload["publish_date"])
         slot_end = planned + (60 if planned % 60 == 0 else 1)
+        async with db.get_session() as session:
+            sent = (await session.execute(select(JobOutbox.payload).where(
+                JobOutbox.coalesce_key == f"vk_calendar_comment:{owner}:{old_post}",
+            ).order_by(JobOutbox.id.desc()).limit(1))).scalar_one_or_none() or {}
+        sent_title = (sent.get("post_title") or "").strip() if (
+            sent.get("post_url") == postponed_url and sent.get("publish_date") == planned
+        ) else ""
 
         def same_slot(timestamp):
             return type(timestamp) is int and planned <= timestamp < slot_end
@@ -16348,7 +16355,7 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
                 matches = [row for row in items if row.get("postponed_id") is None
                            and int(row.get("id") or 0) > old_post and same_slot(row.get("date"))
                            and next((line.strip() for line in str(row.get("text") or "").splitlines()
-                                     if line.strip()), "") == publish_event.title.strip()]
+                                     if line.strip()), "") == (sent_title or publish_event.title.strip())]
             item = matches[0] if len(matches) == 1 else {}
             post = int(item.get("id") or 0)
             live_url = f"https://vk.com/wall{owner}_{post}"

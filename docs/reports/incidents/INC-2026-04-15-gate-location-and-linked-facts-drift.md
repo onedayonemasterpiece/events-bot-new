@@ -176,3 +176,25 @@ fails while waiting for the calendar; the corrected owner lets it run before age
 returns. Source/simplicity review accepted54 net production lines against80.
 Release and new natural overlapping-age/public-comment timing remain open until
 recorded after rollout; old posts/comments are not replayed or changed.
+
+
+### 2026-11-28: delayed comment identity uses a mutable title
+
+Mechanical publication identity defect. Event11576 has stored16323 unavailable
+through wall.getById and two failed comment jobs. A same-slot public16439 has
+the initial candidate32837 title, while current Event uses a later candidate
+32911 title. These observations do not establish physical16323→16439 mapping
+and do not authorize old replay/backfill.
+
+The normal producer sends Event.title unchanged as the first header. Comment
+resolver later compared it against current mutable Event.title, with no sent
+header in durable payload. Offline actual post_to_vk followed by canonical
+title change reproduced selection of a wrong current-title decoy in the same
+slot, including when the sent title was absent or ambiguous.
+
+One exact sent first header is now retained in the existing calendar payload;
+both comment kinds reuse that record with exact old URL and planned timestamp.
+A present sent header is authoritative; failure to match it cannot fall back to
+a new canonical title. Existing slot/owner/unique matching remains. No fuzzy
+match, semantic model, second queue or duplicate sent-title copy is introduced.
+Legacy payloads keep their existing behavior and are not backfilled.

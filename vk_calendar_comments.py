@@ -51,7 +51,7 @@ async def calendar_bytes(db, events):
     return calendar.to_ical()
 
 
-async def schedule_calendar_comment(db, event_id, post_url, publish_date):
+async def schedule_calendar_comment(db, event_id, post_url, publish_date, *, post_title=""):
     """One existing outbox job per new postponed announcement, never wall history."""
     import main
     group = str(main.VK_AFISHA_GROUP_ID or "").lstrip("-")
@@ -61,7 +61,7 @@ async def schedule_calendar_comment(db, event_id, post_url, publish_date):
     delay = random.Random(post_url).randint(300, 720)
     await main.enqueue_job(
         db, event_id, main.JobTask.vk_calendar_comment,
-        {"post_url": post_url, "publish_date": publish_date},
+        {"post_url": post_url, "publish_date": publish_date, "post_title": post_title},
         coalesce_key=f"vk_calendar_comment:{ids[0]}:{ids[1]}",
         next_run_at=datetime.fromtimestamp(publish_date + delay, timezone.utc),
     )
