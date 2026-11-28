@@ -160,6 +160,7 @@ async def test_actual_vk_job_expires_before_related_wait(
             return value.astimezone(tz) if tz else value.replace(tzinfo=None)
 
     monkeypatch.setattr(main, 'datetime', Clock)
+    monkeypatch.setattr(main, 'LOCAL_TZ', timezone(timedelta(hours=2)))
     monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
     monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_VERIFY', '1')
     event = await save_event(db, photo_urls=['source-poster'])
@@ -485,6 +486,7 @@ async def test_initial_two_sources_and_both_cards_schedule_delayed_calendar(db, 
     monkeypatch.setattr(main, "_enqueue_static_site_after_vk_publication", AsyncMock())
     await main.job_sync_vk_source_post(event.id, db, None)
     assert calls == ["wall.post"]
+    main._reserve_vk_postponed_publish_date.assert_awaited_once()
     assert gallery.await_args.args[1] == photos
     assert gallery.await_args.kwargs["relation_cards"] == card_bytes
     async with db.get_session() as session:
@@ -566,3 +568,67 @@ async def test_frozen_ambiguity_finishes_without_retrying_other_failures(db, mon
     assert await main._run_due_jobs_once(db, None) == (0 if terminal else 1)
     assert len(calls) == (1 if terminal else 2)
     assert healthy == [event.id] and main._vk_captcha_needed is False
+
+
+@pytest.mark.asyncio
+async def test_initial_relations_use_reserved_publication_time(db, monkeypatch):
+    import json
+    from datetime import datetime as RealDatetime, timezone, timedelta
+    import vk_event_relations
+    class Clock(RealDatetime):
+        @classmethod
+        def now(cls, tz=None):
+            value = cls(2026, 11, 27, 4, tzinfo=timezone.utc)
+            return value.astimezone(tz) if tz else value.replace(tzinfo=None)
+    monkeypatch.setattr(main, 'datetime', Clock)
+    monkeypatch.setattr(main, 'LOCAL_TZ', timezone(timedelta(hours=2)))
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'default')
+    monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '1')
+    monkeypatch.setattr(main, 'VK_AFISHA_GROUP_ID', '1')
+    monkeypatch.setattr(main, 'choose_vk_actor', lambda *_: [])
+    slot = int(RealDatetime(2026, 11, 28, 18, 40, tzinfo=timezone.utc).timestamp())
+    reserve = AsyncMock(return_value=slot)
+    monkeypatch.setattr(main, '_reserve_vk_postponed_publish_date', reserve)
+    monkeypatch.setattr(main, '_event_primary_publish_source_url', AsyncMock(return_value='https://t.me/source/1'))
+    monkeypatch.setattr(main, '_should_skip_ticket_giveaway_publication', AsyncMock(return_value=False))
+    monkeypatch.setattr('tg_graphic_medallions.resolve_event_graphic_medallions', lambda *_args, **_kwargs: [])
+    async def visible(method, params, *args, **kwargs):
+        return {'response': [{'owner_id': -1, 'id': int(value.split('_')[1]), 'post_type': 'post'}
+                             for value in params['posts'].split(',')]}
+    monkeypatch.setattr(main, '_vk_api', visible)
+    anchor = await save_event(db, photo_urls=['source'])
+    async with db.get_session() as session:
+        peers = []
+        for date in ['2026-11-28', '2026-11-29']:
+            peer = Event(title='Peer', description='', source_text='', date=date, time='19:00',
+                         location_name='Hall', source_vk_post_url=f'https://vk.com/wall-1_{len(peers)+20}')
+            session.add(peer)
+            await session.flush()
+            peers.append(peer.id)
+        await session.commit()
+    vk_event_relations.graph_path(db).write_text(json.dumps({'related': {str(anchor.id): {'pure_related': peers}}}))
+    publish = AsyncMock(return_value=None)
+    monkeypatch.setattr(main, 'sync_vk_source_post', publish)
+    await main.job_sync_vk_source_post(anchor.id, db, None)
+    selected = publish.await_args.kwargs['relations']['related']
+    assert [row['id'] for row in selected] == [peers[1]]
+    reserve.assert_awaited_once()
+    assert publish.await_args.kwargs['publish_date'] == slot
+
+
+@pytest.mark.asyncio
+async def test_missing_source_image_does_not_reserve_before_media(db, monkeypatch):
+    import vk_event_relations
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'default')
+    monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '1')
+    reserve = AsyncMock()
+    monkeypatch.setattr(main, '_reserve_vk_postponed_publish_date', reserve)
+    monkeypatch.setattr(main, '_should_skip_ticket_giveaway_publication', AsyncMock(return_value=False))
+    monkeypatch.setattr(vk_event_relations, 'presentation', AsyncMock(return_value={'dates': [], 'related': []}))
+    publish = AsyncMock(side_effect=RuntimeError('vk_sync_missing_media'))
+    monkeypatch.setattr(main, 'sync_vk_source_post', publish)
+    anchor = await save_event(db, photo_urls=[])
+    with pytest.raises(RuntimeError, match='vk_sync_missing_media'):
+        await main.job_sync_vk_source_post(anchor.id, db, None)
+    reserve.assert_not_awaited()
+    assert publish.await_args.kwargs['publish_date'] is None

@@ -24025,7 +24025,16 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
     # VK wall text includes event metadata built from `ev` (title/date/place)
     # plus the body text, so title-only repairs must not be invisible here.
     from vk_event_relations import presentation, ensure_comment
-    relations = await presentation(db, ev)
+    publish_date = None
+    target_group = VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID
+    if target_group and ev.photo_urls:
+        owner = -int(str(target_group).lstrip("-"))
+        publish_date = await _reserve_vk_postponed_publish_date(
+            owner, choose_vk_actor(owner, "wall.post"), db, bot,
+            source_url=await _event_primary_publish_source_url(db, ev), event_id=ev.id,
+        ) or 0
+    relations = await presentation(db, ev, now=(datetime.fromtimestamp(publish_date, timezone.utc)
+                                              if publish_date else None))
     source_hash_input = "\n".join(
         [
             VK_SOURCE_POST_FORMAT_VERSION,
@@ -24052,6 +24061,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         bot,
         ics_url=ev.ics_url,
         relations=relations,
+        publish_date=publish_date,
         append_text=not replace_existing_text,
     )
     if not vk_url:

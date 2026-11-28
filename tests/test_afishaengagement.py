@@ -2121,7 +2121,8 @@ async def test_shadow_debug_copy_schedules_generated_media_and_records_exposure(
 
 
 @pytest.mark.asyncio
-async def test_public_engagement_copy_schedules_without_debug_marker(tmp_path):
+@pytest.mark.parametrize("public_slot", [None, 0, 1781092800])
+async def test_public_engagement_copy_schedules_without_debug_marker(tmp_path, public_slot):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     now = datetime(2026, 6, 9, 12, 0, tzinfo=timezone.utc)
@@ -2190,12 +2191,13 @@ async def test_public_engagement_copy_schedules_without_debug_marker(tmp_path):
         vk_api_fn=fake_vk_api,
         fetch_image_fn=fake_fetch_image,
         now_utc=now,
+        public_publish_date=public_slot,
     )
 
     assert url == "https://vk.com/wall-231920894_1000"
     assert posted["attachments"] == ["photo-231920894_777"]
     assert posted["kwargs"]["carousel"] is True
-    assert posted["kwargs"]["publish_date"] is None
+    assert posted["kwargs"]["publish_date"] == public_slot
     assert "AFISHAENGAGEMENT DEBUG COPY" not in posted["message"]
     assert "#afishaengagement" not in posted["message"]
 
@@ -2209,6 +2211,8 @@ async def test_public_engagement_copy_schedules_without_debug_marker(tmp_path):
     assert rows[0].details_json["publish_mode"] == "public"
     assert rows[0].details_json["debug_shadow"] is False
     assert "shadow_marker" not in rows[0].details_json
+
+    await db.close()
 
 
 @pytest.mark.asyncio

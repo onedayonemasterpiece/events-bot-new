@@ -84,8 +84,9 @@ async def test_immediate_date_only_post_keeps_event_day(monkeypatch, now_day, ac
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('slot_day,accepted', [(28, True), (30, False)])
-async def test_public_cta_and_plain_fallback_share_publication_window(monkeypatch, slot_day, accepted):
-    _, api = configure(monkeypatch, slot=ts(slot_day, 15))
+@pytest.mark.parametrize('explicit', [False, True])
+async def test_public_cta_and_plain_fallback_share_publication_window(monkeypatch, slot_day, accepted, explicit):
+    reserve, api = configure(monkeypatch, slot=ts(slot_day, 15))
     monkeypatch.setattr(main, 'VK_AFISHA_GROUP_ID', '231920894')
     monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '231920894')
     monkeypatch.setattr(main, 'VK_PHOTOS_ENABLED', True)
@@ -96,10 +97,12 @@ async def test_public_cta_and_plain_fallback_share_publication_window(monkeypatc
         assert kwargs['public_only'] is True
         calls.append(kwargs)
         return await kwargs['post_to_vk_fn'](kwargs['target_group_id'], kwargs['message'],
-            attachments=['photo1'], source_event_id=1)
+            attachments=['photo1'], source_event_id=1, publish_date=kwargs['public_publish_date'])
     monkeypatch.setattr('afishaengagement.maybe_publish_shadow_debug_copy', public_cta)
     result = await main.sync_vk_source_post(event(photo_urls=['https://example.test/poster.jpg']),
-                                            'Ready text', None, None)
+                                            'Ready text', None, None, publish_date=ts(slot_day, 15) if explicit else None)
+    if explicit:
+        reserve.assert_not_awaited()
     assert len(calls) == 1
     assert bool(result) is accepted
     assert api.await_count == int(accepted)
