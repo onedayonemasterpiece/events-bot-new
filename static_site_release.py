@@ -2612,10 +2612,11 @@ def validate_production_candidate_result(
         if candidate_checks.get(check) != "ok":
             raise StaticSitePermanentError(f"static_site_result_candidate_check_incomplete:{check}")
     artifacts = result.get("artifacts")
-    if not isinstance(artifacts, list) or len(artifacts) != 3 or {item.get("kind") for item in artifacts if isinstance(item, Mapping)} != {
+    if not isinstance(artifacts, list) or len(artifacts) != 4 or {item.get("kind") for item in artifacts if isinstance(item, Mapping)} != {
         "production_root",
         "secret_candidate",
         "browser_evidence",
+        "related",
     }:
         raise StaticSitePermanentError("static_site_result_artifact_set_mismatch")
     base = Path(output_dir).resolve()
@@ -2627,7 +2628,8 @@ def validate_production_candidate_result(
         artifact = (base / name).resolve()
         if artifact.parent != base:
             raise StaticSitePermanentError("static_site_result_artifact_path_invalid")
-        if not name.endswith(".tar.gz") or not artifact.is_file():
+        valid_name = name == "event_related.json" if item.get("kind") == "related" else name.endswith(".tar.gz")
+        if not valid_name or not artifact.is_file():
             raise StaticSitePermanentError("static_site_result_artifact_missing")
         if artifact.stat().st_size != int(item.get("size") or -1) or _sha256_file(artifact) != item.get("sha256"):
             raise StaticSitePermanentError("static_site_result_artifact_hash_mismatch")
