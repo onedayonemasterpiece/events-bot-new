@@ -618,13 +618,25 @@ def assert_no_sqlite_artifacts(root: Path) -> None:
         )
 
 
+def persist_related_outputs(out_dir: Path, args: argparse.Namespace) -> None:
+    if not getattr(args, 'related_cache', None):
+        return
+    cache = out_dir / 'event_related_chain_cache.json'
+    related = out_dir / 'event_related.json'
+    require_bounded_durable_cache(cache)
+    require_bounded_durable_cache(related)
+    target = Path(args.related_cache)
+    atomic_copy_file(cache, target)
+    atomic_copy_file(related, target.with_name('static_site_event_related.json'))
+
+
 def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[str, object]:
     assert_no_sqlite_artifacts(out_dir)
     result_path = out_dir / 'static_site_build_result.json'
     if not result_path.exists() or result_path.stat().st_size > 256 * 1024:
         raise RuntimeError('Kaggle result JSON is missing or unbounded')
     result = json.loads(result_path.read_text(encoding='utf-8'))
-    if result.get('ok') is not True or result.get('build_id') != args.build_id:
+    if result.get('build_id') != args.build_id or (args.profile != 'production-candidate' and result.get('ok') is not True):
         raise RuntimeError('Kaggle result build identity/status mismatch')
     if args.profile == 'related-only':
         if result.get('schema_version') != 'static_site_build_result_v2':
@@ -649,12 +661,7 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
         require_bounded_durable_cache(related)
         if sha256_file(related) != artifacts[0].get('sha256'):
             raise RuntimeError('Kaggle related result artifact mismatch')
-        cache = out_dir / 'event_related_chain_cache.json'
-        require_bounded_durable_cache(cache)
-        target = Path(args.related_cache)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        atomic_copy_file(cache, target)
-        atomic_copy_file(related, target.with_name('static_site_event_related.json'))
+        persist_related_outputs(out_dir, args)
         return result
     result_cache_mode = str(result.get('semantic_cache_mode') or 'warm').strip().lower()
     if result_cache_mode != semantic_cache_mode(args):
@@ -690,6 +697,16 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
             raise RuntimeError('Kaggle result input fingerprint mismatch')
         if result.get('build_clock') != args.build_clock:
             raise RuntimeError('Kaggle result build clock mismatch')
+        graph = next((a for a in result.get('artifacts') or [] if a.get('kind') == 'related'), {})
+        path = out_dir / 'event_related.json'
+        require_bounded_durable_cache(path)
+        if graph.get('filename') != path.name or graph.get('size') != path.stat().st_size or graph.get('sha256') != sha256_file(path):
+            raise RuntimeError('Kaggle related result artifact mismatch')
+        persist_related_outputs(out_dir, args)
+        if result.get('ok') is False:
+            return result  # Checked graph, failed HTML; caller must reject publication.
+        if result.get('ok') is not True:
+            raise RuntimeError('Kaggle result status missing')
         if collection_semantic_compute_required(args):
             semantic = result.get('semantic')
             if not isinstance(semantic, dict):
@@ -764,16 +781,18 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
         ):
             raise RuntimeError('Kaggle daily service-share result metadata mismatch')
         artifacts = result.get('artifacts')
-        expected_artifact_kinds = {'production_root', 'secret_candidate', 'browser_evidence'}
+        expected_artifact_kinds = {'production_root', 'secret_candidate', 'browser_evidence', 'related'}
         actual_artifact_kinds = {
             str(artifact.get('kind') or '')
             for artifact in artifacts
         } if isinstance(artifacts, list) else set()
-        if not isinstance(artifacts, list) or len(artifacts) != 3 or actual_artifact_kinds != expected_artifact_kinds:
-            raise RuntimeError('production-candidate result must contain root, secret and browser-evidence artifacts')
+        if not isinstance(artifacts, list) or len(artifacts) != len(expected_artifact_kinds) or actual_artifact_kinds != expected_artifact_kinds:
+            raise RuntimeError('production-candidate result must contain root, secret, browser-evidence and related artifacts')
         for artifact in artifacts:
             name = str(artifact.get('filename') or '')
             path = out_dir / name
+            if artifact['kind'] == 'related':
+                continue  # Validated independently before the HTML checks.
             if not name.endswith('.tar.gz') or not path.is_file():
                 raise RuntimeError(f'Kaggle artifact missing: {name}')
             if path.stat().st_size != int(artifact.get('size') or -1) or sha256_file(path) != artifact.get('sha256'):
@@ -1339,7 +1358,7 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'sqlite_db_filename': None,
         'related_cache_filename': 'event_related_chain_cache.json',
         'related_anchor_ids': (related_publication_anchor_ids(args.status_db)
-                               if args.profile == 'related-only' and args.status_db else []),
+                               if args.profile in {'related-only', 'production-candidate'} and getattr(args, 'status_db', None) else []),
         'bge_vector_cache_filename': 'static_event_bge_vectors.npz',
         'bge_vector_receipt_filename': 'static_event_bge_vectors.receipt.json',
         'unusual_cache_filename': 'unusual_events_cache.json',
@@ -1523,7 +1542,7 @@ def adopt_existing_kernel_output(args: argparse.Namespace, client, kernel_ref: s
     files = client.download_kernel_output(kernel_ref, path=out_dir, force=True)
     print(f'[static-site-kaggle] adopted and downloaded {len(files)} files to {out_dir}', flush=True)
     validated = validate_downloaded_result(out_dir, args)
-    if getattr(args, 'export_in_kaggle', False) and (
+    if validated.get('ok') is True and getattr(args, 'export_in_kaggle', False) and (
         collection_semantic_compute_required(args)
         or getattr(args, 'related_mode', 'sparse') == 'bge'
         or getattr(args, 'unusual_enabled', False)
@@ -1540,7 +1559,7 @@ def adopt_existing_kernel_output(args: argparse.Namespace, client, kernel_ref: s
     ]
     if secret_sources and not args.keep_secret_datasets:
         cleanup_secret_datasets(client, secret_sources)
-    return 0
+    return 0 if validated.get('ok') is True else ADOPT_REMOTE_UNAVAILABLE_EXIT
 
 
 def main() -> int:
@@ -1827,13 +1846,15 @@ def main() -> int:
                             files = client.download_kernel_output(kernel_ref, path=out_dir, force=True)
                             print(f"[static-site-kaggle] downloaded {len(files)} files to {out_dir}", flush=True)
                             validated = validate_downloaded_result(out_dir, args)
+                            if validated.get('ok') is not True:
+                                raise RuntimeError('Kaggle HTML build failed after checked related computation')
                             print(
                                 '[static-site-kaggle] checked output '
                                 f"build_id={validated.get('build_id')} result_sha256={sha256_file(out_dir / 'static_site_build_result.json')}",
                                 flush=True,
                             )
                             cache_out = out_dir / 'event_related_chain_cache.json'
-                            if args.export_in_kaggle and args.related_cache and cache_out.exists():
+                            if args.profile == 'preview' and args.export_in_kaggle and args.related_cache and cache_out.exists():
                                 require_bounded_durable_cache(cache_out)
                                 cache_target = Path(args.related_cache)
                                 cache_target.parent.mkdir(parents=True, exist_ok=True)

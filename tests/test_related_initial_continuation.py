@@ -310,3 +310,142 @@ def test_capped_scope_rotates_after_actual_attempts_to_reach_healthy_older_ancho
         enabled=True, model='models/gemma-4-26b-a4b-it', key_env='GOOGLE_API_KEY4',
         cache={'gemma_verification': {'attempts': [{'anchor_event_id': 26}]}}, max_anchors=20)
     assert attempted[before:] == sorted((event['id'] for event in events), reverse=True)[:20]
+
+
+@pytest.mark.asyncio
+async def test_full_candidate_capped_pending_vk_continues_without_new_effects(tmp_path, monkeypatch):
+    """Actual full exporter/audit/cache, checked-candidate completion and coalesced outbox."""
+    import importlib.util
+    root = Path(__file__).resolve().parents[1]
+    def load(name, path):
+        spec = importlib.util.spec_from_file_location(name, root / path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    exporter = load('full_capped_exporter', 'site/scripts/export-production-preview-data.py')
+    kernel = load('full_capped_kernel', 'kaggle/StaticSiteBuilder/static_site_builder.py')
+    for key, value in {
+        'STATIC_SITE_BUILD_PROFILE': 'production-candidate',
+        'ENABLE_STATIC_SITE_KAGGLE_BUILDER': '1',
+        'STATIC_SITE_GEMMA_RELATED_VERIFY': '1',
+        'VK_EVENTS_GROUP_ID': '231920894',
+        'GOOGLE_API_KEY4': 'offline-only',
+        'STATIC_SITE_GEMMA_RELATED_PASSES': '1',
+        'STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS': '1',
+    }.items():
+        monkeypatch.setenv(key, value)
+    for key in ('ENABLE_STATIC_SITE_SECRET_PUBLISH', 'ENABLE_STATIC_SITE_ROOT_PROMOTION'):
+        monkeypatch.setenv(key, '0')
+    db = main.Database(str(tmp_path / 'full.sqlite'))
+    await db.init()
+    events = [{'id': i, 'title': f'Programme {i}', 'date': '2099-01-01'} for i in range(1, 5)]
+    calls, retrieval, batches = [], [], []
+    output = tmp_path / 'output'
+    output.mkdir()
+    cache = tmp_path / 'event_related_chain_cache.json'
+
+    def retrieve(catalog, *, anchor_ids=None, graph_meta_out=None, **kwargs):
+        assert anchor_ids is None, 'full candidate must retrieve the full graph'
+        ids = {e['id'] for e in catalog}
+        retrieval.append(ids)
+        graph_meta_out.update(event_count=len(ids), policy='pgvector_selective_reciprocity_v1')
+        return {str(i): [{'event_id': min(ids - {i}), 'vector_similarity': .8,
+                 'related_score': .8, 'slot_type': 'pure_related'}] for i in ids}
+
+    def audit(**kwargs):
+        calls.append(kwargs['anchor']['id'])
+        return {e['id']: {'llm_semantic_score': .8, 'confidence': .9,
+                           'reject': False, 'similarity_class': 'highly_similar'}
+                for e in kwargs['candidates']}
+
+    monkeypatch.setattr(exporter, 'build_pgvector_related_chain', retrieve)
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+    monkeypatch.setattr(kernel, 'WORKING', tmp_path)
+    monkeypatch.setattr(kernel, 'SITE_DIR', root / 'site')
+    monkeypatch.setattr(kernel, 'find_input_file',
+                        lambda name: Path(db.path) if name == 'full.sqlite' else None)
+    monkeypatch.setattr(kernel, 'validate_snapshot_input', lambda *a: {})
+    monkeypatch.setattr(kernel, 'validate_semantic_cache_contract', lambda _: {'mode': 'warm'})
+    monkeypatch.setattr(kernel, 'validate_build_clock',
+                        lambda _: {'effective_date': '2026-11-28', 'current_datetime': '2026-11-28T12:00:00+02:00'})
+    for name in ('ensure_python_deps_for_gemma', 'load_encrypted_secrets_to_env',
+                 'load_kaggle_secret_to_env', 'status_event'):
+        monkeypatch.setattr(kernel, name, lambda *a, **k: None)
+
+    def run_export(cmd, **kwargs):
+        assert '--related-anchor-ids' not in cmd
+        options = {}
+        if '--related-audit-priority-ids' in cmd:
+            options['audit_priority_ids'] = {
+                int(i) for i in cmd[cmd.index('--related-audit-priority-ids')+1].split(',') if i}
+        graph = exporter.build_related(events, current_date='2026-11-28', related_mode='pgvector',
+            cache_path=cache, gemma_verify=True, gemma_max_anchors=2, **options)
+        assert set(graph['related']) == {'1', '2', '3', '4'}
+        batches.append(graph)
+        (output / 'event_related.json').write_text(json.dumps(graph))
+
+    monkeypatch.setattr(kernel, 'run', run_export)
+    monkeypatch.setattr(main, 'validate_production_candidate_result',
+                        lambda *a, **k: ({'event_count': 4, 'profile': 'production-candidate', 'ok': True}, None))
+
+    def export():
+        kernel.export_preview_data_if_configured({
+            'profile': 'production-candidate', 'catalog_mode': 'full', 'export_in_kaggle': True,
+            'sqlite_db_filename': 'full.sqlite', 'related_mode': 'pgvector',
+            'gemma_related_verify': True, 'gemma_related_max_anchors': 2,
+            'related_anchor_ids': related_publication_anchor_ids(db.path),
+        })
+
+    async def adopted_handler(event_id, database, bot):
+        async with database.get_session() as session:
+            job = (await session.execute(main.select(main.JobOutbox).where(
+                main.JobOutbox.task == main.JobTask.static_site_build,
+                main.JobOutbox.status == main.JobStatus.running))).scalars().one()
+            job_id = job.id
+        fingerprint, _ = main.compute_static_site_input_fingerprint(
+            db.path, effective_date='2026-11-28', repo_sha='a'*40,
+            build_config={'profile': 'production-candidate'}, related_cache_path=cache)
+        run_id = f'full-capped-{len(batches)}'
+        claim = main.claim_static_site_build(db.path, job_id=job_id, run_id=run_id,
+            input_fingerprint=fingerprint, effective_date='2026-11-28', request_watermark=None)
+        assert claim.action == 'claimed'
+        export()
+        (output / 'static_site_build_result.json').write_text(
+            '{"profile":"production-candidate","ok":true}')
+        return await main._finish_static_site_candidate(
+            db=db, job_id=job_id, output_dir=output, build_id=run_id, run_id=run_id,
+            repo_sha='a'*40, snapshot_metadata=SimpleNamespace(snapshot_id='snap', sha256='b'*64),
+            candidate_token='offline-only', input_fingerprint=fingerprint,
+            clock=SimpleNamespace(effective_date='2026-11-28'), claim_token=claim.claim_token)
+
+    monkeypatch.setitem(main.JOB_HANDLERS, main.JobTask.static_site_build.value, adopted_handler)
+    try:
+        async with db.get_session() as session:
+            session.add_all([main.Event(id=e['id'], title=e['title'], description='facts',
+                source_text='facts', date=e['date'], time='19:00', location_name='Venue',
+                photo_urls=['https://offline.invalid/poster.jpg']) for e in events])
+            await session.commit()
+        for i in (1, 2, 3):
+            await main.enqueue_job(db, i, main.JobTask.vk_sync,
+                next_run_at=datetime.now(timezone.utc)+timedelta(hours=1))
+        assert set(related_publication_anchor_ids(db.path)) == {1, 2, 3}
+        await main.enqueue_static_site_build_request(db, reason='offline full candidate', event_ids=[1, 2, 3])
+        allowed = {main.JobTask.static_site_build}
+        assert await main._run_due_jobs_once(db, None, allowed_tasks=allowed, max_jobs=1) == 1
+        with sqlite3.connect(db.path) as connection:
+            rows = connection.execute("SELECT id FROM joboutbox WHERE task='static_site_build' AND status='pending'").fetchall()
+            assert (calls, len(rows), batches[0]['related']['2']['strict_verified']) == ([3, 2], 1, True)
+            connection.execute("UPDATE joboutbox SET next_run_at=? WHERE id=?",
+                ((datetime.now(timezone.utc)-timedelta(seconds=1)).replace(tzinfo=None).isoformat(' '), rows[0][0]))
+        assert await main._run_due_jobs_once(db, None, allowed_tasks=allowed, max_jobs=1) == 1
+        assert calls == [3, 2, 1, 4]
+        assert all(batches[-1]['related'][str(i)]['strict_verified'] for i in (1, 2, 3))
+        assert batches[-1]['strict_verified_related']
+        assert await main._run_due_jobs_once(db, None, allowed_tasks=allowed, max_jobs=1) == 0
+        with sqlite3.connect(db.path) as connection:
+            assert connection.execute("SELECT COUNT(*) FROM joboutbox WHERE task='static_site_build' AND status='pending'").fetchone()[0] == 0
+        export()
+        assert calls == [3, 2, 1, 4], 'warm/no-change must not call Gemma'
+        assert retrieval == [{1, 2, 3, 4}]
+    finally:
+        await db.engine.dispose()
