@@ -150,3 +150,29 @@ AFTER/regression130 PASS,4 known CAPTCHA priority cases deselected. Final
 missing-image/selection/real-gallery boundaries3 PASS. Independent SOURCE and
 simplicity PASS after carrying the timestamp through the real public CTA adapter.
 No model/provider call was run. Release and new-public acceptance not started.
+
+
+### 2026-11-28: age batch holds unrelated calendar dispatcher
+
+Mechanical queue ownership defect, not a semantic change. Production age job173389
+held the common dispatcher18:40:00.922–18:43:13.355UTC. Calendar171114 was
+due18:40:43.134 but began18:43:15.674. It completed20seconds later with one
+correct ICS/comment; total delay23:35 failed the3–20minute contract. The earlier
+600second retry backoff is a separate contributor, and its failed transport
+phase remains open; this fix does not claim to solve every timing failure.
+
+The existing APScheduler now owns due age rows outside the common comment lock.
+It awaits the original full batch/import and outbox result/error handling.
+An atomic conditional claim excludes another running age batch. General and
+manual dispatchers exclude age, including the interactive next-run query;
+calendar and related comments retain their shared serialization. The previous
+event progress notifier is shared between both owners. No new provider, queue,
+state, flag, retry policy or remote handoff was introduced.
+
+Offline acceptance holds the age handler while a newly due calendar and related
+comment run once in order, checks a competing age owner, and checks both successful
+completion and existing error/retry/progress. Original common-lock ownership
+fails while waiting for the calendar; the corrected owner lets it run before age
+returns. Source/simplicity review accepted54 net production lines against80.
+Release and new natural overlapping-age/public-comment timing remain open until
+recorded after rollout; old posts/comments are not replayed or changed.

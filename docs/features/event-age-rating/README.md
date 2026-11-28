@@ -115,6 +115,13 @@ Runtime-проверка импортирует именно `BGEM3FlagModel`, �
 
 ### Запуск batch
 
+Существующий age JobOutbox исполняет отдельный job основного APScheduler
+`event_age_bge_outbox` при `ENABLE_EVENT_AGE_BGE_ASSESSMENT=1`. Он выбирает
+одну due-строку каждые 30 секунд и целиком ожидает прежний batch/import,
+не занимая общую блокировку календарных и похожих VK-комментариев.
+Атомарный claim допускает только один running age batch; завершение, ошибки,
+повторы и обновление прогресса используют существующую обработку outbox.
+
 После каждого Smart Update события без declared rating один глобальный
 `JobOutbox` job с coalesce key `event_age_bge_assessment:prod` переносится на
 25 минут после последнего обновления. Таким образом пачка набирается в quiet
