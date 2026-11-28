@@ -1,5 +1,7 @@
 # Инциденты
 
+- [INC-2026-11-28: Full static site candidate disabled](INC-2026-11-28-full-site-candidate-disabled.md) — open; full candidate and public acceptance pending.
+
 - [INC-2026-11-27 — VK calendar upload без файла](INC-2026-11-27-vk-calendar-upload-no-file.md). Повторная ошибка внешней загрузки; причина открыта, безопасная диагностика формы ответа без изменения доставки.
 
 - [INC-2026-11-27 — комментарии после смены отложенного VK ID](INC-2026-11-27-vk-comment-publication-receipt.md). Published receipt и physical public identity вместо повторного сопоставления mutable заголовка; общий календарный состав и frozen related выборка.

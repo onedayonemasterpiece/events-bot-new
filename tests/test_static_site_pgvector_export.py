@@ -194,7 +194,7 @@ def test_pgvector_cache_is_invalidated_by_related_corpus_revision() -> None:
         }
         meta_out = kwargs.get("graph_meta_out")
         if meta_out is not None:
-            meta_out.update({"policy": "test"})
+            meta_out.update({"policy": "test", "event_count": len(items)})
         return chains
 
     exporter.build_pgvector_related_chain = fake_build
@@ -448,6 +448,20 @@ def test_pgvector_cache_hit_makes_zero_related_rpc_calls_and_records_receipt(mon
     assert second["retrieval_receipt"]["request_count"] == 0
     assert second["retrieval_receipt"]["response_bytes"] == 0
     assert second["retrieval_receipt"]["source"] == "cache"
+
+    # A previous scoped computation cannot certify full-catalog graph coverage.
+    with tempfile.TemporaryDirectory() as directory:
+        cache_path = Path(directory) / "related.json"
+        exporter.build_related(events, current_date="2026-07-20", related_mode="pgvector",
+                               cache_path=cache_path, related_corpus_revision="a" * 64)
+        cached = json.loads(cache_path.read_text())
+        cached["graph_reciprocity"] = {"policy": cached["graph_reciprocity"]["policy"]}
+        cache_path.write_text(json.dumps(cached))
+        calls.clear()
+        full = exporter.build_related(events, current_date="2026-07-20", related_mode="pgvector",
+                                      cache_path=cache_path, related_corpus_revision="a" * 64)
+        assert calls == [1, 2]
+        assert full["graph_reciprocity"]["event_count"] == 2
 
 
 def test_pgvector_rejects_duplicate_anchor_fetch_before_rpc(monkeypatch) -> None:

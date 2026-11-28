@@ -127,8 +127,9 @@ async def test_linked_initial_failure_never_copies_existing_anchor_receipt(db, m
 
 
 @pytest.mark.asyncio
-async def test_initial_image_post_waits_for_shared_relations_before_any_provider_call(db, monkeypatch):
-    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
+@pytest.mark.parametrize('profile', ['related-only', 'production-candidate'])
+async def test_initial_image_post_waits_for_shared_relations_before_any_provider_call(db, monkeypatch, profile):
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', profile)
     event = await save_event(db, photo_urls=['source-poster'])
     calls = forbidden_calls(monkeypatch)
     with pytest.raises(main.StaticSiteSingleFlightDeferred, match='vk_initial_waiting_related'):
