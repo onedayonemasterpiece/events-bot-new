@@ -1433,6 +1433,11 @@ def main() -> int:
             'build_clock': locals().get('config', {}).get('build_clock'),
             'error_type': exc.__class__.__name__, 'error': str(exc)[:1000],
         }
+        if 'related_artifact' in locals() and config.get('profile') == 'production-candidate':
+            snapshot = config['snapshot']
+            failure.update(run_id=config['run_id'], repo_sha=config['repo_sha'], source=source_identity,
+                           snapshot={'snapshot_id': snapshot['snapshot_id'], 'snapshot_sha256': snapshot['sha256']},
+                           artifacts=[related_artifact])
         try:
             WORKING.mkdir(parents=True, exist_ok=True)
             RESULT_PATH.write_text(json.dumps(failure, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
@@ -1440,6 +1445,8 @@ def main() -> int:
             pass
         cleanup_transient_workspace()
         finish_status(ok=False, message=f"{exc.__class__.__name__}: {exc}")
+        if failure.get('artifacts'):
+            return 0  # Transport the graph and failed application receipt, not a successful HTML build.
         raise
 
 

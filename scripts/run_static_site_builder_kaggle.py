@@ -636,7 +636,7 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
     if not result_path.exists() or result_path.stat().st_size > 256 * 1024:
         raise RuntimeError('Kaggle result JSON is missing or unbounded')
     result = json.loads(result_path.read_text(encoding='utf-8'))
-    if result.get('ok') is not True or result.get('build_id') != args.build_id:
+    if result.get('build_id') != args.build_id or (args.profile != 'production-candidate' and result.get('ok') is not True):
         raise RuntimeError('Kaggle result build identity/status mismatch')
     if args.profile == 'related-only':
         if result.get('schema_version') != 'static_site_build_result_v2':
@@ -697,6 +697,16 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
             raise RuntimeError('Kaggle result input fingerprint mismatch')
         if result.get('build_clock') != args.build_clock:
             raise RuntimeError('Kaggle result build clock mismatch')
+        graph = next((a for a in result.get('artifacts') or [] if a.get('kind') == 'related'), {})
+        path = out_dir / 'event_related.json'
+        require_bounded_durable_cache(path)
+        if graph.get('filename') != path.name or graph.get('size') != path.stat().st_size or graph.get('sha256') != sha256_file(path):
+            raise RuntimeError('Kaggle related result artifact mismatch')
+        persist_related_outputs(out_dir, args)
+        if result.get('ok') is False:
+            return result  # Checked graph, failed HTML; caller must reject publication.
+        if result.get('ok') is not True:
+            raise RuntimeError('Kaggle result status missing')
         if collection_semantic_compute_required(args):
             semantic = result.get('semantic')
             if not isinstance(semantic, dict):
@@ -781,15 +791,15 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
         for artifact in artifacts:
             name = str(artifact.get('filename') or '')
             path = out_dir / name
-            valid_name = name == 'event_related.json' if artifact['kind'] == 'related' else name.endswith('.tar.gz')
-            if not valid_name or not path.is_file():
+            if artifact['kind'] == 'related':
+                continue  # Validated independently before the HTML checks.
+            if not name.endswith('.tar.gz') or not path.is_file():
                 raise RuntimeError(f'Kaggle artifact missing: {name}')
             if path.stat().st_size != int(artifact.get('size') or -1) or sha256_file(path) != artifact.get('sha256'):
                 raise RuntimeError(f'Kaggle artifact hash/size mismatch: {name}')
         token = str(result.get('candidate', {}).get('token') or '')
         if token != args.candidate_token or not re.fullmatch(r'[A-Za-z0-9_-]{43}', token):
             raise RuntimeError('Kaggle candidate token mismatch')
-        persist_related_outputs(out_dir, args)
     return result
 
 
@@ -1532,7 +1542,7 @@ def adopt_existing_kernel_output(args: argparse.Namespace, client, kernel_ref: s
     files = client.download_kernel_output(kernel_ref, path=out_dir, force=True)
     print(f'[static-site-kaggle] adopted and downloaded {len(files)} files to {out_dir}', flush=True)
     validated = validate_downloaded_result(out_dir, args)
-    if getattr(args, 'export_in_kaggle', False) and (
+    if validated.get('ok') is True and getattr(args, 'export_in_kaggle', False) and (
         collection_semantic_compute_required(args)
         or getattr(args, 'related_mode', 'sparse') == 'bge'
         or getattr(args, 'unusual_enabled', False)
@@ -1549,7 +1559,7 @@ def adopt_existing_kernel_output(args: argparse.Namespace, client, kernel_ref: s
     ]
     if secret_sources and not args.keep_secret_datasets:
         cleanup_secret_datasets(client, secret_sources)
-    return 0
+    return 0 if validated.get('ok') is True else ADOPT_REMOTE_UNAVAILABLE_EXIT
 
 
 def main() -> int:
@@ -1836,6 +1846,8 @@ def main() -> int:
                             files = client.download_kernel_output(kernel_ref, path=out_dir, force=True)
                             print(f"[static-site-kaggle] downloaded {len(files)} files to {out_dir}", flush=True)
                             validated = validate_downloaded_result(out_dir, args)
+                            if validated.get('ok') is not True:
+                                raise RuntimeError('Kaggle HTML build failed after checked related computation')
                             print(
                                 '[static-site-kaggle] checked output '
                                 f"build_id={validated.get('build_id')} result_sha256={sha256_file(out_dir / 'static_site_build_result.json')}",
