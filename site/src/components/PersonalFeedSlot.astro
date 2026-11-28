@@ -1,15 +1,18 @@
 ---
-import { siteHomeHref, withBase } from '../lib/events';
+import { getPopularEvents, siteHomeHref, withBase } from '../lib/events';
+import EventCard from './EventCard.astro';
 
 interface Props {
-  context: 'today' | 'tomorrow' | 'date' | 'weekend' | 'event-detail' | 'exhibitions' | 'popular';
+  context: 'today' | 'tomorrow' | 'date' | 'weekend' | 'event-detail' | 'exhibitions' | 'popular' | 'for-me';
   currentEventId?: number;
   relatedSrc?: string;
 }
 const { context, currentEventId, relatedSrc } = Astro.props;
 const isEventDetail = context === 'event-detail';
+const isForMe = context === 'for-me';
+const initialEvents = isForMe ? getPopularEvents(12) : [];
 const eyebrow = isEventDetail ? 'Продолжить выбор' : 'Личная лента';
-const heading = isEventDetail ? 'Ещё события' : 'Дальше — под ваши интересы';
+const heading = isEventDetail ? 'Ещё события' : isForMe ? 'Ваша лента' : 'Дальше — под ваши интересы';
 const explanation = isEventDetail
   ? 'Шесть разных событий без бесконечной ленты. Когда накопятся ваши оценки, подборка станет персональной.'
   : 'События меняются с учётом ваших лайков и отметок «Не интересно».';
@@ -18,6 +21,8 @@ const headingId = `personal-feed-${context}-title`;
 <section
   class:list={['section-card', 'personal-feed-section', 'ke-personal-feed-slot', { 'personal-feed-section--event-detail': isEventDetail }]}
   data-personal-feed-section
+  data-ds-component="PersonalFeedSlot"
+  data-ds-version="2"
   data-personal-feed-src={withBase('/data/personal-feed.json')}
   data-personal-feed-related-src={relatedSrc ? withBase(relatedSrc) : undefined}
   data-current-event-id={currentEventId}
@@ -25,20 +30,22 @@ const headingId = `personal-feed-${context}-title`;
   data-personal-feed-mode={isEventDetail ? 'pending' : undefined}
   data-personal-feed-desktop-only={isEventDetail ? 'true' : undefined}
   aria-labelledby={headingId}
-  hidden={!isEventDetail}
+  hidden={!isEventDetail && !isForMe}
 >
   <div class="section-card__inner">
     <p class="eyebrow">{eyebrow}</p>
     <h2 id={headingId} data-personal-feed-title>{heading}</h2>
     <p class="muted-note personal-feed-section__explanation" data-personal-feed-explanation>{explanation}</p>
-    <p class="muted-note personal-feed-section__status" data-personal-feed-status role="status" aria-live="polite">Подбираем события…</p>
+    <p class="muted-note personal-feed-section__status" data-personal-feed-status role="status" aria-live="polite" hidden={isForMe}>Подбираем события…</p>
     <div
       class="cards-grid cards-grid--personal-feed personal-feed-section__feed"
       data-personal-feed-slot
       data-feed-card-variant="split-actions"
       data-listing-context={context}
       aria-live="polite"
-    ></div>
+    >
+      {initialEvents.map((event) => <EventCard event={event} variant="split-actions" mobileFlowMedia />)}
+    </div>
     {!isEventDetail && <button type="button" class="secondary-button personal-feed-section__load-more" data-personal-feed-load-more hidden>Показать ещё</button>}
     <button type="button" class="secondary-button personal-feed-section__refresh" data-personal-feed-refresh hidden>Обновить ленту</button>
     {isEventDetail && <a class="secondary-button personal-feed-section__all-events" data-personal-feed-all-events href={siteHomeHref()}>Все анонсы</a>}

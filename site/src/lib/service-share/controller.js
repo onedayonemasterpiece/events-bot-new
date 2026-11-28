@@ -375,7 +375,7 @@ function prepare(root) {
   prepared.ready = loadServiceShareManifest(manifestUrl).then((manifest) => {
     prepared.manifest = manifest;
     prepared.manifestReady = true;
-    prepared.pngPromise = loadAsset(manifest.assets.png);
+    prepared.pngPromise = loadAsset(manifest.assets.png).catch(() => null);
     return loadAsset(manifest.assets.webp).then((blob) => {
       prepared.webpBlob = blob;
       root.dataset.serviceShareReady = 'file';
