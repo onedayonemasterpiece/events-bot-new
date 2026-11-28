@@ -1176,9 +1176,12 @@ def main() -> int:
         ensure_python_deps_for_bge(config)
         export_preview_data_if_configured(config)
         related_retrieval = read_related_retrieval_receipt()
-        if config.get('profile') == 'related-only':
+        if config.get('profile') in {'related-only', 'production-candidate'}:
             related_path = WORKING / 'event_related.json'
             shutil.copy2(SITE_DIR / 'src/data/preview-related.json', related_path)
+            related_artifact = {'kind': 'related', 'filename': related_path.name,
+                                'sha256': sha256_file(related_path), 'size': related_path.stat().st_size}
+        if config.get('profile') == 'related-only':
             payload = json.loads(related_path.read_text(encoding='utf-8'))
             result = {
                 'schema_version': 'static_site_build_result_v2',
@@ -1191,8 +1194,7 @@ def main() -> int:
                 'started_at': started, 'finished_at': datetime.now(timezone.utc).isoformat(),
                 'related_retrieval': related_retrieval,
                 'event_count': len(payload.get('events') or payload.get('related') or {}),
-                'artifacts': [{'kind': 'related', 'filename': related_path.name,
-                               'sha256': sha256_file(related_path), 'size': related_path.stat().st_size}],
+                'artifacts': [related_artifact],
             }
             RESULT_PATH.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
             cleanup_transient_workspace()
@@ -1284,7 +1286,7 @@ def main() -> int:
             # pinned headless shell and its OS dependencies.
             run(list(PLAYWRIGHT_CHROMIUM_INSTALL_COMMAND), cwd=SITE_DIR, env=env)
         event_count = len(json.loads((SITE_DIR / 'src/data/preview-events.json').read_text(encoding='utf-8')).get('events', []))
-        artifacts: list[dict] = []
+        artifacts: list[dict] = [related_artifact] if profile == 'production-candidate' else []
         result_details: dict = {}
         if profile == 'production-candidate':
             run_id = str(config.get('run_id') or '')
@@ -1431,6 +1433,11 @@ def main() -> int:
             'build_clock': locals().get('config', {}).get('build_clock'),
             'error_type': exc.__class__.__name__, 'error': str(exc)[:1000],
         }
+        if 'related_artifact' in locals() and config.get('profile') == 'production-candidate':
+            snapshot = config['snapshot']
+            failure.update(run_id=config['run_id'], repo_sha=config['repo_sha'], source=source_identity,
+                           snapshot={'snapshot_id': snapshot['snapshot_id'], 'snapshot_sha256': snapshot['sha256']},
+                           artifacts=[related_artifact])
         try:
             WORKING.mkdir(parents=True, exist_ok=True)
             RESULT_PATH.write_text(json.dumps(failure, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
@@ -1438,6 +1445,8 @@ def main() -> int:
             pass
         cleanup_transient_workspace()
         finish_status(ok=False, message=f"{exc.__class__.__name__}: {exc}")
+        if failure.get('artifacts'):
+            return 0  # Transport the graph and failed application receipt, not a successful HTML build.
         raise
 
 

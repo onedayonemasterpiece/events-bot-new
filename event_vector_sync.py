@@ -329,7 +329,7 @@ async def run_event_vector_sync(
                 if not isinstance(coverage, dict) or coverage.get("status") != "complete":
                     raise RuntimeError("event vector report coverage is not complete")
                 projection_snapshot = None
-                if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only":
+                if os.getenv("STATIC_SITE_BUILD_PROFILE") in {"related-only", "production-candidate"}:
                     projection_root = receipt_path.parent / "event_vector_projections"
                     projection_path, manifest_path, _ = await asyncio.to_thread(
                         create_immutable_projection_snapshot, snapshot_path, projection_root,
@@ -410,11 +410,14 @@ async def run_event_vector_sync(
             owner_event_id,
             json.dumps(metrics, ensure_ascii=False, sort_keys=True),
         )
-        if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only":
+        profile = os.getenv("STATIC_SITE_BUILD_PROFILE")
+        if profile in {"related-only", "production-candidate"}:
             from main import enqueue_static_site_build_request
             await enqueue_static_site_build_request(
                 db, reason="vector_projection_ready",
                 event_ids=[owner_event_id] if owner_event_id else [],
+                **({"trigger": "smart_update", "delay_seconds": 900}
+                   if profile == "production-candidate" else {}),
             )
         return {"status": "success", "ops_run_id": ops_run_id, **metrics, **details}
     except Exception as exc:
