@@ -470,3 +470,9 @@ prepared/published posts and their frozen comments are not rewritten.
 Если историческое задание не содержит этого поля, остаётся прежний путь; старые
 задания и комментарии автоматически не переписываются. Exact minute, owner и
 единственность найденного публичного поста по-прежнему обязательны.
+
+Повторная штатная постановка static build после нового vector snapshot очищает
+`terminal_reason` вместе с attempts/last_error в существующих atomic UPDATE.
+Это относится к requeue, объединению pending и pending followup при running
+владельце. Running payload/handoff и daily idempotence остаются прежними;
+старые terminal записи без новой заявки не переписываются.
