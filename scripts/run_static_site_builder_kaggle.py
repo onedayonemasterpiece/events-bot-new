@@ -1358,7 +1358,7 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'sqlite_db_filename': None,
         'related_cache_filename': 'event_related_chain_cache.json',
         'related_anchor_ids': (related_publication_anchor_ids(args.status_db)
-                               if args.profile in {'related-only', 'production-candidate'} and args.status_db else []),
+                               if args.profile in {'related-only', 'production-candidate'} and getattr(args, 'status_db', None) else []),
         'bge_vector_cache_filename': 'static_event_bge_vectors.npz',
         'bge_vector_receipt_filename': 'static_event_bge_vectors.receipt.json',
         'unusual_cache_filename': 'unusual_events_cache.json',
