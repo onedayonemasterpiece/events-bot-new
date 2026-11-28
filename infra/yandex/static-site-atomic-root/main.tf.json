@@ -1,0 +1,167 @@
+{
+  "terraform": {"required_version":">= 1.6.0","required_providers":{"yandex":{"source":"yandex-cloud/yandex","version":"0.250.0"}}},
+  "provider": {"yandex":{"folder_id":"b1g5tck18cgqtjb7rn3s"}},
+  "variable": {
+    "network_id": {"type":"string"},
+    "zone_a": {"type":"string"},
+    "zone_b": {"type":"string"},
+    "subnet_a": {"type":"string"},
+    "subnet_b": {"type":"string"},
+    "certificate_id": {"type":"string"},
+    "kms_key_id": {"type":"string"},
+    "publisher_storage_sa_id": {"type":"string"},
+    "restricted_log_group_id": {"type":"string"},
+    "security_group_ids": {"type":"list(string)"},
+    "arl_requests_per_minute": {"type":"number","description":"Measured and reviewed request budget, no guessed default"},
+    "waf_anomaly_score": {"type":"number","description":"Approved OWASP inbound score, no guessed default"}
+  },
+  "resource": {
+    "yandex_storage_bucket": {
+      "root": {
+        "for_each": "${toset([\"blue\",\"green\"])}",
+        "bucket": "kenigevents-root-${each.key}",
+        "folder_id": "b1g5tck18cgqtjb7rn3s",
+        "default_storage_class": "STANDARD",
+        "force_destroy": false,
+        "versioning": [{"enabled":true}],
+        "anonymous_access_flags": [{"read":true,"list":false,"config_read":false}],
+        "server_side_encryption_configuration": [{"rule":[{"apply_server_side_encryption_by_default":[{"kms_master_key_id":"${var.kms_key_id}","sse_algorithm":"aws:kms"}]}]}],
+        "policy": "${jsonencode({Version=\"2012-10-17\",Statement=[{Effect=\"Allow\",Principal={CanonicalUser=var.publisher_storage_sa_id},Action=[\"s3:ListBucket\"],Resource=[\"arn:aws:s3:::kenigevents-root-${each.key}\"]},{Effect=\"Allow\",Principal={CanonicalUser=var.publisher_storage_sa_id},Action=[\"s3:GetObject\",\"s3:PutObject\",\"s3:DeleteObject\"],Resource=[\"arn:aws:s3:::kenigevents-root-${each.key}/*\"]}]})}",
+        "lifecycle": {"prevent_destroy":true}
+      }
+    },
+    "yandex_alb_backend_group": {
+      "root": {
+        "name": "kenigevents-atomic-root-pages",
+        "folder_id": "b1g5tck18cgqtjb7rn3s",
+        "http_backend": [
+          {"name":"root-blue","storage_bucket":"${yandex_storage_bucket.root[\"blue\"].bucket}","weight":100,"port":80},
+          {"name":"root-green","storage_bucket":"${yandex_storage_bucket.root[\"green\"].bucket}","weight":0,"port":80}
+        ],
+        "lifecycle": {"prevent_destroy":true,"ignore_changes":["http_backend"]}
+      },
+      "shared": {
+        "name": "kenigevents-atomic-root-shared-routes",
+        "folder_id": "b1g5tck18cgqtjb7rn3s",
+        "http_backend": [{"name":"shared-existing","storage_bucket":"kenigevents.ru","weight":100,"port":80}]
+      }
+    },
+    "yandex_alb_http_router": {"root":{"name":"kenigevents-atomic-root-router","folder_id":"b1g5tck18cgqtjb7rn3s"}},
+    "yandex_sws_waf_profile": {
+      "root": {
+        "name": "kenigevents-atomic-root-waf",
+        "folder_id": "b1g5tck18cgqtjb7rn3s",
+        "rule_set": [
+          {
+            "action": "DENY",
+            "is_enabled": true,
+            "priority": 1,
+            "core_rule_set": [{"inbound_anomaly_score":"${var.waf_anomaly_score}","paranoia_level":1,"rule_set":[{"name":"OWASP Core Ruleset","version":"4.0.0","type":"CORE"}]}]
+          }
+        ]
+      }
+    },
+    "yandex_sws_advanced_rate_limiter_profile": {
+      "root": {
+        "name": "kenigevents-atomic-root-arl",
+        "folder_id": "b1g5tck18cgqtjb7rn3s",
+        "advanced_rate_limiter_rule": [{"name":"baseline-total","priority":10,"dry_run":true,"static_quota":[{"action":"DENY","limit":"${var.arl_requests_per_minute}","period":60}]}]
+      }
+    },
+    "yandex_sws_security_profile": {
+      "root": {
+        "name": "kenigevents-atomic-root-sws",
+        "folder_id": "b1g5tck18cgqtjb7rn3s",
+        "default_action": "ALLOW",
+        "disallow_data_processing": true,
+        "advanced_rate_limiter_profile_id": "${yandex_sws_advanced_rate_limiter_profile.root.id}",
+        "security_rule": [
+          {"name":"waf","priority":88888,"dry_run":true,"waf":[{"mode":"API","waf_profile_id":"${yandex_sws_waf_profile.root.id}"}]},
+          {"name":"smart-protection","priority":99999,"dry_run":true,"smart_protection":[{"mode":"API"}]}
+        ],
+        "log_options": [{"enable":true,"log_group_id":"${var.restricted_log_group_id}"}]
+      }
+    },
+    "yandex_alb_virtual_host": {
+      "root": {
+        "name": "kenigevents-ru",
+        "http_router_id": "${yandex_alb_http_router.root.id}",
+        "authority": ["kenigevents.ru"],
+        "route_options": [{"security_profile_id":"${yandex_sws_security_profile.root.id}"}],
+        "route": [
+          {
+            "name": "shared-directory",
+            "disable_security_profile": false,
+            "http_route": [
+              {
+                "http_match": [{"http_method":["GET","HEAD"],"path":[{"regex":"^/(?:p|ics|_review|_static|preview-[a-z0-9][a-z0-9._-]*)/(?:.*/)?$"}]}],
+                "http_route_action": [{"backend_group_id":"${yandex_alb_backend_group.shared.id}","regex_rewrite":[{"regex":"^(/(?:.*/)?)$","substitute":"\\1index.html"}]}]
+              }
+            ]
+          },
+          {
+            "name": "shared-file",
+            "disable_security_profile": false,
+            "http_route": [
+              {
+                "http_match": [{"http_method":["GET","HEAD"],"path":[{"regex":"^/(?:p|ics|_review|_static|preview-[a-z0-9][a-z0-9._-]*)/.*$"}]}],
+                "http_route_action": [{"backend_group_id":"${yandex_alb_backend_group.shared.id}"}]
+              }
+            ]
+          },
+          {
+            "name": "root-directory",
+            "disable_security_profile": false,
+            "http_route": [
+              {
+                "http_match": [{"http_method":["GET","HEAD"],"path":[{"regex":"^/(?:.*/)?$"}]}],
+                "http_route_action": [{"backend_group_id":"${yandex_alb_backend_group.root.id}","regex_rewrite":[{"regex":"^(/(?:.*/)?)$","substitute":"\\1index.html"}]}]
+              }
+            ]
+          },
+          {
+            "name": "root-file",
+            "disable_security_profile": false,
+            "http_route": [{"http_match":[{"http_method":["GET","HEAD"],"path":[{"prefix":"/"}]}],"http_route_action":[{"backend_group_id":"${yandex_alb_backend_group.root.id}"}]}]
+          }
+        ]
+      }
+    },
+    "yandex_vpc_address": {
+      "root": {
+        "name": "kenigevents-atomic-root-ip",
+        "folder_id": "b1g5tck18cgqtjb7rn3s",
+        "external_ipv4_address": [{"zone_id":"${var.zone_a}","ddos_protection_provider":"qrator"}],
+        "deletion_protection": true
+      }
+    },
+    "yandex_alb_load_balancer": {
+      "root": {
+        "name": "kenigevents-atomic-root",
+        "folder_id": "b1g5tck18cgqtjb7rn3s",
+        "network_id": "${var.network_id}",
+        "security_group_ids": "${var.security_group_ids}",
+        "allocation_policy": [{"location":[{"zone_id":"${var.zone_a}","subnet_id":"${var.subnet_a}"},{"zone_id":"${var.zone_b}","subnet_id":"${var.subnet_b}"}]}],
+        "auto_scale_policy": [{"min_zone_size":2}],
+        "listener": [
+          {
+            "name": "https",
+            "endpoint": [{"address":[{"external_ipv4_address":[{"address":"${yandex_vpc_address.root.external_ipv4_address[0].address}"}]}],"ports":[443]}],
+            "tls": [{"default_handler":[{"certificate_ids":["${var.certificate_id}"],"http_handler":[{"http_router_id":"${yandex_alb_http_router.root.id}"}]}]}]
+          },
+          {
+            "name": "http",
+            "endpoint": [{"address":[{"external_ipv4_address":[{"address":"${yandex_vpc_address.root.external_ipv4_address[0].address}"}]}],"ports":[80]}],
+            "http": [{"redirects":[{"http_to_https":true}]}]
+          }
+        ],
+        "log_options": [{"disable":false,"log_group_id":"${var.restricted_log_group_id}","discard_rule":[{"http_code_intervals":["2XX"],"discard_percent":90}]}],
+        "lifecycle": {"prevent_destroy":true}
+      }
+    }
+  },
+  "output": {
+    "root_backend_group_id": {"value":"${yandex_alb_backend_group.root.id}"},
+    "alb_ipv4": {"value":"${yandex_vpc_address.root.external_ipv4_address[0].address}"}
+  }
+}
