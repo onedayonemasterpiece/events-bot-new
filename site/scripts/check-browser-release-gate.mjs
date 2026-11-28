@@ -908,6 +908,72 @@ async function assertFestivalCalendar(page, origin, basePath, expectedCount) {
   return reports;
 }
 
+// Check the accepted public route behavior on the very same generated tree.
+async function assertRecoveredOwnerPages(page, origin, basePath, artifactDir) {
+  const route = (path) => (basePath + path).replace(/\/+/gu, '/');
+  const reports = [];
+  const open = async (path) => {
+    const response = await page.goto(origin + route(path), { waitUntil:'domcontentloaded' });
+    invariant(response?.ok(), 'owner route unavailable: ' + path);
+  };
+  for (const width of [390, 768, 1440]) {
+    await page.setViewportSize({ width, height:900 });
+    await open('/');
+    const nav = page.locator('[data-home-quick-nav]');
+    invariant(await nav.count() === 1, 'Home must have one navigation island');
+    const hrefs = await nav.locator('a').evaluateAll((links) => links.map((link) => link.href));
+    invariant(hrefs.length >= 8, 'Home navigation misses accepted route families');
+    if (width === 1440) {
+      for (const href of hrefs) {
+        invariant(href.startsWith(origin + '/'), 'Home link is not local to the checked release');
+        const response = await page.request.get(href);
+        invariant(response.ok(), 'broken owner route: ' + href);
+      }
+    }
+    await page.evaluate(() => {
+      const anchor = document.querySelector('[data-home-nav-anchor]');
+      window.scrollTo(0, scrollY + anchor.getBoundingClientRect().top + 40);
+    });
+    if (width >= 760) {
+      await page.waitForFunction(() => document.querySelector('[data-home-quick-nav]')?.classList.contains('is-docked'));
+    }
+    const home = await nav.evaluate((node) => ({
+      docked: node.classList.contains('is-docked'),
+      overflow: document.documentElement.scrollWidth - innerWidth,
+      clippedLinks: [...node.querySelectorAll('a')].filter((link) => {
+        const rect = link.getBoundingClientRect();
+        return rect.left < -1 || rect.right > innerWidth + 1;
+      }).length,
+      mosaics: document.querySelectorAll('[data-home-hero-mosaic]').length,
+      eligibleScenes: [...document.querySelectorAll('[data-home-hero-scene]')].filter((scene) => scene.querySelector('[data-home-hero-image]')).length,
+    }));
+    invariant(home.overflow <= 1 && home.clippedLinks === 0, 'Home navigation overflow at ' + width);
+    invariant(home.docked === (width >= 760), 'Home dock state at ' + width);
+    invariant(home.mosaics >= home.eligibleScenes, 'eligible HeroTalk media lacks mosaic');
+    await page.evaluate(() => localStorage.removeItem('ke_personalization_profile'));
+    await open('/dlya-menya/');
+    const section = page.locator('[data-personal-feed-section][data-listing-context="for-me"]');
+    invariant(await section.count() === 1 && await section.isVisible(), 'For Me feed must be public and visible');
+    await page.waitForFunction(() => document.querySelector('[data-personal-feed-section][data-listing-context="for-me"]')?.dataset.personalFeedReady === 'true');
+    const feed = await section.evaluate((node) => ({
+      cards: node.querySelectorAll('[data-personal-feed-slot] > [data-event-card]').length,
+      profile: Boolean(localStorage.getItem('ke_personalization_profile')),
+      overflow: document.documentElement.scrollWidth - innerWidth,
+      mode: node.dataset.personalFeedMode,
+    }));
+    invariant(feed.cards > 0 && feed.cards <= (width >= 1024 ? 12 : 6), 'For Me first chunk at ' + width);
+    invariant(!feed.profile && feed.overflow <= 1, 'For Me cold start contract at ' + width);
+    if (artifactDir) await page.screenshot({path:join(artifactDir, 'owner-for-me-' + width + '.png'),animations:'disabled'});
+    reports.push({width,home,feed});
+  }
+  await page.setViewportSize({width:1536,height:864});
+  await open('/segodnya/');
+  invariant(await page.locator('[data-listing-rail-date-context]').count() === 0, 'Today must not duplicate date context');
+  await open('/zavtra/');
+  invariant(await page.locator('[data-listing-rail-date-context]').count() === 1, 'Tomorrow must retain date context');
+  return reports;
+}
+
 async function runBrowserGate({ root, basePath, manifest, origin, browser, artifactDir = '' }) {
   const routes = eventRoutes(root, basePath);
   const candidates = staticSpecimenCandidates(root, basePath, routes);
@@ -1037,6 +1103,9 @@ async function runBrowserGate({ root, basePath, manifest, origin, browser, artif
     );
     checks.festival_calendar = 'ok';
     console.log('[browser-release-gate] festival_calendar=ok');
+    const ownerPages = await assertRecoveredOwnerPages(page, origin, basePath, artifactDir);
+    checks.owner_pages = 'ok';
+    console.log('[browser-release-gate] owner_pages=ok', JSON.stringify(ownerPages));
     return {
       ok: true, checks,
       specimen: { route: specimen.route, gallery_target: specimen.targetPath, crop_routes: cropRoutes, hero_routes:heroRoutes },
@@ -1044,6 +1113,7 @@ async function runBrowserGate({ root, basePath, manifest, origin, browser, artif
       keyboard:keyboardReports,
       spatial_keyboard:spatialKeyboard,
       festival_calendar:festivalCalendar,
+      owner_pages:ownerPages,
       media: [...related, ...continuation].map((item) => ({
         id:item.id,
         row:item.row,
