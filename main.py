@@ -15370,7 +15370,7 @@ def _static_site_coalesced_next_run(
 ) -> datetime:
     """Return the schedule caused by *this* incoming static-build request.
 
-    Smart Update uses a strict trailing quiet window.  Historical trigger
+    Smart Update uses a bounded trailing quiet window. Historical trigger
     evidence is deliberately ignored here: merging a previous operator or
     calendar request into the payload must not make a later Smart Update
     immediate.  Conversely, an incoming immediate override pulls the one
@@ -15390,7 +15390,14 @@ def _static_site_coalesced_next_run(
         effect_at = _sqlite_parse_datetime(latest_effect)
     except (TypeError, ValueError):
         effect_at = now
-    return effect_at + timedelta(minutes=15)
+    try:
+        first_effect_at = _sqlite_parse_datetime(effect_evidence.get("first_effect_at") or latest_effect)
+    except (TypeError, ValueError):
+        first_effect_at = effect_at
+    return min(
+        effect_at + timedelta(minutes=15),
+        first_effect_at + timedelta(seconds=max(900, _env_int("STATIC_SITE_MAX_DEBOUNCE_SECONDS", 1800))),
+    )
 
 
 def _static_site_initial_next_run(
@@ -15470,7 +15477,12 @@ async def _enqueue_static_site_build_atomic(
             if active_state and active_state["active_job_id"]
             else None
         )
-        if running is not None:
+        if running is None and os.getenv("STATIC_SITE_BUILD_PROFILE") == "production-candidate":
+            running = next((row for row in rows if int(row["id"]) == active_job_id), None)
+            if running is not None:
+                # A deferred remote owner has immutable inputs; new effects belong to its follow-up.
+                pending = next((row for row in rows if int(row["id"]) != active_job_id and row["status"] == "pending"), None)
+        if running is not None and running["status"] == "running":
             updated_at = _sqlite_parse_datetime(running["updated_at"])
             stale_after = int(JOB_MAX_RUNTIME.get(JobTask.static_site_build, 14400))
             if (now - updated_at).total_seconds() > stale_after:
@@ -15818,7 +15830,7 @@ async def enqueue_job(
                 # re-armed from the current Smart Update cycle and must not keep
                 # stale tomorrow slots.
                 job_next_run = _ensure_utc(job.next_run_at)
-                if task == JobTask.event_vector_sync and os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only":
+                if task == JobTask.event_vector_sync and os.getenv("STATIC_SITE_BUILD_PROFILE") in {"related-only", "production-candidate"}:
                     job.next_run_at = min(job_next_run, run_time)
                 elif next_run_at and task == JobTask.tg_event_publish:
                     job.next_run_at = next_run_at
@@ -20093,12 +20105,12 @@ async def _run_due_jobs_once_locked(
                 j.payload if isinstance(j.payload, dict) else {}).get("relations"):
             return (-1, 0, int(_ensure_utc(j.next_run_at).timestamp()), j.id)
         task_priority = priority.get(j.task, 99)
-        related_only = os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only"
+        related_build = os.getenv("STATIC_SITE_BUILD_PROFILE") in {"related-only", "production-candidate"}
         if j.task == JobTask.vk_sync and j.id in initial_vk_jobs and j.last_error != "vk_initial_waiting_related":
             return (-2, -1, int(_ensure_utc(j.next_run_at).timestamp()), j.id)
-        if related_only and j.task == JobTask.static_site_build:
+        if related_build and j.task == JobTask.static_site_build:
             return (-2, 1, int(_ensure_utc(j.next_run_at).timestamp()), j.id)
-        if related_only and j.task in {JobTask.vk_sync, JobTask.event_vector_sync}:
+        if related_build and j.task in {JobTask.vk_sync, JobTask.event_vector_sync}:
             return (-2, 2, int(_ensure_utc(j.next_run_at).timestamp()), j.id)
         if j.task == JobTask.event_media_review and j.event_id is not None:
             event_id = int(j.event_id)
@@ -20109,7 +20121,7 @@ async def _run_due_jobs_once_locked(
             # date; old events cannot exhaust the daily model budget first.
             date_rank = int(event_date.replace("-", "")) if len(event_date) == 10 and event_date.replace("-", "").isdigit() else 99999999
             if eligible and event_id in blocked_media_event_ids:
-                if related_only:
+                if related_build:
                     return (-2, 2, int(_ensure_utc(j.next_run_at).timestamp()), j.id)
                 return (-3, 0, date_rank, j.id)
             if eligible:
@@ -23972,7 +23984,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
     if _event_has_managed_vk_post(ev):
         logging.info("vk.automatic_existing_post_skipped event_id=%s url=%s", event_id, ev.source_vk_post_url)
         return False
-    if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only" and ev.photo_urls and not ev.vk_source_hash:
+    if os.getenv("STATIC_SITE_BUILD_PROFILE") in {"related-only", "production-candidate"} and ev.photo_urls and not ev.vk_source_hash:
         from vk_event_relations import graph_path
         path = graph_path(db)
         graph = json.loads(path.read_text())["related"] if path.is_file() else {}
@@ -25235,6 +25247,33 @@ async def _refresh_static_site_vector_barrier_payload(
     return payload, changed_ids
 
 
+async def _enqueue_remaining_related_audit(db: Database, output_dir: Path, *, run_id: str, profile: str) -> None:
+    related_payload = json.loads((output_dir / "event_related.json").read_text(encoding="utf-8"))
+    audit = related_payload.get("gemma_verification") or {}
+    if profile == "related-only":
+        if related_payload.get("cache", {}).get("state") != "incremental":
+            return
+        targets = set(audit.get("changed_event_ids") or [])
+    else:
+        from scripts.run_static_site_builder_kaggle import related_publication_anchor_ids
+        # The frozen catalog may not yet contain newer imports; only continue
+        # first publications present in this checked full graph.
+        targets = set(await asyncio.to_thread(related_publication_anchor_ids, db.path))
+        targets.intersection_update(map(int, related_payload.get("related") or {}))
+    verified = set(audit.get("verified_event_ids") or [])
+    remaining = targets - verified
+    newly_verified = int(audit.get("attempted_anchors") or 0) - len({
+        item["anchor_event_id"] for item in (audit.get("errors") or [])
+    })
+    if newly_verified > 0 and remaining:
+        await enqueue_static_site_build_request(
+            db, reason="related_selected_remaining", event_ids=sorted(remaining),
+            trigger="smart_update",
+        )
+        logging.info("related_remaining run_id=%s newly_verified=%s remaining=%s",
+                     run_id, newly_verified, len(remaining))
+
+
 async def _finish_static_site_candidate(
     *,
     db: Database,
@@ -25274,22 +25313,7 @@ async def _finish_static_site_candidate(
             effective_date=clock.effective_date, success=False,
             receipt={"status": "related_ready", "published": False},
         )
-        related_payload = json.loads((output_dir / "event_related.json").read_text(encoding="utf-8"))
-        audit = related_payload.get("gemma_verification") or {}
-        targets = set(audit.get("changed_event_ids") or [])
-        verified = set(audit.get("verified_event_ids") or [])
-        remaining = targets - verified
-        newly_verified = int(audit.get("attempted_anchors") or 0) - len({
-            item["anchor_event_id"] for item in (audit.get("errors") or [])
-        })
-        if (related_payload.get("cache", {}).get("state") == "incremental"
-                and newly_verified > 0 and remaining):
-            await enqueue_static_site_build_request(
-                db, reason="related_selected_remaining", event_ids=sorted(remaining),
-                trigger="smart_update",
-            )
-            logging.info("related_remaining run_id=%s newly_verified=%s remaining=%s",
-                         run_id, newly_verified, len(remaining))
+        await _enqueue_remaining_related_audit(db, output_dir, run_id=run_id, profile="related-only")
         logging.info("related_ready run_id=%s build_id=%s published=false", run_id, build_id)
         return True
     result, candidate_archive = await asyncio.to_thread(
@@ -25497,6 +25521,8 @@ async def _finish_static_site_candidate(
         success=True,
         receipt=success_receipt,
     )
+    if related_result.get("profile") == "production-candidate" and _env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY"):
+        await _enqueue_remaining_related_audit(db, output_dir, run_id=run_id, profile="production-candidate")
     try:
         # Redact the no-longer-recoverable bearer handoff only after the
         # immutable success/current-candidate receipt commits atomically.
@@ -26092,7 +26118,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         raise StaticSiteSingleFlightDeferred(f"static_site_capacity_deferred:{exc}") from exc
     snapshot_source = db.path
     if (
-        os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only"
+        os.getenv("STATIC_SITE_BUILD_PROFILE") in {"related-only", "production-candidate"}
         and os.getenv("STATIC_SITE_RELATED_MODE") == "pgvector"
     ):
         snapshot_source, request_payload = await asyncio.to_thread(
@@ -26466,7 +26492,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             ),
             semantic_cache_mode=semantic_cache_mode,
         )
-        if profile == "related-only":
+        if profile == "related-only" or not force_rebuild:
             cmd.append("--no-wait")
         logging.info(
             "static_site_build: launching Kaggle builder owner_event_id=%s build_id=%s limit=%s related_mode=%s semantic_cache_mode=%s sync_pgvector=%s gemma_verify=%s",
@@ -26502,7 +26528,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             raise StaticSiteRetryableError(
                 f"static-site Kaggle builder failed code={code}: " + "\n".join(tail[-20:])
             )
-        if profile == "related-only":
+        if profile == "related-only" or not force_rebuild:
             raise StaticSiteSingleFlightDeferred(f"static_site_remote_submitted:{run_id}")
         output_dir = static_site_output_root() / f"output-{build_id}"
         completed = await _finish_static_site_candidate(

@@ -8,13 +8,14 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_related_remote_wait_releases_worker_and_reuses_handoff(tmp_path, monkeypatch):
+@pytest.mark.parametrize('profile', ['related-only', 'production-candidate'])
+async def test_related_remote_wait_releases_worker_and_reuses_handoff(tmp_path, monkeypatch, profile):
     import main
     from unittest.mock import AsyncMock
     db = main.Database(str(tmp_path / 'live.sqlite'))
     await db.init()
     monkeypatch.setenv('ENABLE_STATIC_SITE_KAGGLE_BUILDER', '1')
-    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', profile)
     monkeypatch.setenv('STATIC_SITE_RELATED_MODE', 'sparse')
     monkeypatch.setenv('STATIC_SITE_SNAPSHOT_DIR', str(tmp_path / 'snapshots'))
     monkeypatch.setenv('STATIC_SITE_RELATED_CACHE', str(tmp_path / 'cache.json'))
@@ -66,7 +67,8 @@ async def test_related_remote_wait_releases_worker_and_reuses_handoff(tmp_path, 
 
 
 @pytest.mark.asyncio
-async def test_related_uses_completed_vector_snapshot_while_ingest_advances(tmp_path, monkeypatch):
+@pytest.mark.parametrize('profile', ['related-only', 'production-candidate'])
+async def test_related_uses_completed_vector_snapshot_while_ingest_advances(tmp_path, monkeypatch, profile):
     import event_vector_sync as vectors
     import main
     from static_site_release import related_projection_input, validate_vector_barrier
@@ -75,7 +77,7 @@ async def test_related_uses_completed_vector_snapshot_while_ingest_advances(tmp_
     await db.init()
     monkeypatch.setenv('ENABLE_EVENT_VECTOR_SYNC', '1')
     monkeypatch.setenv('ENABLE_STATIC_SITE_KAGGLE_BUILDER', '1')
-    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', profile)
     receipt_path = tmp_path / 'vector-receipt.json'
     monkeypatch.setenv('EVENT_VECTOR_SYNC_RECEIPT_PATH', str(receipt_path))
     try:
@@ -454,3 +456,76 @@ async def test_related_saved_data_survives_model_config_change_but_not_wrong_inp
     with pytest.raises(main.StaticSiteSingleFlightDeferred, match="cross_deploy_source_identity_mismatch"):
         await recover(html_payload)
     assert commands == [("adopt-only",), ("adopt-only",)]
+
+
+@pytest.mark.parametrize("adopt_existing", [False, True])
+def test_full_html_gate_failure_preserves_checked_related_outputs(tmp_path, monkeypatch, adopt_existing):
+    from scripts import run_static_site_builder_kaggle as runner
+    from static_site_release import STATIC_SITE_SOURCE_IDENTITY_SCHEMA
+    import shutil
+
+    source = Path(__file__).parents[1] / 'kaggle/StaticSiteBuilder/static_site_builder.py'
+    spec = importlib.util.spec_from_file_location('full_failure_kernel', source)
+    kernel = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kernel)
+    remote = tmp_path / 'remote'
+    data = remote / 'site/src/data'
+    data.mkdir(parents=True)
+    graph = {'related': {'42': {'strict_verified': True}, '43': {'strict_verified': False}}}
+    cache = {'event_fingerprints': {'42': 'current'}}
+    (data / 'preview-related.json').write_text(json.dumps(graph))
+    (remote / 'event_related_chain_cache.json').write_text(json.dumps(cache))
+    clock = {'effective_date': '2026-11-28'}
+    config = {'profile': 'production-candidate', 'collection_semantic_compute': True,
+              'build_id': 'production-full-gate-test', 'run_id': 'test-run', 'repo_sha': 'a' * 40,
+              'input_fingerprint': 'b' * 64, 'build_clock': clock,
+              'snapshot': {'snapshot_id': 'snap', 'sha256': 'c' * 64}}
+    source_identity = {'schema_version': STATIC_SITE_SOURCE_IDENTITY_SCHEMA,
+        'repo_sha': config['repo_sha'], 'image_source_manifest_sha256': 'd' * 64,
+        'image_source_tree_sha256': 'e' * 64, 'payload_tree_sha256': 'f' * 64,
+        'payload_archive_sha256': '1' * 64}
+    for name, value in {'WORKING': remote, 'SITE_DIR': remote / 'site',
+                        'RESULT_PATH': remote / 'static_site_build_result.json'}.items():
+        monkeypatch.setattr(kernel, name, value)
+    monkeypatch.setattr(kernel, 'read_config', lambda: config)
+    monkeypatch.setattr(kernel, 'validate_build_clock', lambda _: clock)
+    monkeypatch.setattr(kernel, 'validate_semantic_cache_contract', lambda _: {'mode': 'warm', 'inputs_staged': []})
+    monkeypatch.setattr(kernel, 'ensure_site_source', lambda _: source_identity)
+    for name in ('init_status', 'cleanup_transient_workspace'):
+        monkeypatch.setattr(kernel, name, lambda: None)
+    for name in ('ensure_python_deps_for_bge', 'export_preview_data_if_configured'):
+        monkeypatch.setattr(kernel, name, lambda _: None)
+    monkeypatch.setattr(kernel, 'status_event', lambda *a, **kw: None)
+    terminal = []
+    monkeypatch.setattr(kernel, 'finish_status', lambda **kw: terminal.append(kw['ok']))
+    def fail_gate(*a, **kw):
+        raise RuntimeError('mandatory Search release gate failed')
+    monkeypatch.setattr(kernel, 'apply_public_authorized_search_env', fail_gate)
+    assert kernel.main() == 0  # Successful artifact transport, failed application status.
+    assert terminal == [False]
+    args = SimpleNamespace(**config, semantic_cache_mode='warm', snapshot_contract=config['snapshot'],
+        image_source_contract={'manifest_sha256': 'd' * 64, 'source_tree_sha256': 'e' * 64},
+        related_cache=str(tmp_path / 'durable/cache.json'), expected_dataset_ref='owner/exact',
+        export_in_kaggle=True, keep_secret_datasets=True)
+    if adopt_existing:
+        class Client:
+            def kernel_has_dataset_sources(self, ref, expected):
+                return expected == ['owner/exact'], {}
+            def get_kernel_status(self, ref):
+                return {'status': 'COMPLETE'}
+            def download_kernel_output(self, ref, path, force):
+                names = ['static_site_build_result.json', 'event_related.json', 'event_related_chain_cache.json']
+                for name in names:
+                    shutil.copy2(remote / name, Path(path) / name)
+                return names
+        monkeypatch.setattr(runner, 'OUTPUT_ROOT', tmp_path / 'output')
+        monkeypatch.setattr(runner, 'require_static_site_storage_ready', lambda: None)
+        assert runner.adopt_existing_kernel_output(args, Client(), 'owner/kernel') == runner.ADOPT_REMOTE_UNAVAILABLE_EXIT
+    else:
+        assert runner.validate_downloaded_result(remote, args)['ok'] is False
+    assert json.loads((tmp_path / 'durable/static_site_event_related.json').read_text()) == graph
+    assert json.loads((tmp_path / 'durable/cache.json').read_text()) == cache
+    assert not json.loads((remote / 'static_site_build_result.json').read_text())['ok']
+    (remote / 'event_related.json').write_text('{}')
+    with pytest.raises(RuntimeError, match='artifact mismatch'):
+        runner.validate_downloaded_result(remote, args)

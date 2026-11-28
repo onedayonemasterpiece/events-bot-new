@@ -1,13 +1,13 @@
 services:
   events:
-    image: runcoveer/events:dedup-per-call-timeout-20261128
+    image: runcoveer/events:full-candidate-builder-20261128
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
     environment:
       GUIDE_VISUAL_DIGEST_VK_MENTIONS: "1"
       GUIDE_DIGEST_SOL_SOCKET: /data/guide-sol/writer.sock
-      STATIC_SITE_BUILD_PROFILE: "related-only"
+      STATIC_SITE_BUILD_PROFILE: "production-candidate"
       STATIC_SITE_GEMMA_RELATED_VERIFY: "1"
       ENABLE_GUIDE_VISUAL_DIGEST_MAX: "1"
       GUIDE_VIBEPUBLISH_URL: "https://mcp-vibepublish.kenigevents.ru"
