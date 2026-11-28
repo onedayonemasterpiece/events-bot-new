@@ -14846,8 +14846,9 @@ def _enforce_merge_non_shrinking_description(
 def _pick_richest_source_text_for_description(event: Event, candidate: EventCandidate) -> str:
     """Pick the richest available source text for building a full description.
 
-    Priority is the longest cleaned text among event/source aggregates and the candidate.
+    Preserve accepted event sources; candidate evidence uses its selected occurrence.
     """
+    candidate_scope = (candidate.occurrence_scope_text or "").strip()
     texts: list[str] = []
     poster_texts: list[str] = []
     try:
@@ -14860,9 +14861,9 @@ def _pick_richest_source_text_for_description(event: Event, candidate: EventCand
     for t in [
         getattr(event, "source_text", None),
         *(getattr(event, "source_texts", None) or []),
-        getattr(candidate, "source_text", None),
-        getattr(candidate, "raw_excerpt", None),
-        *poster_texts,
+        candidate_scope or getattr(candidate, "source_text", None),
+        None if candidate_scope else getattr(candidate, "raw_excerpt", None),
+        *([] if candidate_scope else poster_texts),
     ]:
         if not isinstance(t, str):
             continue

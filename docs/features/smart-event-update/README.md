@@ -68,6 +68,10 @@ Only the LLM-selected, verbatim-grounded child scope goes to downstream text
 generation; full source text remains provenance. The date grounding helper
 recognizes explicit comma/conjunction day lists sharing a month without
 expanding ranges or treating unrelated numeric prose as dates.
+Description source selection also honors that selected candidate scope: the
+full carrier, generated excerpt and unselected poster OCR cannot win again by
+being longer. Existing accepted event sources remain available during merges;
+without a selected scope the previous richest-source behavior is preserved.
 The final identity adjudicator requests literal evidence quotes (not paraphrased
 facts) and grounds them against the same candidate/existing-poster OCR supplied
 to the model. Explicit repeated days may be distinct occurrences; uncertainty

@@ -113,3 +113,12 @@ the existing curated name/address identity; it cannot protect a wrong known
 name with another venue's address. The original Ecodvor OCR control and an
 added false `raw_excerpt` control retain source-owned grounding. This does not
 establish the missing historical extraction answer or repair wrong primary data.
+
+
+### 2026-11-28: selected occurrence scope re-entered as full carrier
+
+Actual11607 (porcupine feeding) had a weekend-wide description/digest although packet48785 draft33020 described only that feeding. Runtime scope review returned grounded_source_anchor; pure deployed reconstruction selects the target date/time line and shared venue evidence. The later create_description_shrunk stage executed at16:50:16. The richest-description-source helper ignored the selected scope and could choose the full candidate carrier/OCR again. Exact raw model answers are not retained in the checked identity records or diagnostic trace, so the first expansion and its causal share are not established. G4_SPLIT_CREATE configuration alone does not prove the fact-first branch ran.
+
+The local correction restricts candidate contributions in this existing helper to the selected occurrence scope, retaining accepted event source aggregates and unchanged unscoped selection. Identity/provenance data are intact; no keyword classifier, provider call, state or retry was added. Production net+1 / budget+6. Three boundary tests: scoped CREATE/shrink payload, retained MERGE source, unscoped source selection. Valid BEFORE2FAIL/1PASS, AFTER3PASS; relevant regression set22PASS. SOURCE/simplicity reviewed independently.
+
+Status: implementation and offline boundary checks only. Actual model bank, merge, deployment and new public acceptance have not run. No historical VK posts/comments or canonical records were rewritten. Treat as regression guard whenever a description consumer chooses evidence after occurrence scope review. Retained evidence: zoo33020-safe-stage-log-20261128.json, zoo33020-deployed-scope-reconstruction-20261128.json and description-scope-before/after/regression-20261128.log in the existing related-events retained task directory.
