@@ -122,6 +122,6 @@ while the canonical SVG already had a circular field and transparent corners.
 Regenerated only those raster fallbacks from that SVG, preserving the shared
 identity, gold ring, dimensions and renderer. No consumer mask, manifest change,
 state or provider call was added. Pixel check: corners alpha0, alpha range0–255,
-PNG and lossless WebP RGBA identical. Offline actual-frozen card preview and
-ordinary new-publication verification are recorded separately; old VK posts
-and comments remain untouched. Retained evidence: tretyakov-fallback-pixels-20261128.json.
+PNG and lossless WebP RGBA identical. Offline actual-frozen card preview passed root and independent visual review.
+Merge, deployment and a new actual public-card check have not run yet; old VK
+posts and comments remain untouched. Retained evidence: tretyakov-fallback-pixels-20261128.json.
