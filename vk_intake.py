@@ -3083,9 +3083,6 @@ async def build_event_drafts_from_vk(
     if operator_extra:
         llm_text = f"{llm_text}\n{operator_extra}"
 
-    # LLM-first hinting: if the source explicitly says it's a standup/comedy show,
-    # nudge the parser to make the format visible in the title (without hardcoding
-    # deterministic renames after parsing).
     llm_text += (
         "\nОбязательный source-level verdict: верни один типизированный объект "
         "SourceParseDecision с disposition, events, lifecycle_actions, evidence_complete, parse_version и no_event_reason. "
