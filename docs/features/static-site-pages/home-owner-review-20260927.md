@@ -66,3 +66,11 @@ origin. This fallback:
   Authenticated Live product acceptance remains the canonical-domain/browser
   contract plus the no-mail production Live canary until the Object Storage
   writer is restored.
+
+### 2026-11-28: selective recovery against current main
+
+The September 27 contract above remains authoritative: the existing R9 Home mosaic, page-end renderer and single navigation DOM are retained. The same island wraps its links when width is insufficient (no duplicate bar or new navigation component).
+
+Other accepted September 26 route behavior is restored from PR #673 without importing its obsolete shell: /dlya-menya/ opens the canonical PersonalFeedSlot immediately (SSR public cards; first hydrated desktop chunk 12, mobile and subsequent chunks 6). The current explicit consent interaction remains unchanged; no profile is created simply by opening the page. The donor's removal of preliminary opt-in is not adopted because a later approved owner decision superseding the canonical consent contract was not established. Account/logout and participant-only InterestProfile/feedback remain separate; the existing reset clears the recommendation state. PersonalFeedSlot catalog v2 replaces v1; all existing consumers use the same component, including the bounded six-card event-detail continuation. Today omits the duplicate pinned date context; Tomorrow and exact-date retain it in ListingDiscoveryRail. The accepted event-detail sticky header, media-family/CTA geometry and search contract remain unchanged. Archive detail pages use the same discovery JSON route as current details. PR #545's approved 8px exhibition deck/frame radius uses the existing token; medallion size and listing crop geometry are not changed by this correction.
+
+The later recovery CI demonstrated that the donor absolute/zero-height desktop event header violates the current event-detail pointer contract. Preserve the approved sticky 56+1 px header and exact CTA/media geometry described in event-desktop-media-families-2026-07-12.md; no desktop header replacement is selected.

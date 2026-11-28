@@ -3679,7 +3679,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
 
         async function getPersonalFeedManifest(section, { force = false } = {}) {
           const profile = readProfile();
-          const allowsPopularFallback = section?.dataset.listingContext === 'event-detail';
+          const allowsPopularFallback = ['event-detail', 'for-me'].includes(section?.dataset.listingContext);
           if (!personalFeedProfileIsReady(profile) && !allowsPopularFallback) return null;
           if (!force) {
             const cached = readPersonalFeedCache(profile, section);
@@ -3864,7 +3864,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const discoveryFeed = document.querySelector('[data-discovery-feed]');
           const currentId = asId(discoveryFeed?.dataset.currentEventId);
           if (currentId) ids.add(currentId);
-          section?.querySelectorAll('[data-event-card]').forEach((card) => {
+          if (section?.dataset.listingContext !== 'for-me') section?.querySelectorAll('[data-event-card]').forEach((card) => {
             const id = asId(card.dataset.eventId);
             if (id) ids.add(id);
           });
@@ -3876,7 +3876,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const slot = section.querySelector('[data-personal-feed-slot]');
           const loadMore = section.querySelector('[data-personal-feed-load-more]');
           if (!store || !slot || !personalFeedSectionCanHydrate(section)) return 0;
-          const end = Math.min(store.items.length, store.rendered + PERSONAL_FEED_CHUNK_SIZE);
+          const chunkSize = section.dataset.listingContext === 'for-me' && store.rendered === 0 && personalFeedUsesDesktopRows() ? 12 : PERSONAL_FEED_CHUNK_SIZE;
+          const end = Math.min(store.items.length, store.rendered + chunkSize);
           const chunk = store.items.slice(store.rendered, end);
           let appended = 0;
           let nextRendered = end;
@@ -3951,13 +3952,14 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const title = section.querySelector('[data-personal-feed-title]');
           const explanation = section.querySelector('[data-personal-feed-explanation]');
           const isEventDetail = section.dataset.listingContext === 'event-detail';
+          const isForMe = section.dataset.listingContext === 'for-me';
           const isPersonal = personalFeedProfileIsReady(profile);
           if (!slot || !manifest) {
             if (isEventDetail) {
               section.hidden = false;
               section.dataset.personalFeedMode = 'unavailable';
               if (status) status.textContent = 'Подборка временно недоступна — можно перейти ко всем анонсам.';
-            } else {
+            } else if (!isForMe) {
               section.hidden = true;
             }
             personalFeedStores.delete(section);
@@ -3996,12 +3998,19 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
               section.hidden = false;
               section.dataset.personalFeedMode = 'unavailable';
               if (status) status.textContent = 'Других подходящих событий пока нет — откройте все анонсы.';
+            } else if (isForMe) {
+              slot.replaceChildren();
+              if (status) { status.hidden = false; status.textContent = 'Подходящих событий пока нет.'; }
             } else {
               section.hidden = true;
             }
             personalFeedStores.delete(section);
             return;
           }
+          // Preserve the server-rendered For Me cards if the existing card renderer is unavailable.
+          if (isForMe && (personalFeedUsesDesktopRows()
+            ? typeof window.KenigEventsPackRelatedCardRows !== 'function'
+            : typeof window.KenigEventsResolveMobileEventCardMedia !== 'function')) return;
           slot.innerHTML = '';
           personalFeedStores.set(section, { items: ranked, ranked, rendered: 0, profile, manifest });
           section.hidden = false;
@@ -4066,7 +4075,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
 
         function initializePersonalFeedObservers() {
           const sections = Array.from(document.querySelectorAll('[data-personal-feed-section]'));
-          sections.forEach((section) => startPersonalFeedHydration(section));
+          sections.forEach((section) => startPersonalFeedHydration(section, { eager: section.dataset.listingContext === 'for-me' }));
           const desktopOnlySections = sections.filter((section) => section.dataset.personalFeedDesktopOnly === 'true');
           personalFeedDesktopMedia?.addEventListener?.('change', (event) => {
             if (!event.matches) return;
@@ -5949,7 +5958,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         hydrateListingFilterFooterGuard();
         updatePersonalizationResetStatus();
         hydrateCalendarActions();
-        initializePersonalFeedObservers();
+        document.addEventListener('DOMContentLoaded', initializePersonalFeedObservers, { once: true });
         hydrateHeroParallax();
         hydrateDesktopEventReading();
         hydrateHeroGallery();
