@@ -461,3 +461,12 @@ post waits in the postponed queue cannot enter its frozen card/body/comment.
 The same slot reaches both public CTA and plain-post fallback; no second slot
 is reserved. Immediate publication keeps current-time eligibility. Already
 prepared/published posts and their frozen comments are not rewritten.
+
+Для delayed VK comment identity исходный заголовок первой непустой строки
+отправленного сообщения сохраняется один раз в payload календарного JobOutbox
+(`post_title`). Календарный и похожий комментарии используют одну эту квитанцию,
+связанную с точными `post_url` и `publish_date`. Каноническое название события
+может измениться во время ожидания и не заменяет сохранённый заголовок публикации.
+Если историческое задание не содержит этого поля, остаётся прежний путь; старые
+задания и комментарии автоматически не переписываются. Exact minute, owner и
+единственность найденного публичного поста по-прежнему обязательны.
