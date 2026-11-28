@@ -62,3 +62,27 @@ source:38 existing source/avatar/relation tests PASS plus3 new role/site
 integration controls PASS. Source32touched/net+8 within budget50/net+18.
 Path-only image remains BUILT, NOT DEPLOYED. Final combined rollout and ordinary
 initial159664 recovery remain open.
+
+## 27 November: selected venue and source portrait duplicate one identity
+
+Root inspected actual postponed VK16321: peer11006 displayed the curated
+`dom-kitoboya` logo and source portrait `vk-source--148784347` side by side.
+Retained provider metadata binds signed owner -148784347 to «Дом китобоя» and
+canonical profile `https://vk.com/club148784347`. The shared resolver suppressed
+all source portraits only when a selected item had reason `source_identity`;
+the same selected venue had reason `location_alias`, so slug dedup missed it.
+Site detail and listing consumers independently appended the same source portrait.
+
+Correction uses an existing exact profile alias in the common manifest. Each
+consumer omits only the source owner already represented by a selected curated
+item. It preserves a different owner, positive personal-page identity, two
+different source owners and the portrait when no curated item was selected.
+No event meaning, ranking, assets, downloads, state or recovery path changes.
+The failure is mechanical exact owner identity, not semantic venue inference.
+
+Distinguishing baseline: Python2FAIL/3PASS; site1FAIL/5PASS. Mandatory checks:
+source-avatar and external-path relation suites, shared manifest asset tests,
+site listing/detail identity tests and normal new-card visual readback.
+Code/tests, main release and subsequent product verification are separate;
+deployment for this correction has not run. Existing VK posts/comments remain
+untouched, including postponed16321.

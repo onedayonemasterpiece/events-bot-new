@@ -103,12 +103,15 @@ function toListingMedallion({ item, evidence }: ListingCandidate): ListingVenueM
  * is safe for OCR because the rail is rendered outside the media frame.
  */
 export function getListingIdentityMedallions(event: PreviewEvent): ListingVenueMedallion[] {
-  const sources: ListingVenueMedallion[] = (event.source_medallions || []).map((source): ListingVenueMedallion => ({
+  const selected = listingCandidates(event);
+  const sources: ListingVenueMedallion[] = (event.source_medallions || [])
+    .filter((source) => !selected.some(({ item }) => item.aliases?.includes(source.source_url)))
+    .map((source): ListingVenueMedallion => ({
     slug:`vk-source-${source.owner_id}`, name:source.name, shortName:source.name,
     avatarUrl:source.image_url, ariaLabel:`Источник события: ${source.name}`,
     evidence:{ field:'source_url', value:source.source_url, match:'exact' },
   }));
-  return [...listingCandidates(event).map(toListingMedallion), ...sources].slice(0, 3);
+  return [...selected.map(toListingMedallion), ...sources].slice(0, 3);
 }
 
 /**

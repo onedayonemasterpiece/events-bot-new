@@ -91,6 +91,7 @@ organizers.forEach(({ item:organizer, evidence }) => {
   });
 });
 for (const source of event.source_medallions || []) {
+  if (organizers.some(({ item }) => item.aliases?.includes(source.source_url))) continue;
   tokens.push({
     kind:'source', key:`source:vk:${source.owner_id}`, label:source.name,
     ariaLabel:`Источник события: ${source.name}`, title:`Источник: ${source.name}`,

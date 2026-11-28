@@ -221,12 +221,14 @@ def resolve_event_graphic_medallions(
         }
         add(pushkin_item, "pushkin_card", semantic_key="program:pushkin-card")
 
-    if not any(item.get("reason") == "source_identity" for item in selected):
-        from source_avatars import avatar_path, vk_post_owners
-        urls = [getattr(event, "source_post_url", None) or getattr(event, "source_vk_post_url", None), *(getattr(event, "source_urls", None) or [])]
-        for owner in vk_post_owners(urls):
-            if path := avatar_path(owner):
-                selected.append({"slug": f"vk-source-{owner}", "name": "Источник ВКонтакте", "asset_path": str(path), "reason": "source_avatar", "source_owner": owner})
+    from source_avatars import avatar_path, vk_post_owners
+    urls = [getattr(event, "source_post_url", None) or getattr(event, "source_vk_post_url", None), *(getattr(event, "source_urls", None) or [])]
+    for owner in vk_post_owners(urls):
+        profile = f"https://vk.com/{'club' if owner < 0 else 'id'}{abs(owner)}"
+        if any(profile in _aliases(item) for item in selected):
+            continue
+        if path := avatar_path(owner):
+            selected.append({"slug": f"vk-source-{owner}", "name": "Источник ВКонтакте", "asset_path": str(path), "reason": "source_avatar", "source_owner": owner})
 
     return selected[:max_items]
 

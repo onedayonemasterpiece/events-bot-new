@@ -37,6 +37,22 @@ const july26RuinKeepersEvent = {
   organizer_names:['Хранители руин'],
 };
 
+test('source rail retains different signed owners and omits only the selected venue identity', () => {
+  for (const [owners, venue, expected] of [
+    [[-148784347], 'Дом китобоя', ['dom-kitoboya']],
+    [[-999], 'Дом китобоя', ['dom-kitoboya', 'vk-source--999']],
+    [[-148784347, -999], 'Дом китобоя', ['dom-kitoboya', 'vk-source--999']],
+    [[148784347], 'Дом китобоя', ['dom-kitoboya', 'vk-source-148784347']],
+    [[-148784347], '', ['vk-source--148784347']],
+  ]) {
+    const event = { venue_name:venue, source_medallions:owners.map((owner) => ({
+      owner_id:owner, name:'Источник', image_url:'/avatar.webp',
+      source_url:`https://vk.com/${owner < 0 ? 'club' : 'id'}${Math.abs(owner)}`,
+    })) };
+    assert.deepEqual(getListingIdentityMedallions(event).map(({ slug }) => slug), expected);
+  }
+});
+
 test('event 7018 gets Ruin Keepers from a structured organizer binding', () => {
   const medallions = getListingIdentityMedallions(july26RuinKeepersEvent);
   assert.deepEqual(medallions.map(({ slug }) => slug), ['ruin-keepers']);
