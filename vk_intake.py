@@ -3083,9 +3083,6 @@ async def build_event_drafts_from_vk(
     if operator_extra:
         llm_text = f"{llm_text}\n{operator_extra}"
 
-    # LLM-first hinting: if the source explicitly says it's a standup/comedy show,
-    # nudge the parser to make the format visible in the title (without hardcoding
-    # deterministic renames after parsing).
     llm_text += (
         "\nОбязательный source-level verdict: верни один типизированный объект "
         "SourceParseDecision с disposition, events, lifecycle_actions, evidence_complete, parse_version и no_event_reason. "
@@ -3161,18 +3158,6 @@ async def build_event_drafts_from_vk(
             "building when source text/OCR supports it. КОНБ+Мира9 => "
             "location_name=Научная библиотека."
         )
-    try:
-        hint_parts: list[str] = [text or ""]
-        if poster_texts:
-            hint_parts.extend([p for p in poster_texts if isinstance(p, str) and p.strip()])
-        hint_norm = unicodedata.normalize("NFKC", "\n".join(hint_parts)).casefold().replace("ё", "е")
-        if re.search(r"\b(?:стендап|стенд-?ап|stand\s*-?up|комик\w*|юмор\w*)\b", hint_norm, flags=re.IGNORECASE):
-            llm_text += (
-                "\nЕсли это стендап/комедия, сделай это явно в title (например «Стендап: …»), "
-                "даже если оригинальное название звучит как «медитация». Не выдумывай детали."
-            )
-    except Exception:
-        pass
     if _vk_parse_should_add_giveaway_prize_hint(text, poster_texts=poster_texts):
         llm_text += (
             "\nЕсли это розыгрыш/конкурс и мероприятие упомянуто только как приз "

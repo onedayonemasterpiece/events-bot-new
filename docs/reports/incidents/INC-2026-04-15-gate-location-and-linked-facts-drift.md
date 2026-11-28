@@ -113,3 +113,24 @@ the existing curated name/address identity; it cannot protect a wrong known
 name with another venue's address. The original Ecodvor OCR control and an
 added false `raw_excerpt` control retain source-owned grounding. This does not
 establish the missing historical extraction answer or repair wrong primary data.
+
+### 2026-11-28 attendee format grounding
+
+VK source `wall-214027639_12194` describes rapid dating for guests aged 45+
+with five-minute conversations and a comedian hosting the evening. Packet
+49305 and accepted candidate 33005 already call it `Стендап: «Быстрые свидания»`
+and `Стендап-встреча` before Smart Update or the vector consumer. The redundant
+VK keyword hint was injected by the host/humour words; the shared title rule
+also used `комик` as a standup-show example. Remove the duplicate hint and
+ground the existing shared format rule in the actual attendee programme,
+including descriptions and search_digest. Actual standup shows retain their
+explicit format. No category, age, venue or recommendation filter is added.
+
+Retained vector/audit evidence separates this input defect from ranking:
+Project X was vector rank 18 and accepted by Gemma as highly_similar; black
+standup was vector rank 2. Category promotion was absent. The exact causal
+share of the false format, missing audience facts and model judgement is not
+measured. Offline parser/contract checks do not establish improved model
+answers; a bounded before/after bank remains unrun. The internally conflicting
+poster time and older speed-dating source identity are separate investigations.
+Existing VK posts and comments are not edited by this change.
