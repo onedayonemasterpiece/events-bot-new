@@ -3,9 +3,11 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import re
 import tarfile
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -39,6 +41,8 @@ def _tree(files: list[dict[str, object]]) -> str:
 def _mime(key: str) -> str:
     if key.endswith(".html"):
         return "text/html; charset=utf-8"
+    if key.endswith(".js"):
+        return "text/javascript; charset=utf-8"
     if key.endswith(".webmanifest"):
         return "application/manifest+json; charset=utf-8"
     if key.endswith(".png"):
@@ -50,12 +54,16 @@ def _mime(key: str) -> str:
     return "application/octet-stream"
 
 
-def _root_archive(tmp_path: Path, *, build_id: str = "production-atomic-test") -> tuple[Path, dict]:
+def _root_archive(tmp_path: Path, *, build_id: str = "production-atomic-test",
+                  astro_asset: str | None = None) -> tuple[Path, dict]:
     root = tmp_path / f"{build_id}-root"
     root.mkdir()
     files: dict[str, bytes] = {
         key: (f"complete:{build_id}:{key}").encode() for key in ROOT_REQUIRED_ROUTES
     }
+    if astro_asset is not None:
+        files["index.html"] = f'<script src="/{astro_asset}"></script>'.encode()
+        files[astro_asset] = f"// distinct {build_id}".encode()
     pwa = {
         "id": "/",
         "name": "Анонсы",
@@ -431,3 +439,115 @@ def test_yandex_alb_adapter_enables_complete_target_before_disabling_source(tmp_
     ]
     assert switched.operation_ids == ("yc-operation-1", "yc-operation-2")
     assert switched.state.weights == {"root-blue": 0, "root-green": 100}
+
+
+def _atomic_infra() -> dict:
+    path = Path(__file__).resolve().parents[1] / "infra/yandex/static-site-atomic-root/main.tf.json"
+    return json.loads(path.read_text(encoding="utf-8"))["resource"]
+
+
+def _model_route(url: str, method: str = "GET"):
+    """Model the checked-in match/rewrite rules; not a provider transport test."""
+    parts = urlsplit(url)
+    routes = _atomic_infra()["yandex_alb_virtual_host"]["root"]["route"]
+    for route in routes:
+        http = route["http_route"][0]
+        match = http["http_match"][0]
+        if method not in match["http_method"]:
+            continue
+        path = match["path"][0]
+        if "regex" in path:
+            if not re.fullmatch(path["regex"], parts.path):
+                continue
+        elif not parts.path.startswith(path["prefix"]):
+            continue
+        action = http["http_route_action"][0]
+        rewrite = action.get("regex_rewrite")
+        upstream = parts.path
+        if rewrite:
+            upstream = re.sub(rewrite[0]["regex"], rewrite[0]["substitute"], upstream)
+        return action["backend_group_id"].split(".")[-2], upstream, parts.query, action.get("host_rewrite")
+    return None
+
+
+@pytest.mark.parametrize("path,group,key", [
+    ("/", "root", "/index.html"),
+    ("/segodnya/", "root", "/segodnya/index.html"),
+    ("/segodnya", "root", "/segodnya/index.html"),
+    ("/poisk", "root", "/poisk/index.html"),
+    ("/fokus-gruppa/priglashenie", "root", "/fokus-gruppa/priglashenie/index.html"),
+    ("/manifest.webmanifest", "root", "/manifest.webmanifest"),
+    ("/_review/fixture-token/", "shared", "/kenigevents.ru/_review/fixture-token/index.html"),
+    ("/_review/fixture-token", "shared", "/kenigevents.ru/_review/fixture-token/index.html"),
+    ("/preview-test/event", "shared", "/kenigevents.ru/preview-test/event/index.html"),
+    ("/_review/fixture-token/_astro/a.js", "shared", "/kenigevents.ru/_review/fixture-token/_astro/a.js"),
+    ("/_static/prelaunch-root/current.json", "shared", "/kenigevents.ru/_static/prelaunch-root/current.json"),
+    ("/p/image.webp", "shared", "/kenigevents.ru/p/image.webp"),
+    ("/ics/event.ics", "shared", "/kenigevents.ru/ics/event.ics"),
+    ("/_astro/chunk.hash.js", "shared", "/kenigevents.ru/_astro/chunk.hash.js"),
+    ("/_review", "shared", "/kenigevents.ru/_review"),
+])
+def test_candidate_route_model_preserves_query_and_known_key(path, group, key):
+    query = "v=probe&v=second&encoded=%2F"
+    for method in ("GET", "HEAD", "OPTIONS"):
+        assert _model_route(f"https://kenigevents.ru{path}?{query}", method) == (
+            group, key, query, "storage.yandexcloud.net" if group == "shared" else None
+        )
+    for method in ("PUT", "DELETE", "POST", "PATCH"):
+        assert _model_route(f"https://kenigevents.ru{path}", method) is None
+
+
+def test_candidate_only_new_public_buckets_and_private_ip_shared_target():
+    infra = _atomic_infra()
+    root = infra["yandex_storage_bucket"]["root"]
+    assert set(infra["yandex_storage_bucket"]) == {"root"}
+    assert root["bucket"] == "kenigevents-root-\u0024{each.key}"
+    assert root["anonymous_access_flags"] == [{"read": True, "list": True, "config_read": False}]
+    assert "server_side_encryption_configuration" not in root
+    group = infra["yandex_alb_backend_group"]
+    assert [(b["name"], b["weight"]) for b in group["root"]["http_backend"]] == [
+        ("root-blue", 100), ("root-green", 0)
+    ]
+    shared = group["shared"]["http_backend"][0]
+    assert "storage_bucket" not in shared and shared["port"] == 443
+    assert shared["tls"][0]["sni"] == "storage.yandexcloud.net"
+    assert shared["tls"][0]["validation_context"][0]["trusted_ca_bytes"]
+    endpoint = infra["yandex_vpc_private_endpoint"]["shared"]
+    assert endpoint["dns_options"] == [{"private_dns_records_enabled": False}]
+    assert infra["yandex_alb_target_group"]["shared"]["target"][0]["ip_address"] == (
+        "\u0024{yandex_vpc_private_endpoint.shared.endpoint_address[0].address}"
+    )
+
+
+def test_two_complete_slots_do_not_prove_cross_release_asset_delivery(tmp_path):
+    store, control = MemoryStore(), MemoryControl()
+    key_a, key_b = "_astro/chunk.hashA.js", "_astro/chunk.hashB.js"
+
+    def publish(build_id, key, fail=False):
+        directory = tmp_path / build_id
+        directory.mkdir()
+        archive, result = _root_archive(directory, build_id=build_id, astro_asset=key)
+        return publish_atomic_root_archive(
+            archive, build_result=result, config=_config(tmp_path),
+            control=control, store=store, smoke=Smoke(fail=fail)
+        )
+
+    a = publish("production-a", key_a)
+    b = publish("production-b", key_b, fail=True)
+    assert a["status"] == "promoted" and b["status"] == "rolled_back"
+    assert {"root-blue": 100, "root-green": 100} in control.weight_history
+    assert control.weights == {"root-blue": 0, "root-green": 100}
+    green, blue = store.objects["root-green"], store.objects["root-blue"]
+    assert key_a.encode() in green["index.html"][0] and key_b.encode() in blue["index.html"][0]
+    # The existing publisher completed both manifest-bound trees, but cross-slot
+    # asset reads can miss during overlap and for a B tab after rollback.
+    assert key_a in green and key_a not in blue
+    assert key_b in blue and key_b not in green
+    # Model the proposed independent append-only namespace, NOT live publication:
+    # both immutable keys remain reachable regardless of the root weight.
+    independent = {"/kenigevents.ru/" + key_a: green[key_a],
+                   "/kenigevents.ru/" + key_b: blue[key_b]}
+    for key, original in ((key_a, green[key_a]), (key_b, blue[key_b])):
+        group, upstream, _, _ = _model_route("https://kenigevents.ru/" + key)
+        assert group == "shared" and independent[upstream] == original
+

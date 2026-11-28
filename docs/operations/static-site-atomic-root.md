@@ -4,6 +4,11 @@ Status: **implemented in code, default OFF; infrastructure and live cutover do
 not exist yet**. This document is the only production runbook for the atomic
 root publisher. It does not authorize DNS or production changes.
 
+PR1126 proposes the corrections below for owner review; no cloud writes are
+approved by this text. See [infra decision package](../../infra/yandex/static-site-atomic-root/README.md)
+for the provider incompatibility and the conditional PE alternative. Do not
+merge as an accepted production contract before review.
+
 ## Safety model
 
 The canonical website root uses two complete, page-only Object Storage buckets:
@@ -30,10 +35,14 @@ rechecked locally for path, SHA-256, size and MIME. The publisher then:
 7. on smoke failure, restores the former backend weights and records
    `rolled_back`.
 
-The bounded overlap during ALB convergence can serve the old complete tree or
-the new complete tree only. It cannot serve a directory copied halfway. There
-is no browser `current.json`, no sequential copy into the active bucket and no
-mutation of the separate media/stable-ICS bucket.
+The bounded overlap during ALB convergence serves complete trees **per request**;
+it does not prove that HTML and dependent content-hashed assets come from the
+same release. A separate immutable same-origin `/_astro/` namespace, proposed
+in PR1126, must remain readable for both releases during overlap and rollback.
+The existing publisher does not yet publish that subset. No browser
+`current.json`, sequential copy into the active bucket, or mutation of media,
+ICS, or review objects. Any future append-only shared `/_astro/` writes require
+explicit contract acceptance and an automatic verified publication path.
 
 The atomic JSON receipt defaults to
 `/data/static_site_builder/atomic-root-receipt.json` and records the Yandex
@@ -74,10 +83,16 @@ Do this through an reviewed Terraform/YC change, save before/after JSON under
 ignored `artifacts/codex/`, and keep DNS on the existing origin until every
 pre-DNS gate below passes.
 
-1. Create two new buckets with versioning, encryption, anonymous listing off
-   and public object read required by an ALB bucket backend. Do not place media,
-   stable ICS, review candidates or control objects in them. Bucket names must
-   be different from the existing shared asset bucket.
+1. Proposed correction for the two **new public page-only** buckets: versioning,
+   provider system-key at-rest encryption, anonymous object read AND listing on,
+   settings read off; no customer SSE-KMS. [ALB API](https://yandex.cloud/en/docs/application-load-balancer/api-ref/BackendGroup/create)
+   requires both public read and list for native bucket backends; [YC system-key encryption](https://yandex.cloud/en/docs/security/standard/encryption)
+   is default. Customer KMS requires authenticated decryption. Do not place any
+   nonpublic bytes, media, stable ICS, review candidates or control objects in
+   these buckets. Names must differ from shared. Existing shared bucket remains
+   LIST=false; never open review-bearing enumeration. Public slot names and
+   inactive staging can be discovered directly; this correction is a proposal,
+   not a previously established owner decision.
 2. Before the ALB is public, bootstrap **the same fully checked production
    archive** into both buckets with each object's `sha256` metadata, exact MIME
    and cache policy, then verify its manifest exactly. Bootstrap is a
@@ -90,8 +105,15 @@ pre-DNS gate below passes.
    backend weights distribute requests proportionally:
    <https://yandex.cloud/en/docs/application-load-balancer/concepts/backend-group>.
 4. Create the HTTP router, `kenigevents.ru` virtual host, TLS listener and
-   Certificate Manager binding. Route `/` to only this backend group. Do not
-   create a route or origin rewrite through `current.json`.
+   Certificate Manager binding. Route page requests to the two-bucket group;
+   preserve exact shared URLs through separate routing, not `current.json`.
+   Native shared storage_bucket requires public LIST and is incompatible with
+   the unchanged shared restriction. The decision package provides an exact
+   VPC Private Endpoint + private-IP HTTPS target candidate, whose ALB target
+   compatibility requires provider/live proof. No public shared LIST, guessed
+   FQDN/IP backend, proxy or origin redirect fallback. Before any switch, the
+   accepted append-only content-hashed asset subset must be reachable for both
+   releases without writing either active root or shared review/media/ICS.
 5. Attach a Smart Web Security profile to the virtual host, with Smart
    Protection, WAF and an Advanced Rate Limiter policy approved against a
    measured baseline. Keep route-level security enabled. Yandex documents the
@@ -165,6 +187,10 @@ Required before any DNS change:
 - authenticated listing of each root bucket equals its manifest and has no
   `p/`, `ics/`, `_review/` or control JSON;
 - direct ALB test host returns exact hashes/MIME for stable smoke routes;
+- shared known-key GET/HEAD/OPTIONS, same origin/path/query and raw LIST denial
+  are verified; slashless, missing and encoded paths preserve intended behavior;
+- actual distinct A/B immutable asset dependencies load during overlap,
+  after promotion and after forced rollback, including cached old HTML;
 - Chromium root gate and Android PWA install smoke pass through the ALB host;
 - SWS/ARL/WAF logs and ALB error/latency/RPS alerts are visible;
 - a forced smoke failure demonstrates weight rollback;
