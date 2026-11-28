@@ -16454,22 +16454,28 @@ def _event_has_trusted_publish_span(ev: Event) -> bool:
 
 
 def _event_publication_start_deadline_ts(ev: Event) -> int | None:
-    """Latest safe VK publish timestamp for timed one-day public fanout."""
+    """Exclusive VK publication deadline from canonical start or trusted last day."""
 
-    if _event_has_trusted_publish_span(ev):
-        return None
-    date_raw = str(getattr(ev, "date", "") or "").split("..", 1)[0].strip()
-    event_date = parse_iso_date(date_raw)
+    date_raw = str(getattr(ev, "date", "") or "").strip()
+    event_date = parse_iso_date(date_raw.split("..", 1)[0].strip())
+    span = _event_has_trusted_publish_span(ev)
+    if span:
+        event_date = (parse_iso_date(date_raw.split("..", 1)[-1].strip())
+                      if getattr(ev, "end_date_is_inferred", False)
+                      else _event_vk_publish_end_date(ev))
     if event_date is None:
         return None
-    time_raw = str(getattr(ev, "time", "") or "").strip()
+    day_end = int(datetime.combine(
+        event_date + timedelta(days=1), time.min, tzinfo=LOCAL_TZ
+    ).timestamp())
+    time_raw = "" if span else str(getattr(ev, "time", "") or "").strip()
     match = re.match(r"^\s*(\d{1,2})[:.](\d{2})", time_raw)
     if not match:
-        return None
+        return day_end
     hour = int(match.group(1))
     minute = int(match.group(2))
     if not (0 <= hour <= 23 and 0 <= minute <= 59):
-        return None
+        return day_end
     return int(
         datetime.combine(event_date, time(hour, minute), tzinfo=LOCAL_TZ).timestamp()
     )
@@ -24048,6 +24054,8 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         relations=relations,
         append_text=not replace_existing_text,
     )
+    if not vk_url:
+        return False
     event_for_notice, partner_user = await _persist_vk_source_post_result(
         event_id,
         db,

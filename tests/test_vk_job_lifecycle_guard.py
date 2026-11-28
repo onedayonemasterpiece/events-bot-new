@@ -100,7 +100,7 @@ async def test_only_unpublished_active_current_event_syncs(db, monkeypatch, exis
     assert sync.call_args.args[0].date == "2099-12-21"
     assert sync.call_args.args[1] == "Current description"
     assert sync.call_args.kwargs["append_text"] is (not bool(existing_url))
-    persist.assert_awaited_once()
+    persist.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -7469,7 +7469,8 @@ async def sync_vk_source_post(
                 target_group_id=str(target_group_id),
                 message=prepared_message,
                 photo_urls=prepared_photo_urls,
-                post_to_vk_fn=post_to_vk,
+                post_to_vk_fn=(partial(post_to_vk, latest_publish_ts=_event_publication_start_deadline_ts(event))
+                               if public_only else post_to_vk),
                 upload_vk_photo_fn=upload_vk_photo,
                 upload_images_fn=upload_images,
                 vk_api_fn=_vk_api,

@@ -104,3 +104,13 @@ On 2026-06-28 the managed VK community `klgdevents` showed a fresh post for `Ð”Ð
 ## Prevention
 
 This incident extends `INC-2026-06-24-vk-past-actuals`: freshness must be checked at enqueue time, execution time, and postponed-slot reservation time. Inferred date ranges are not enough to make a timed event safe for delayed public publication.
+
+## 2026-11-28 date-only reservation regression
+
+RunCoveer read-only evidence: event11598 has canonical28November without a time or trusted end date, but its initial reservation produced postponed post16356 for30November. The existing helper returned no deadline for missing/invalid time and all trusted spans; public Afisha Engagement also passed an unbound publication callback. Source text mentions28and29November; the lost second date is a separate extraction investigation and is not reconstructed by this change.
+
+The existing `latest_publish_ts` guard now receives next local midnight after the canonical date or trusted last day, while one-day timed events retain their exact start cutoff. The public CTA callback supplies the same guard. An inferred end cannot extend a one-day event or a trusted embedded range. Cleared lifecycle dates retain no deadline. No new queue, retry, spacing override or retrospective VK edit is introduced.
+
+Regression checks exercise actual `post_to_vk` with reserved, explicit and immediate slots, midnight boundaries, trusted/inferred spans and actual public CTA callbacks. Before this change18of the initial30 cases failed; release and live acceptance evidence will be recorded after review. Existing post16356 is unchanged under the current owner prohibition on old VK edits. The historical June deletion/Fly steps above are evidence of that incident, not instructions for the current RunCoveer repair.
+
+Exact review also found the handler persisted `vk_source_hash` after a no-URL rejection, which could bypass initial related readiness on a later ordinary enqueue. Returning false before persistence keeps the existing unpublished state. A distinguishing actual-post/real-handler/SQLite check failed before this guard because the hash was written; it also checks no URL, comment or outbox job is created. No retry is introduced.
