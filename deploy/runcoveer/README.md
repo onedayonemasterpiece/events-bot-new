@@ -36,6 +36,17 @@ driver needs `libatomic.so.1` to start even its `install --with-deps` command on
 a fresh `python:3.12-slim` base. Keep this prerequisite in the declared OS
 dependency layer alongside `webp`.
 
+## Comment frozen publication slot release, prepared 2026-11-28
+
+Image: `runcoveer/events:comment-frozen-slot-20261128`; rollback:
+`runcoveer/events:source-medallion-owner-20261127`. Exact merged-main Events-only
+update. Without a published receipt, both one-shot comment kinds resolve the
+original publication from its saved slot instead of mutable event date/time.
+Exact owner, public/deleted state, physical mapping or unique timestamp/title
+and original stored URL checks remain. Legacy tasks, pacing, once receipts and
+CAPTCHA handling remain. Check ordinary new comments; never replay or edit old
+posts/comments to qualify the change.
+
 ## Source medallion owner dedup release, prepared 2026-11-27
 
 Image: `runcoveer/events:source-medallion-owner-20261127`; rollback:

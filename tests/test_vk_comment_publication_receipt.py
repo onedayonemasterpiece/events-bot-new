@@ -131,3 +131,68 @@ async def test_frozen_comment_uses_verified_public_receipt(tmp_path, monkeypatch
         assert not any(method in {'wall.edit', 'wall.editComment', 'wall.deleteComment'} for method, _ in calls)
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('kind', ['calendar', 'related'])
+@pytest.mark.parametrize('conflict', [None, 'date', 'owner', 'deleted', 'postpone', 'postponed_id', 'ambiguous', 'title', 'id', 'explicit_mapping'])
+async def test_missing_receipt_uses_frozen_publication_slot_after_header_drift(tmp_path, monkeypatch, kind, conflict):
+    db = main.Database(str(tmp_path / 'frozen-slot.sqlite'))
+    await db.init()
+    published_at = int(datetime.now(timezone.utc).timestamp()) - 3600
+    title = 'Творческая встреча-концерт Николая Бурляева'
+    selection = {'dates': [], 'related': [{'id': 2, 'title': 'Frozen peer'}]}
+    payload = {'post_url': OLD, 'publish_date': published_at}
+    if kind == 'related':
+        payload['relations'] = selection
+    original = {'id': 20, 'owner_id': -231920894, 'date': published_at,
+                'post_type': 'post', 'text': title + '\n📅 28 ноября\nПОХОЖИЕ СОБЫТИЯ\nFrozen peer'}
+    rival = {**original, 'id': 30, 'date': published_at + 600,
+             'text': title + '\n📅 28 ноября 14:00\nПОХОЖИЕ СОБЫТИЯ\nFrozen peer'}
+    if conflict == 'date': original['date'] += 60
+    if conflict == 'owner': original['owner_id'] = -2
+    if conflict == 'deleted': original['is_deleted'] = True
+    if conflict == 'postpone': original['post_type'] = 'postpone'
+    if conflict == 'postponed_id': original['postponed_id'] = 11
+    items = [rival, original]
+    if conflict == 'ambiguous': items.append({**original, 'id': 40})
+    if conflict == 'title': original['text'] = 'Другая программа'
+    if conflict == 'id': original['id'] = 5
+    if conflict == 'explicit_mapping':
+        original.update(postponed_id=10, date=published_at + 60, text='Earlier title')
+    calls = []
+    async def api(method, params, *args, **kwargs):
+        calls.append((method, params))
+        assert method == 'wall.get'
+        assert params == {'owner_id': -231920894, 'filter': 'owner', 'count': 100}
+        return {'response': {'items': items}}
+    calendar_send, related_send = AsyncMock(return_value=True), AsyncMock(return_value=True)
+    monkeypatch.setattr(main, '_vk_api', api)
+    monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '231920894')
+    monkeypatch.setattr(main, 'VK_SERVICE_TOKEN', 'fixture')
+    monkeypatch.setattr(calendar, 'ensure_calendar_comment', calendar_send)
+    monkeypatch.setattr(related, 'ensure_comment', related_send)
+    try:
+        async with db.get_session() as session:
+            session.add(main.Event(id=1, title=title, description='', source_text='',
+                date='2026-11-28', time='14:00', location_name='Hall', source_vk_post_url=OLD))
+            await session.commit()
+        if conflict not in (None, 'explicit_mapping'):
+            with pytest.raises(RuntimeError):
+                await main.job_vk_calendar_comment(1, db, None, payload)
+            calendar_send.assert_not_called()
+            related_send.assert_not_called()
+        else:
+            assert await main.job_vk_calendar_comment(1, db, None, payload)
+            sent = related_send if kind == 'related' else calendar_send
+            assert sent.call_args.args[2] == LIVE
+            if kind == 'related':
+                assert sent.call_args.args[3] is selection
+                assert sent.call_args.kwargs['public_item'] == original
+            else:
+                assert sent.call_args.kwargs['stored_url'] == OLD
+            async with db.get_session() as session:
+                assert (await session.get(main.Event, 1)).source_vk_post_url == OLD
+        assert len(calls) == 1
+    finally:
+        await db.close()

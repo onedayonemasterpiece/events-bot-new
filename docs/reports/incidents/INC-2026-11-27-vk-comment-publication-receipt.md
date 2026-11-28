@@ -23,3 +23,11 @@ Canonical дата27ноября, time19:00, конец18декабря; пуб�
 Не выполнена. Требуются normal main release, продолжение существующих jobs и фактический единичный комментарий. Ручной replay, DB reset и массовый backfill не разрешены. Ранее выпущенный PR1113 и его CUTOVER_USED не повторять.
 
 Retained evidence: `/home/dev/artifacts/events-bot-new/20261112T111614Z-similar-events-check/event11515-*`.
+
+## 28 ноября: published receipt ещё отсутствует, header уже изменён
+
+Обычные комментарии события11573 к public16354 пришли через86 и96мин после публикации04:50UTC. Существующий projection snapshot с manifest05:00:26 содержит Event.time14:00 и receipt statusmissing/liveNULL. Сохранённый фактический пост имеет тот же title, но date-only header «📅 28 ноября». Оба no-receipt fallback строили header из изменяемого canonical и отвергали этот пост. Исторические wall.get responses не сохранены: это доказанный дефект условия, а не утверждение единственной причины всех восьми ошибок.
+
+Механическое исправление использует уже frozen payload.post_url/publish_date и существующее одно service wall.get. Published receipt fast path сохранён. При отсутствии receipt выбирается единственный публичный неудалённый пост нашего owner с исходным postponed ID, либо без такого ID — с большим live ID, точным временем исходной публикации и точным title. Не выбирать ближайшее время, другой слот, противоречивый postponed ID или неоднозначные результаты. Legacy payload без publish_date и прочие consumers общего recovery остаются прежними. Новых полей, очередей, retries, providers, контроллеров и canonical/VK edits нет.
+
+Обязательные проверки: оба actual handler вида с date-only prepared header и canonical14:00; соседний одноимённый пост в другом слоте первым в ответе; owner/deleted/postpone/date/postponed-ID/ambiguous negative controls; старые receipt conflicts и legacy/early-publication/CAPTCHA/once checks. Before14FAIL: calendar выбрал соседний live30, related продолжил со stored10; negative controls тоже не остановили dispatch. After и release ещё выполняются. Живая приёмка — новая обычная публикация и единичные comments, без replay или правок уже отправленных.

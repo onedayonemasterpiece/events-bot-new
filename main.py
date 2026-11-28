@@ -16311,24 +16311,42 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
             "AND p.live_url IS NOT NULL AND p.live_url!='' "
             "AND (p.event_id=? OR e.source_vk_post_url IN (p.stored_url,p.live_url))",
             (OWN_VK_TARGET, postponed_url, event_id))).fetchall()
-    if receipts and payload.get("publish_date"):
-        live_url = receipts[0][0]
-        old_ids, live_ids = _vk_owner_and_post_id(postponed_url), _vk_owner_and_post_id(live_url)
+    if payload.get("publish_date"):
+        old_ids = _vk_owner_and_post_id(postponed_url)
         group = str(VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
-        if (len(receipts) != 1 or not old_ids or not live_ids or not group
-                or int(old_ids[0]) != -int(group) or old_ids[0] != live_ids[0]
-                or event.source_vk_post_url not in (postponed_url, live_url)):
+        if not old_ids or not group or int(old_ids[0]) != -int(group):
             raise RuntimeError("vk_comment_publication_identity_conflict")
-        owner, post = map(int, live_ids)
-        response = await _vk_api("wall.getById", {"posts": f"{owner}_{post}"}, db, bot,
-                                 token=VK_SERVICE_TOKEN, token_kind="service", skip_captcha=True)
-        items = _vk_wall_get_by_id_items(response)
-        item = items[0] if len(items) == 1 else {}
+        owner, old_post = map(int, old_ids)
+        if receipts:
+            live_url = receipts[0][0]
+            live_ids = _vk_owner_and_post_id(live_url)
+            if len(receipts) != 1 or not live_ids or old_ids[0] != live_ids[0]:
+                raise RuntimeError("vk_comment_publication_identity_conflict")
+            post = int(live_ids[1])
+            response = await _vk_api("wall.getById", {"posts": f"{owner}_{post}"}, db, bot,
+                                     token=VK_SERVICE_TOKEN, token_kind="service", skip_captcha=True)
+            items = _vk_wall_get_by_id_items(response)
+            item = items[0] if len(items) == 1 else {}
+        else:
+            response = await _vk_api("wall.get", {"owner_id": owner, "filter": "owner", "count": 100},
+                                     db, bot, token=VK_SERVICE_TOKEN, token_kind="service", skip_captcha=True)
+            items = [row for row in _vk_postponed_items(response)
+                     if row.get("owner_id") == owner and row.get("post_type") == "post" and not row.get("is_deleted")]
+            matches = [row for row in items if int(row.get("postponed_id") or row.get("id") or 0) == old_post]
+            if not matches:
+                # The slot is frozen at wall.post; canonical event headers can change afterwards.
+                matches = [row for row in items if row.get("postponed_id") is None
+                           and int(row.get("id") or 0) > old_post and row.get("date") == payload["publish_date"]
+                           and str(row.get("text") or "").splitlines()[:1] == [event.title.strip()]]
+            item = matches[0] if len(matches) == 1 else {}
+            post = int(item.get("id") or 0)
+            live_url = f"https://vk.com/wall{owner}_{post}"
         if not item or item.get("post_type") != "post" or item.get("is_deleted"):
             raise RuntimeError("vk_relations_post_missing" if relations else "vk_calendar_public_post_not_found")
-        if (item.get("id") != post or item.get("owner_id") != owner
-                or (int(item["postponed_id"]) != int(old_ids[1]) if item.get("postponed_id") is not None
-                    else post != int(old_ids[1]) and item.get("date") != payload.get("publish_date"))):
+        if (event.source_vk_post_url not in (postponed_url, live_url)
+                or item.get("id") != post or item.get("owner_id") != owner
+                or (int(item["postponed_id"]) != old_post if item.get("postponed_id") is not None
+                    else post != old_post and item.get("date") != payload.get("publish_date"))):
             raise RuntimeError("vk_comment_publication_identity_conflict")
         public_due = datetime.fromtimestamp(int(item["date"]) + delay, timezone.utc)
         if public_due > datetime.now(timezone.utc):

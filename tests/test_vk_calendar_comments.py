@@ -184,7 +184,7 @@ async def test_new_post_schedules_user_calendar_after_actual_public_time_once(tm
                 return {'response': {'items': [
                     {'id': 5, 'date': published_at-86400, 'text': 'Старый пост'},
                     # A prior gallery edit may have made the actual public date earlier.
-                    {'id': 20, 'date': published_at+120, 'post_type': 'post',
+                    {'id': 20, 'owner_id': -231920894, 'postponed_id': 10, 'date': published_at+120, 'post_type': 'post',
                      'text': 'Лекция\n' + public_header},
                 ]}}
             if method == 'docs.getWallUploadServer':
@@ -253,10 +253,10 @@ async def test_new_post_schedules_user_calendar_after_actual_public_time_once(tm
             'wall.get', 'docs.getWallUploadServer', 'docs.save', 'wall.createComment']
         async with db.get_session() as session:
             assert (await session.get(Event, 1)).time == '18:00'
-            assert (await session.get(Event, 1)).source_vk_post_url == 'https://vk.com/wall-231920894_20'
+            assert (await session.get(Event, 1)).source_vk_post_url == 'https://vk.com/wall-231920894_10'
             assert (await session.get(Event, 2)).source_vk_post_url.endswith('_5')
             assert (await session.get(Event, 3)).source_vk_post_url.endswith(
-                '_5' if linked == 'individual' else '_20'
+                '_5' if linked == 'individual' else '_10'
             )
             assert (await session.get(JobOutbox, jobs[0].id)).status == JobStatus.done
         after = list(calls)
