@@ -729,9 +729,12 @@ adoption validate/import the output. Consumers use `related[event_id].similar`
 for the selected related list; `chain` and `adjacent_discovery` are not equivalent
 to that selection. `strict_verified_related` states whether Gemma verification
 ran. VK rendering/editing is a separate consumer and is not activated by this
-profile. Return to `production-candidate` when site restoration is ready; the
-same exporter/cache remains in use. A computation-only completion releases the
-site claim with a `related_ready` receipt rather than recording an HTML success.
+profile. The production `production-candidate` profile keeps the same exported
+related graph and cache as a checked `related` sidecar, alongside the three
+existing archives. Normal and adopted results import that graph for the first
+VK announcement; strict per-anchor readiness applies to both build profiles.
+A computation-only completion releases the site claim with a `related_ready`
+receipt rather than recording an HTML success. Root promotion remains separate.
 
 For API-started Kaggle static-site builds, do **not** depend on Kaggle UI Secrets for Gemma verification. The documented project pattern is encrypted split datasets. `scripts/run_static_site_builder_kaggle.py` now creates two short-lived private datasets when `--gemma-related-verify` is enabled:
 
@@ -854,7 +857,9 @@ Related-only vector and graph jobs keep their earliest coalesced due time.
 A later Smart Update merges its facts without moving a ready snapshot back
 into a trailing quiet window. Both share priority with media needed by an
 initial VK post; they retain existing snapshot and single-flight contracts.
-Website profiles keep their fifteen-minute quiet window unchanged.
+The website profile keeps its fifteen-minute quiet window, capped by the
+existing `STATIC_SITE_MAX_DEBOUNCE_SECONDS` from the first effect. Vector jobs
+and initial VK dependencies retain their ready-work ordering in both profiles.
 
 Related-only does not perform the authorized Search qualification of a secret
 HTML candidate. That site-only check can reject the complete vector snapshot
@@ -868,7 +873,7 @@ Repeated media or a new calculation cannot jump ahead of an older ready
 carousel; an older ready calculation likewise progresses during imports.
 Existing fresh Telegram/confirmed public repair lanes keep their precedence,
 ordinary media/backfill retain their own ordering, and dependency/rate/CAPTCHA
-checks are unchanged. Website-profile ordering is unchanged.
+checks are unchanged. The production-candidate profile uses the same ready-work ordering.
 
 ### Related data survive an application release
 

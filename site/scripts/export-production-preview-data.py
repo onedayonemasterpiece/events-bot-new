@@ -4998,6 +4998,8 @@ def build_related(
         and cache.get("event_fingerprints") == fingerprints
         and cache.get("event_ids") == event_ids
         and isinstance(cache.get("chains"), dict)
+        and (related_mode != "pgvector" or anchor_ids is not None
+             or (cache.get("graph_reciprocity") or {}).get("event_count") == len(events))
     )
     gemma_policy_signature = gemma_related_policy_signature(model=gemma_model) if gemma_verify else None
     candidate_limit = max(6, min(12, int(os.getenv("STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT", "10") or "10")))

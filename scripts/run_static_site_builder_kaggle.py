@@ -618,6 +618,18 @@ def assert_no_sqlite_artifacts(root: Path) -> None:
         )
 
 
+def persist_related_outputs(out_dir: Path, args: argparse.Namespace) -> None:
+    if not getattr(args, 'related_cache', None):
+        return
+    cache = out_dir / 'event_related_chain_cache.json'
+    related = out_dir / 'event_related.json'
+    require_bounded_durable_cache(cache)
+    require_bounded_durable_cache(related)
+    target = Path(args.related_cache)
+    atomic_copy_file(cache, target)
+    atomic_copy_file(related, target.with_name('static_site_event_related.json'))
+
+
 def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[str, object]:
     assert_no_sqlite_artifacts(out_dir)
     result_path = out_dir / 'static_site_build_result.json'
@@ -649,12 +661,7 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
         require_bounded_durable_cache(related)
         if sha256_file(related) != artifacts[0].get('sha256'):
             raise RuntimeError('Kaggle related result artifact mismatch')
-        cache = out_dir / 'event_related_chain_cache.json'
-        require_bounded_durable_cache(cache)
-        target = Path(args.related_cache)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        atomic_copy_file(cache, target)
-        atomic_copy_file(related, target.with_name('static_site_event_related.json'))
+        persist_related_outputs(out_dir, args)
         return result
     result_cache_mode = str(result.get('semantic_cache_mode') or 'warm').strip().lower()
     if result_cache_mode != semantic_cache_mode(args):
@@ -764,23 +771,25 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
         ):
             raise RuntimeError('Kaggle daily service-share result metadata mismatch')
         artifacts = result.get('artifacts')
-        expected_artifact_kinds = {'production_root', 'secret_candidate', 'browser_evidence'}
+        expected_artifact_kinds = {'production_root', 'secret_candidate', 'browser_evidence', 'related'}
         actual_artifact_kinds = {
             str(artifact.get('kind') or '')
             for artifact in artifacts
         } if isinstance(artifacts, list) else set()
-        if not isinstance(artifacts, list) or len(artifacts) != 3 or actual_artifact_kinds != expected_artifact_kinds:
-            raise RuntimeError('production-candidate result must contain root, secret and browser-evidence artifacts')
+        if not isinstance(artifacts, list) or len(artifacts) != len(expected_artifact_kinds) or actual_artifact_kinds != expected_artifact_kinds:
+            raise RuntimeError('production-candidate result must contain root, secret, browser-evidence and related artifacts')
         for artifact in artifacts:
             name = str(artifact.get('filename') or '')
             path = out_dir / name
-            if not name.endswith('.tar.gz') or not path.is_file():
+            valid_name = name == 'event_related.json' if artifact['kind'] == 'related' else name.endswith('.tar.gz')
+            if not valid_name or not path.is_file():
                 raise RuntimeError(f'Kaggle artifact missing: {name}')
             if path.stat().st_size != int(artifact.get('size') or -1) or sha256_file(path) != artifact.get('sha256'):
                 raise RuntimeError(f'Kaggle artifact hash/size mismatch: {name}')
         token = str(result.get('candidate', {}).get('token') or '')
         if token != args.candidate_token or not re.fullmatch(r'[A-Za-z0-9_-]{43}', token):
             raise RuntimeError('Kaggle candidate token mismatch')
+        persist_related_outputs(out_dir, args)
     return result
 
 
@@ -1833,7 +1842,7 @@ def main() -> int:
                                 flush=True,
                             )
                             cache_out = out_dir / 'event_related_chain_cache.json'
-                            if args.export_in_kaggle and args.related_cache and cache_out.exists():
+                            if args.profile == 'preview' and args.export_in_kaggle and args.related_cache and cache_out.exists():
                                 require_bounded_durable_cache(cache_out)
                                 cache_target = Path(args.related_cache)
                                 cache_target.parent.mkdir(parents=True, exist_ok=True)
