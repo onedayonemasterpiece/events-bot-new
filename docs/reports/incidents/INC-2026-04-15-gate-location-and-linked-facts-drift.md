@@ -113,3 +113,15 @@ the existing curated name/address identity; it cannot protect a wrong known
 name with another venue's address. The original Ecodvor OCR control and an
 added false `raw_excerpt` control retain source-owned grounding. This does not
 establish the missing historical extraction answer or repair wrong primary data.
+
+### 2026-11-28: Tretyakovka shared raster fallback shape
+
+Actual ordinary VK post16440 (event11582) showed two Tretyakovka medallions on
+opaque cream squares. Both shared 512px PNG/WebP had alpha255 in every pixel,
+while the canonical SVG already had a circular field and transparent corners.
+Regenerated only those raster fallbacks from that SVG, preserving the shared
+identity, gold ring, dimensions and renderer. No consumer mask, manifest change,
+state or provider call was added. Pixel check: corners alpha0, alpha range0–255,
+PNG and lossless WebP RGBA identical. Offline actual-frozen card preview and
+ordinary new-publication verification are recorded separately; old VK posts
+and comments remain untouched. Retained evidence: tretyakov-fallback-pixels-20261128.json.
