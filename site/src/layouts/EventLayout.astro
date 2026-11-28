@@ -2656,6 +2656,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         const discoveryStores = new WeakMap();
         const servedListByFeed = new WeakMap();
         let shareCalloutTimer = 0;
+        let pendingConsentAction = null;
         let personalFeedRequest = null;
         const personalFeedMemoryCache = new Map();
 
@@ -3069,12 +3070,42 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           return writeJson(PROFILE_KEY, compactPersonalizationProfile(profile));
         }
 
-        function ensureLocalProfile(seed) {
+        function ensureProfileAfterConsent(seed) {
           const existing = readProfile();
           if (isCompatibleProfile(existing)) return existing;
           const profile = createEmptyProfile(seed);
           saveProfile(profile);
           return profile;
+        }
+
+        function consentBanner() {
+          let banner = document.querySelector('[data-personalization-consent]');
+          if (banner) return banner;
+          banner = document.createElement('div');
+          banner.className = 'personalization-consent';
+          banner.dataset.personalizationConsent = 'true';
+          banner.setAttribute('role', 'dialog');
+          banner.setAttribute('aria-live', 'polite');
+          banner.innerHTML = `<p><strong>Настроить рекомендации?</strong> Лайки и отметки «не интересно» сохранятся только в этом браузере и помогут убрать неподходящее.</p><div class="personalization-consent__actions"><button type="button" class="secondary-button" data-personalization-consent-dismiss>Пока нет</button><button type="button" class="cta-button" data-personalization-consent-accept>ОК</button></div>`;
+          document.body.appendChild(banner);
+          banner.querySelector('[data-personalization-consent-dismiss]')?.addEventListener('click', () => {
+            pendingConsentAction = null;
+            banner.classList.remove('is-visible');
+          });
+          banner.querySelector('[data-personalization-consent-accept]')?.addEventListener('click', async () => {
+            ensureProfileAfterConsent();
+            banner.classList.remove('is-visible');
+            const action = pendingConsentAction;
+            pendingConsentAction = null;
+            await applyFeedbackState();
+            if (typeof action === 'function') setTimeout(action, 0);
+          });
+          return banner;
+        }
+
+        function requestConsent(action) {
+          pendingConsentAction = action || null;
+          consentBanner().classList.add('is-visible');
         }
 
         function mapScore(map, key) {
@@ -4774,8 +4805,11 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           if (!eventId) return;
           const card = button.closest('[data-event-card]');
           const { store } = await controllerForCard(card);
-          const profile = activeProfile(store?.manifest) || ensureLocalProfile();
-          if (!isCompatibleProfile(profile, store?.manifest?.feature_schema_version, store?.manifest?.taxonomy_version)) return;
+          const profile = activeProfile(store?.manifest);
+          if (!profile) {
+            requestConsent(() => handleFeedbackButton(button));
+            return;
+          }
           const candidate = store ? candidateById(store, eventId) : null;
           const current = eventState(profile, eventId);
           const title = button.dataset.eventTitle || scope?.dataset.eventTitle || '';

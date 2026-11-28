@@ -203,8 +203,19 @@ jobs:
           # production/candidate artifacts; ordinary local previews stay inert.
           PUBLIC_KEYBOARD_EVENT_NAVIGATION_FORCE: '1'
         run: npm run build:preview
+      - name: Verify recovered UI source and built catalog
+        run: node --experimental-strip-types --test tests/ui-owner-recovery.test.mjs tests/personal-feed-surface.test.mjs
       - name: Block on static browser release gate
-        run: npm run check:browser-release -- --root dist/preview-ci-browser-gate
+        run: npm run check:browser-release -- --root dist/preview-ci-browser-gate --report artifacts/ui-browser/report.json --artifact-dir artifacts/ui-browser
+      - name: Retain immutable CI preview and browser evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-ui-preview-${{ github.sha }}
+          path: |
+            site/dist/preview-ci-browser-gate
+            site/artifacts/ui-browser
+          if-no-files-found: error
+          retention-days: 7
 
   python-ci:
     runs-on: ubuntu-latest

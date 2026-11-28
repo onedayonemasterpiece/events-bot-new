@@ -964,6 +964,15 @@ async function assertRecoveredOwnerPages(page, origin, basePath, artifactDir) {
     invariant(feed.cards > 0 && feed.cards <= (width >= 1024 ? 12 : 6), 'For Me first chunk at ' + width);
     invariant(!feed.profile && feed.overflow <= 1, 'For Me cold start contract at ' + width);
     if (artifactDir) await page.screenshot({path:join(artifactDir, 'owner-for-me-' + width + '.png'),animations:'disabled'});
+    if (width === 1440) {
+      await section.locator('[data-feedback-action=like]').first().click();
+      const consent = page.locator('[data-personalization-consent].is-visible');
+      await consent.waitFor();
+      invariant(await page.evaluate(() => localStorage.getItem('ke_personalization_profile') === null), 'For Me profile before explicit consent');
+      await consent.locator('[data-personalization-consent-dismiss]').click();
+      invariant(await consent.count() === 0, 'For Me consent dismissal');
+      invariant(await page.evaluate(() => localStorage.getItem('ke_personalization_profile') === null), 'For Me profile created on dismissal');
+    }
     reports.push({width,home,feed});
   }
   await page.setViewportSize({width:1536,height:864});

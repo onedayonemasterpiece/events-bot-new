@@ -261,21 +261,29 @@ async page => {
   assert(Object.values(posterFacts.days).flat().filter((value) => value === "copy_event_poster").length === 1, "Repeated event P must leave one completed daily poster fact");
   assert(await page.evaluate(() => window.__keyboardNativeShareCalls) === 0, "Event copy actions must never call navigator.share on desktop");
 
-  // The deliberate first L action starts the local recommendation function.
-  // It must not open the superseded preliminary opt-in modal or steal focus.
-  assert(await page.evaluate(() => localStorage.getItem("ke_personalization_profile") === null), "No profile before the first explicit reaction");
+  // Consent keyboard flow and visible CTA states are fixture-independent.
   await page.locator(surfaceSelector).focus();
   await page.keyboard.press("l");
-  await waitFor("first explicit like", () => document.querySelector("[data-keyboard-event-surface] [data-feedback-action=like]")?.getAttribute("aria-pressed") === "true");
-  assert(await page.locator("[data-personalization-consent].is-visible").count() === 0, "L must not open a second opt-in");
-  await waitFor("like retains logical focus", () => document.activeElement?.hasAttribute?.("data-keyboard-event-surface"));
+  const consent = page.locator("[data-personalization-consent].is-visible");
+  await consent.waitFor();
+  await waitFor("consent focus entry", () => document.activeElement?.hasAttribute?.("data-personalization-consent-accept"));
+  assert(await consent.evaluate((node) => node.contains(document.activeElement)), "L must move focus into the lazy consent dialog");
+  await page.keyboard.press("Escape");
+  assert(await page.locator("[data-personalization-consent].is-visible").count() === 0, "Escape must decline consent");
+  await waitFor("consent decline focus return", () => document.activeElement?.hasAttribute?.("data-keyboard-event-surface"));
+  await page.keyboard.press("l");
+  await consent.waitFor();
+  await waitFor("reopened consent focus entry", () => document.activeElement?.hasAttribute?.("data-personalization-consent-accept"));
+  await page.keyboard.press("Enter");
+  await waitFor("like consent replay", () => document.querySelector("[data-keyboard-event-surface] [data-feedback-action=like]")?.getAttribute("aria-pressed") === "true");
+  await waitFor("consent accept focus return", () => document.activeElement?.hasAttribute?.("data-keyboard-event-surface"));
   report.currentLike = await page.locator(`${surfaceSelector} [data-feedback-action=like]`).evaluate((button) => ({
     pressed: button.getAttribute("aria-pressed"), color: getComputedStyle(button).backgroundColor,
     eventId: button.getAttribute("data-event-id"), base: Number(button.getAttribute("data-base-count") || 0),
     count: Number(button.querySelector("[data-feedback-count]")?.textContent || 0),
   }));
-  assert(report.currentLike.eventId === report.eventId && report.currentLike.pressed === "true" && report.currentLike.color === "rgb(201, 52, 52)" && report.currentLike.count === report.currentLike.base + 1, "Explicit L must leave the current event visibly liked");
-  await waitFor("accepted like daily fact", () => window.__keyboardDailyFacts.some((fact) => fact.action_code === "like_toggle"));
+  assert(report.currentLike.eventId === report.eventId && report.currentLike.pressed === "true" && report.currentLike.color === "rgb(201, 52, 52)" && report.currentLike.count === report.currentLike.base + 1, "L + consent must leave the current event visibly liked");
+  await waitFor("consented like daily fact", () => window.__keyboardDailyFacts.some((fact) => fact.action_code === "like_toggle"));
   const remoteFact = await page.evaluate(() => window.__keyboardDailyFacts.find((fact) => fact.action_code === "like_toggle"));
   assert(Object.keys(remoteFact).sort().join(",") === "action_code,schema_version", "Consent-gated collector event must contain only schema and allowlisted action");
 
